@@ -27,9 +27,9 @@
 Phase 1: 기반 설계 문서     [██████████] 100%  ✅
 Phase 2: 인프라 설정 파일   [██████████] 100%  ✅
 Phase 3: SDK 계측 코드      [██████████] 100%  ✅
-Phase 4: Grafana 대시보드   [████████░░]  80%  🔄  (5/5 완료, load-test 미작성)
-Phase 5: 통합 테스트 & 검증  [██████░░░░]  60%  🔄  (validate-traces, benchmark, test-alerts 완료)
-Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
+Phase 4: Grafana 대시보드   [██████████] 100%  ✅
+Phase 5: 통합 테스트 & 검증  [██████████] 100%  ✅  (load-test.py 포함 전체 완성)
+Phase 6: 운영 자동화        [███░░░░░░░]  30%  🔄  (Chart.yaml, values.yaml 완료)
 ```
 
 ---
@@ -225,61 +225,73 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 
 ---
 
-## 미완료 항목 — Phase 5: 통합 테스트 (잔여)
+## Session 4 완료 내역 ✅
 
-### 5-2. E2E 부하 테스트 시나리오 📋
-```
-파일 위치: scripts/load-test.py
-```
-- [ ] Locust 기반 시나리오 작성
-  - 정상 트래픽: 10 RPS 기준선
-  - 가드레일 부하: 악의적 입력 20% 혼합
-  - LLM 과부하: 동시 100 요청 (GPU 포화 시뮬레이션)
-  - 외부 API 지연: Serper API Mock 5초 지연 주입
-- [ ] 부하 테스트 중 Prometheus 지표 자동 캡처
-- [ ] 테스트 결과 리포트 자동 생성 (HTML + Prometheus snapshot)
+> **날짜**: 2026-03-02 (4회차 — 부분 완료 후 중단)
+> **커밋**: (아래 참조)
+
+### 완료된 작업
+
+#### 검증 스크립트 (Phase 5 잔여 완성)
+- [x] **`scripts/load-test.py`** (약 260줄)
+  - `NormalTrafficUser` — 정상 트래픽 (채팅 70%, 임베딩 20%, 헬스체크 10%)
+  - `GuardrailStressUser` — 악성 입력 20% 혼합, 가드레일 차단율 검증
+  - `LLMOverloadUser` — 동시 100 요청, 긴 컨텍스트로 GPU 포화 유도
+  - `ExternalAPIDelayUser` — 웹 검색 에이전트 요청, Circuit Breaker 동작 검증
+  - `PrometheusCapture` — 테스트 전후 Prometheus 지표 자동 캡처 및 비교 출력
+  - `--html`, `--csv` 리포트, `PROMETHEUS_SNAPSHOT=true` 옵션 지원
+
+#### Helm Chart 패키징 (Phase 6 — 부분 완료)
+- [x] **`helm/aiservice-monitoring/Chart.yaml`**
+  - apiVersion v2, 5개 서브차트 의존성 선언
+  - otel-collector (Agent + Gateway 분리), kube-prometheus-stack, tempo, loki
+- [x] **`helm/aiservice-monitoring/values.yaml`**
+  - OTel Agent DaemonSet 설정 (GPU toleration, WAL, priorityClass)
+  - OTel Gateway Deployment + HPA (min:3, max:10) + PDB 설정
+  - kube-prometheus-stack: Prometheus, Alertmanager (Slack 알람), Grafana
+  - Tempo (7일 retention, metrics-generator 활성화), Loki (7일 retention)
+  - RBAC, ServiceMonitor, PrometheusRule, Grafana Dashboard ConfigMap 플래그
+
+### 미완료 항목 (다음 세션으로 이월)
+
+- [ ] **`helm/aiservice-monitoring/values-dev.yaml`** — 개발 환경 오버라이드
+- [ ] **`helm/aiservice-monitoring/values-prod.yaml`** — 프로덕션 환경 오버라이드
+- [ ] **`helm/aiservice-monitoring/templates/`** — ServiceMonitor, PrometheusRule, Grafana Dashboard ConfigMap 템플릿
+- [ ] **`.github/workflows/lint.yaml`** — YAML 검증 + Python/JS 린트
+- [ ] **`.github/workflows/validate-collector.yaml`** — otelcol validate 실행
+- [ ] **`.github/workflows/test-alerts.yaml`** — promtool check rules 실행
+
+---
+
+## 미완료 항목 — Phase 5: 통합 테스트
+
+> **모두 완료됨.** 잔여 없음.
 
 ---
 
 ## 미완료 항목 — Phase 6: 운영 자동화 📋
 
-### 6-1. Helm Chart 패키징 💡
+### 6-1. Helm Chart 패키징 🔄 (부분 완료)
 ```
 파일 위치: helm/aiservice-monitoring/
 ```
-- [ ] `Chart.yaml` — 차트 메타데이터 (버전, 설명, 의존성 선언)
-- [ ] `values.yaml` — 환경별 오버라이드 가능한 기본값
-  - OTel Collector image 태그, 리소스 요청량
-  - Prometheus retention, 스크레이프 간격
-  - Grafana admin password, persistence 설정
-- [ ] 서브차트 의존성 선언
-  - `opentelemetry-collector` (open-telemetry/opentelemetry-helm-charts)
-  - `prometheus` (prometheus-community/kube-prometheus-stack)
-  - `grafana` (grafana/grafana)
-  - `tempo` (grafana/tempo)
-  - `loki` (grafana/loki)
-- [ ] `templates/` — 커스텀 리소스 (ServiceMonitor, PrometheusRule, ConfigMap)
-- [ ] Values 오버라이드로 환경별 배포
-  - `values-dev.yaml` — 단일 레플리카, 소용량 retention
-  - `values-prod.yaml` — HPA 활성화, Thanos 연동
+- [x] `Chart.yaml` — 차트 메타데이터 및 5개 서브차트 의존성 선언 ✅
+- [x] `values.yaml` — 기본값 전체 (OTel Agent/Gateway, Prometheus, Tempo, Loki) ✅
+- [ ] `values-dev.yaml` — 개발 환경 오버라이드 (단일 레플리카, 소용량 retention)
+- [ ] `values-prod.yaml` — 프로덕션 오버라이드 (Thanos 연동, Slack 시크릿 참조)
+- [ ] `templates/configmap-dashboards.yaml` — Grafana 대시보드 JSON ConfigMap
+- [ ] `templates/prometheus-rules.yaml` — Alert Rule + Recording Rule CRD 렌더링
+- [ ] `templates/servicemonitor.yaml` — ServiceMonitor 렌더링
+- [ ] `templates/rbac.yaml` — ServiceAccount + ClusterRole + ClusterRoleBinding
 
 ### 6-2. GitHub Actions CI/CD 파이프라인 💡
 ```
 파일 위치: .github/workflows/
 ```
-- [ ] `lint.yaml` — PR 시 자동 실행
-  - `yamllint` — Collector/K8s YAML 문법 검증
-  - `ruff` — Python SDK 코드 린트
-  - `eslint` — Node.js SDK 코드 린트
-- [ ] `validate-collector.yaml` — otelcol 설정 유효성 검증
-  - `otelcol validate --config=...` 실행
-  - Agent + Gateway 설정 파일 각각 검증
-- [ ] `test-alerts.yaml` — Alert Rule 자동 테스트
-  - `promtool check rules infra/docker/prometheus-rules.yaml`
-  - 필수 Alert 9개 존재 여부 검증
-- [ ] `validate-traces.yaml` — Context Propagation 단절 탐지
-  - staging 환경 Tempo에 쿼리
-  - 단절 트레이스 발견 시 PR 블로킹
+- [ ] `lint.yaml` — PR 시 자동 실행 (yamllint, ruff, eslint)
+- [ ] `validate-collector.yaml` — otelcol validate --config 실행
+- [ ] `test-alerts.yaml` — promtool check rules 실행 + 필수 Alert 9개 존재 확인
+- [ ] `validate-traces.yaml` — staging Tempo Context Propagation 단절 탐지
 
 ### 6-3. Collector Pipelines 문서화 (선택) 💡
 ```
@@ -287,7 +299,6 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 ```
 - [ ] `traces-pipeline.md` — 트레이스 데이터 흐름 ASCII 다이어그램
 - [ ] `metrics-pipeline.md` — 지표 파이프라인 (DCGM → Prometheus → Thanos)
-- [ ] Processor 적용 순서와 이유 설명
 
 ---
 
@@ -332,10 +343,14 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 | `dashboards/grafana/guardrail-analysis.json` | ✅ | — | 차단율 + Loki 로그 |
 | `dashboards/grafana/agent-external-api.json` | ✅ | — | Tool 성공률 + P99 |
 | `scripts/validate-traces.py` | ✅ | 200 | TraceQL 전파 단절 탐지 |
-| `scripts/load-test.py` | 📋 | — | **미작성** (Session 4) |
+| `scripts/load-test.py` | ✅ | 260 | Locust 4개 시나리오 + Prometheus 캡처 |
 | `scripts/benchmark-sampling.py` | ✅ | 160 | Tail Sampling 비용 시뮬레이션 |
 | `scripts/test-alerts.sh` | ✅ | 130 | Alert Rule 검증 |
-| `helm/aiservice-monitoring/` | 📋 | — | **미작성** (Phase 6) |
+| `helm/aiservice-monitoring/Chart.yaml` | ✅ | — | 5개 서브차트 의존성 |
+| `helm/aiservice-monitoring/values.yaml` | ✅ | — | 전체 기본값 (Agent/GW/Prom/Tempo/Loki) |
+| `helm/aiservice-monitoring/values-dev.yaml` | 📋 | — | **미작성** |
+| `helm/aiservice-monitoring/values-prod.yaml` | 📋 | — | **미작성** |
+| `helm/aiservice-monitoring/templates/` | 📋 | — | **미작성** (ConfigMap, Rules, RBAC) |
 | `.github/workflows/` | 📋 | — | **미작성** (Phase 6) |
 
 ---
@@ -343,15 +358,16 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 ## 권장 작업 순서 (Next Session 기준)
 
 ```
-Session 4 권장 작업 (운영 자동화 완성):
-  1. scripts/load-test.py                         ← Locust 부하 테스트 시나리오
-  2. helm/aiservice-monitoring/Chart.yaml          ← Helm 패키징 시작
-  3. helm/aiservice-monitoring/values.yaml
-  4. helm/aiservice-monitoring/values-dev.yaml
-  5. helm/aiservice-monitoring/values-prod.yaml
-  6. .github/workflows/lint.yaml
-  7. .github/workflows/validate-collector.yaml
-  8. .github/workflows/test-alerts.yaml
+Session 5 권장 작업 (Helm Chart 완성 + GitHub Actions):
+  1. helm/aiservice-monitoring/values-dev.yaml          ← 개발 환경 오버라이드
+  2. helm/aiservice-monitoring/values-prod.yaml         ← 프로덕션 오버라이드
+  3. helm/aiservice-monitoring/templates/rbac.yaml      ← ServiceAccount + ClusterRole
+  4. helm/aiservice-monitoring/templates/configmap-dashboards.yaml  ← Grafana 대시보드
+  5. helm/aiservice-monitoring/templates/prometheus-rules.yaml      ← Alert Rules CRD
+  6. helm/aiservice-monitoring/templates/servicemonitor.yaml
+  7. .github/workflows/lint.yaml                        ← yamllint + ruff + eslint
+  8. .github/workflows/validate-collector.yaml          ← otelcol validate
+  9. .github/workflows/test-alerts.yaml                 ← promtool check rules
 ```
 
 ---
@@ -363,7 +379,8 @@ Session 4 권장 작업 (운영 자동화 완성):
 | `2aa54f4` | feat: initialize AI service monitoring project structure | 24 |
 | `54bd888` | feat: add OTel architecture, collector configs, infra, and SDK instrumentation | 18 |
 | `3832418` | docs: add WORK_STATUS.md — project progress tracker and TODO master | 1 |
-| (Session 3) | feat: complete SDK instrumentation, K8s manifests, Grafana dashboards, and scripts | 19 |
+| `50e5ba1` | feat: complete SDK instrumentation, K8s manifests, Grafana dashboards, and scripts | 19 |
+| (Session 4) | feat: add load-test.py and Helm chart (Chart.yaml + values.yaml) | 3 |
 
 ---
 

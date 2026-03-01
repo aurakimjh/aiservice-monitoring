@@ -1,0 +1,63 @@
+apiVersion: v2
+name: aiservice-monitoring
+description: |
+  OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션.
+  LLM 추론(TTFT/TPS), GPU VRAM 상관관계, 가드레일 차단율,
+  벡터 DB 캐시 히트율, 외부 API 레이턴시를 통합 계측합니다.
+
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - ai
+  - llm
+  - opentelemetry
+  - observability
+  - monitoring
+  - grafana
+  - prometheus
+
+home: https://github.com/your-org/aiservice-monitoring
+sources:
+  - https://github.com/your-org/aiservice-monitoring
+
+maintainers:
+  - name: Aura Kim
+    email: aura.kimjh@gmail.com
+
+annotations:
+  category: Monitoring
+  licenses: Apache-2.0
+
+dependencies:
+  # OpenTelemetry Collector (Agent + Gateway 분리 배포)
+  - name: opentelemetry-collector
+    alias: otel-agent
+    version: "0.82.0"
+    repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+    condition: otelAgent.enabled
+
+  - name: opentelemetry-collector
+    alias: otel-gateway
+    version: "0.82.0"
+    repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+    condition: otelGateway.enabled
+
+  # Prometheus + Alertmanager + Grafana 통합 스택
+  - name: kube-prometheus-stack
+    version: "55.5.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus.enabled
+
+  # Tempo — 분산 추적 백엔드
+  - name: tempo
+    version: "1.7.1"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: tempo.enabled
+
+  # Loki — 로그 집계
+  - name: loki
+    version: "5.41.6"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: loki.enabled

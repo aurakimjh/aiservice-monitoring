@@ -1,0 +1,410 @@
+# =============================================================================
+# values.yaml — aiservice-monitoring Helm Chart 기본값
+#
+# 환경별 오버라이드:
+#   helm install ... -f values-dev.yaml    (개발 환경)
+#   helm install ... -f values-prod.yaml   (프로덕션 환경)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 전역 설정
+# -----------------------------------------------------------------------------
+global:
+  # 모든 컴포넌트에 추가될 레이블
+  labels:
+    app.kubernetes.io/part-of: aiservice-monitoring
+    managed-by: helm
+
+  # 이미지 풀 시크릿 (프라이빗 레지스트리 사용 시)
+  imagePullSecrets: []
+
+  # 스토리지 클래스 (PVC에 적용)
+  storageClass: ""
+
+# -----------------------------------------------------------------------------
+# OTel Collector Agent (DaemonSet)
+# -----------------------------------------------------------------------------
+otelAgent:
+  enabled: true
+
+  # opentelemetry-collector 서브차트 값 오버라이드
+  mode: daemonset
+
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.91.0"
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # GPU 노드 포함 전 노드 배포
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  # WAL 스토리지 (hostPath)
+  extraVolumes:
+    - name: otelcol-storage
+      hostPath:
+        path: /var/otelcol/agent/storage
+        type: DirectoryOrCreate
+
+  extraVolumeMounts:
+    - name: otelcol-storage
+      mountPath: /var/otelcol/storage
+
+  priorityClassName: system-node-critical
+
+  # Agent Collector 설정 (collector/config/otelcol-agent.yaml 참조)
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch:
+        send_batch_size: 1000
+        timeout: 5s
+      k8sattributes:
+        auth_type: serviceAccount
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.deployment.name
+          labels:
+            - tag_name: ai.service.layer
+              key: ai-layer
+              from: pod
+
+    exporters:
+      otlp/gateway:
+        endpoint: "{{ .Release.Name }}-otel-gateway:4317"
+        tls:
+          insecure: true
+        compression: gzip
+        sending_queue:
+          enabled: true
+          storage: file_storage
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+    extensions:
+      file_storage:
+        directory: /var/otelcol/storage
+      health_check:
+        endpoint: "0.0.0.0:13133"
+
+    service:
+      extensions: [file_storage, health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlp/gateway]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlp/gateway]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlp/gateway]
+
+# -----------------------------------------------------------------------------
+# OTel Collector Gateway (Deployment + HPA)
+# -----------------------------------------------------------------------------
+otelGateway:
+  enabled: true
+
+  mode: deployment
+
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.91.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 3
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 75
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: otel-gateway
+          topologyKey: kubernetes.io/hostname
+
+  # Tail Sampling 설정
+  tailSampling:
+    decisionWait: 10s
+    numTraces: 50000
+    policies:
+      errorRate: true
+      highLatencyThresholdMs: 3000
+      highTTFTThresholdMs: 2000
+      guardrailBlock: true
+      externalTimeout: true
+      baselineSamplingPercentage: 5
+
+# -----------------------------------------------------------------------------
+# Prometheus + Alertmanager + Grafana (kube-prometheus-stack)
+# -----------------------------------------------------------------------------
+prometheus:
+  enabled: true
+
+  # kube-prometheus-stack 서브차트 값
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      retentionSize: "40GB"
+      scrapeInterval: "15s"
+      evaluationInterval: "15s"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+
+      # 추가 스크레이프 설정 (DCGM, vLLM)
+      additionalScrapeConfigs:
+        - job_name: dcgm-exporter
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names: [monitoring]
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_name]
+              regex: dcgm-exporter
+              action: keep
+
+        - job_name: vllm-inference
+          kubernetes_sd_configs:
+            - role: pod
+              namespaces:
+                names: [ai-inference]
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              regex: "true"
+              action: keep
+
+  # Alertmanager 설정
+  alertmanager:
+    alertmanagerSpec:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    config:
+      global:
+        resolve_timeout: 5m
+        slack_api_url: ""  # values-prod.yaml에서 시크릿으로 주입
+      route:
+        group_by: ["alertname", "severity"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: "null"
+        routes:
+          - receiver: slack-critical
+            matchers:
+              - severity = critical
+          - receiver: slack-warning
+            matchers:
+              - severity = warning
+      receivers:
+        - name: "null"
+        - name: slack-critical
+          slack_configs:
+            - channel: "#ai-alerts-critical"
+              send_resolved: true
+              title: "[CRITICAL] {{ .GroupLabels.alertname }}"
+              text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        - name: slack-warning
+          slack_configs:
+            - channel: "#ai-alerts"
+              send_resolved: true
+
+  # Grafana 설정
+  grafana:
+    enabled: true
+    adminPassword: "changeme"  # values-prod.yaml에서 시크릿 참조로 대체
+    persistence:
+      enabled: true
+      size: 5Gi
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: aiservice
+            orgId: 1
+            folder: "AI Service"
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/aiservice
+    dashboardsConfigMaps:
+      aiservice: aiservice-grafana-dashboards
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+      datasources:
+        enabled: true
+        label: grafana_datasource
+
+# -----------------------------------------------------------------------------
+# Tempo — 분산 추적 백엔드
+# -----------------------------------------------------------------------------
+tempo:
+  enabled: true
+
+  tempo:
+    retention: 168h  # 7일
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  persistence:
+    enabled: true
+    size: 20Gi
+
+  config:
+    auth_enabled: false
+    server:
+      http_listen_port: 3200
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: "0.0.0.0:4317"
+            http:
+              endpoint: "0.0.0.0:4318"
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+    metrics_generator:
+      enabled: true
+      storage:
+        path: /var/tempo/generator
+      registry:
+        external_labels:
+          source: tempo
+      processor:
+        service_graphs:
+          enabled: true
+        span_metrics:
+          enabled: true
+
+# -----------------------------------------------------------------------------
+# Loki — 로그 집계
+# -----------------------------------------------------------------------------
+loki:
+  enabled: true
+
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: filesystem
+    limits_config:
+      retention_period: 168h  # 7일
+
+  singleBinary:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# -----------------------------------------------------------------------------
+# 커스텀 리소스 (이 차트의 templates/ 폴더에서 렌더링)
+# -----------------------------------------------------------------------------
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+
+prometheusRules:
+  enabled: true
+  # prometheus-rules.yaml 에서 가져온 Alert Rule 적용 여부
+  loadFromFile: true
+
+grafanaDashboards:
+  enabled: true
+  # dashboards/grafana/*.json 을 ConfigMap으로 마운트
+
+rbac:
+  create: true
+  namespaces:
+    - monitoring
+    - ai-inference
+
+nameOverride: ""
+fullnameOverride: ""
