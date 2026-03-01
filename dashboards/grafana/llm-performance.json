@@ -1,0 +1,243 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus" },
+    { "name": "DS_TEMPO",      "label": "Tempo",      "type": "datasource", "pluginId": "tempo" }
+  ],
+  "title": "LLM Performance — TTFT / TPS / Token Economics",
+  "uid": "aiservice-llm-perf",
+  "tags": ["ai", "llm", "performance"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "label": "LLM 모델",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_llm_time_to_first_token_bucket, llm_model)",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "env",
+        "label": "환경",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_llm_time_to_first_token_bucket, env)",
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "TTFT P50",
+      "description": "50번째 백분위수 첫 토큰 시간. 일반 사용자 체감 응답성.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 1000,  "color": "yellow" },
+            { "value": 2000,  "color": "red" }
+          ]},
+          "mappings": []
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{
+        "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_time_to_first_token_bucket{llm_model=~\"$model\"}[5m])) by (le))",
+        "legendFormat": "P50 TTFT"
+      }]
+    },
+    {
+      "id": 2, "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "TTFT P95",
+      "description": "95번째 백분위수. SLO 목표: < 2,000ms",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 2000,  "color": "yellow" },
+            { "value": 3000,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_time_to_first_token_bucket{llm_model=~\"$model\"}[5m])) by (le))",
+        "legendFormat": "P95 TTFT"
+      }]
+    },
+    {
+      "id": 3, "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "TPS P50",
+      "description": "50번째 백분위수 초당 토큰. SLO 목표: > 30 tok/s",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tok/s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "red" },
+            { "value": 15,    "color": "yellow" },
+            { "value": 30,    "color": "green" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{
+        "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_tokens_per_second_bucket{llm_model=~\"$model\"}[5m])) by (le))",
+        "legendFormat": "P50 TPS"
+      }]
+    },
+    {
+      "id": 4, "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "동시 요청 수",
+      "description": "vLLM 현재 처리 중인 동시 요청. 높을수록 큐 대기 증가.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 50,   "color": "yellow" },
+            { "value": 100,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(aiservice_llm_concurrent_requests{llm_model=~\"$model\"}) by (llm_model)",
+        "legendFormat": "{{llm_model}}"
+      }]
+    },
+    {
+      "id": 5, "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "오늘 총 토큰 수",
+      "description": "당일 누적 토큰 사용량 (비용 추적)",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{
+        "expr": "increase(aiservice_llm_completion_tokens_total{llm_model=~\"$model\"}[24h])",
+        "legendFormat": "Completion Tokens"
+      }]
+    },
+    {
+      "id": 6, "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "큐 대기 P95",
+      "description": "vLLM 내부 큐 대기 시간 P95. GPU 포화 지표.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 1000,  "color": "yellow" },
+            { "value": 3000,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_queue_wait_time_bucket{llm_model=~\"$model\"}[5m])) by (le))",
+        "legendFormat": "P95 큐 대기"
+      }]
+    },
+    {
+      "id": 10, "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "TTFT 시계열 — 모델별 (P50 / P95 / P99)",
+      "description": "LLM 첫 토큰 시간 추이. 급등 시 GPU VRAM 또는 큐 적체 확인.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 2000, "color": "red" }
+          ]}
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_time_to_first_token_bucket{llm_model=~\"$model\"}[5m])) by (le, llm_model))",
+          "legendFormat": "P50 — {{llm_model}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_time_to_first_token_bucket{llm_model=~\"$model\"}[5m])) by (le, llm_model))",
+          "legendFormat": "P95 — {{llm_model}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(aiservice_llm_time_to_first_token_bucket{llm_model=~\"$model\"}[5m])) by (le, llm_model))",
+          "legendFormat": "P99 — {{llm_model}}"
+        }
+      ]
+    },
+    {
+      "id": 11, "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "TPS 시계열 — 모델별 (P50 / P95)",
+      "description": "초당 토큰 생성 속도. 하락 시 GPU 스로틀링 또는 메모리 단편화 확인.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tok/s",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_tokens_per_second_bucket{llm_model=~\"$model\"}[5m])) by (le, llm_model))",
+          "legendFormat": "P50 TPS — {{llm_model}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_tokens_per_second_bucket{llm_model=~\"$model\"}[5m])) by (le, llm_model))",
+          "legendFormat": "P95 TPS — {{llm_model}}"
+        }
+      ]
+    },
+    {
+      "id": 20, "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "토큰 소비 추이 (Prompt / Completion)",
+      "description": "시간대별 토큰 사용량. 비용 예측 및 트래픽 패턴 분석.",
+      "fieldConfig": {
+        "defaults": { "unit": "tok/s", "custom": { "lineWidth": 1, "fillOpacity": 20, "stacking": { "mode": "normal" } } }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(aiservice_llm_prompt_tokens_total{llm_model=~\"$model\"}[5m])) by (llm_model)",
+          "legendFormat": "Prompt — {{llm_model}}"
+        },
+        {
+          "expr": "sum(rate(aiservice_llm_completion_tokens_total{llm_model=~\"$model\"}[5m])) by (llm_model)",
+          "legendFormat": "Completion — {{llm_model}}"
+        }
+      ]
+    },
+    {
+      "id": 21, "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "큐 대기 시간 vs 동시 요청 수",
+      "description": "GPU 포화 상관관계: 동시 요청 증가 → 큐 대기 증가 패턴 확인.",
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": [{
+          "matcher": { "id": "byName", "options": "동시 요청" },
+          "properties": [
+            { "id": "unit", "value": "none" },
+            { "id": "custom.axisPlacement", "value": "right" }
+          ]
+        }]
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_queue_wait_time_bucket{llm_model=~\"$model\"}[5m])) by (le))",
+          "legendFormat": "큐 대기 P95 (ms)"
+        },
+        {
+          "expr": "sum(aiservice_llm_concurrent_requests{llm_model=~\"$model\"})",
+          "legendFormat": "동시 요청"
+        }
+      ]
+    }
+  ]
+}

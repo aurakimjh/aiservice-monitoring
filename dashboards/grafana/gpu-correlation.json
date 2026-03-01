@@ -1,0 +1,235 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus" }
+  ],
+  "title": "GPU-LLM Correlation — VRAM / 온도 / 전력 vs 성능",
+  "uid": "aiservice-gpu-correlation",
+  "tags": ["ai", "gpu", "infrastructure", "correlation"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "refresh": "15s",
+  "time": { "from": "now-30m", "to": "now" },
+  "description": "GPU 하드웨어 지표와 LLM 성능 지표의 상관관계를 시각화합니다. VRAM 포화 → 큐 대기 급증 패턴을 조기에 탐지하여 OOM 장애를 예방합니다.",
+  "templating": {
+    "list": [
+      {
+        "name": "gpu", "label": "GPU",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_gpu_utilization, gpu)",
+        "multi": true, "includeAll": true
+      },
+      {
+        "name": "node", "label": "노드",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_gpu_utilization, node)",
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "type": "gauge", "title": "VRAM 사용률",
+      "description": "GPU 비디오 메모리 점유율. 90% 초과 시 OOM 위험.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 75,   "color": "yellow" },
+            { "value": 90,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true },
+      "targets": [{
+        "expr": "avg(aiservice_gpu_memory_used{gpu=~\"$gpu\"} / (aiservice_gpu_memory_used{gpu=~\"$gpu\"} + aiservice_gpu_memory_free{gpu=~\"$gpu\"})) * 100",
+        "legendFormat": "VRAM %"
+      }]
+    },
+    {
+      "id": 2, "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "type": "gauge", "title": "GPU 가동률 (SM)",
+      "description": "Streaming Multiprocessor 사용률. 100% 시 모든 연산 코어 포화.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 80,   "color": "yellow" },
+            { "value": 95,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true },
+      "targets": [{
+        "expr": "avg(aiservice_gpu_utilization{gpu=~\"$gpu\"})",
+        "legendFormat": "SM 가동률"
+      }]
+    },
+    {
+      "id": 3, "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "type": "gauge", "title": "GPU 온도",
+      "description": "85°C 초과 시 SM 클록 스로틀링 시작 → TPS 저하.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius", "min": 30, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 75,   "color": "yellow" },
+            { "value": 85,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true },
+      "targets": [{
+        "expr": "max(aiservice_gpu_temperature{gpu=~\"$gpu\"})",
+        "legendFormat": "최고 온도"
+      }]
+    },
+    {
+      "id": 4, "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "전력 소비",
+      "description": "GPU 현재 전력 소비. TDP의 90% 초과 시 스로틀링 가능.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 350,   "color": "yellow" },
+            { "value": 420,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(aiservice_gpu_power_draw{gpu=~\"$gpu\"})",
+        "legendFormat": "총 전력"
+      }]
+    },
+    {
+      "id": 5, "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "OOM 예측 잔여 시간",
+      "description": "현재 VRAM 증가 속도로 OOM까지 남은 시간. 5분 이내 시 CRITICAL.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 600,   "color": "yellow" },
+            { "value": 300,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "aiservice_gpu_memory_free{gpu=~\"$gpu\"} / clamp_min(deriv(aiservice_gpu_memory_used{gpu=~\"$gpu\"}[5m]), 0.001)",
+        "legendFormat": "OOM까지 {{gpu}}"
+      }]
+    },
+    {
+      "id": 6, "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "메모리 대역폭 사용률",
+      "description": "GPU HBM 대역폭. 90% 초과 시 LLM 추론 병목.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 75,   "color": "yellow" },
+            { "value": 90,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "avg(aiservice_gpu_memory_bandwidth_utilization{gpu=~\"$gpu\"})",
+        "legendFormat": "메모리 대역폭"
+      }]
+    },
+    {
+      "id": 10, "gridPos": { "x": 0, "y": 4, "w": 24, "h": 9 },
+      "type": "timeseries",
+      "title": "🔑 핵심: VRAM 사용률 vs LLM 큐 대기 시간 (상관관계)",
+      "description": "VRAM 포화(우측 Y축)가 큐 대기 시간(좌측 Y축) 급증보다 선행함을 확인하여 OOM 예방. 두 곡선이 함께 상승하면 즉시 Scale-out 실행.",
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 2, "fillOpacity": 15 } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "VRAM 사용률 %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } },
+              { "id": "custom.lineWidth", "value": 3 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "큐 대기 P95 ms" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aiservice_llm_queue_wait_time_bucket[5m])) by (le))",
+          "legendFormat": "큐 대기 P95 ms"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_queue_wait_time_bucket[5m])) by (le))",
+          "legendFormat": "큐 대기 P50 ms"
+        },
+        {
+          "expr": "avg(aiservice_gpu_memory_used{gpu=~\"$gpu\"} / (aiservice_gpu_memory_used{gpu=~\"$gpu\"} + aiservice_gpu_memory_free{gpu=~\"$gpu\"})) * 100",
+          "legendFormat": "VRAM 사용률 %"
+        }
+      ]
+    },
+    {
+      "id": 11, "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "GPU 온도 vs TPS 상관관계",
+      "description": "온도 상승 → 클록 스로틀링 → TPS 저하 패턴. 85°C 도달 전 냉각 조치 필요.",
+      "fieldConfig": {
+        "defaults": { "unit": "tok/s" },
+        "overrides": [{
+          "matcher": { "id": "byName", "options": "GPU 온도 °C" },
+          "properties": [
+            { "id": "unit", "value": "celsius" },
+            { "id": "custom.axisPlacement", "value": "right" },
+            { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+          ]
+        }]
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(aiservice_llm_tokens_per_second_bucket[5m])) by (le))",
+          "legendFormat": "TPS P50 (tok/s)"
+        },
+        {
+          "expr": "max(aiservice_gpu_temperature{gpu=~\"$gpu\"})",
+          "legendFormat": "GPU 온도 °C"
+        }
+      ]
+    },
+    {
+      "id": 12, "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "멀티 GPU 노드 VRAM 사용률 비교",
+      "description": "GPU 인덱스별 VRAM 사용률. 불균형 시 로드 분산 설정 확인.",
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 }
+      },
+      "targets": [{
+        "expr": "aiservice_gpu_memory_used{gpu=~\"$gpu\", node=~\"$node\"} / (aiservice_gpu_memory_used{gpu=~\"$gpu\", node=~\"$node\"} + aiservice_gpu_memory_free{gpu=~\"$gpu\", node=~\"$node\"}) * 100",
+        "legendFormat": "{{node}} / GPU-{{gpu}}"
+      }]
+    }
+  ]
+}

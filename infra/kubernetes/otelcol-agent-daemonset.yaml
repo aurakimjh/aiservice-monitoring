@@ -1,0 +1,195 @@
+---
+# OTel Collector Agent — DaemonSet (노드당 1개)
+# 역할: 동일 노드의 Pod에서 텔레메트리를 수신하여 Gateway로 전달
+# 수집 전담 / 경량 처리 / WAL 큐로 유실 방지
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector-agent
+  namespace: monitoring
+  labels:
+    app: otel-collector
+    role: agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/version: "0.104.0"
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+      role: agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        role: agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+        # Pod가 재시작되어도 WAL 데이터 보존을 위해 hostPath 사용
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+    spec:
+      serviceAccountName: otel-collector
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
+
+      # GPU 노드 포함 모든 노드에 배포
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+
+      # 우선순위: 모니터링 Agent는 일반 워크로드보다 우선 스케줄링
+      priorityClassName: system-node-critical
+
+      initContainers:
+        # WAL 디렉터리 권한 설정
+        - name: init-storage
+          image: busybox:1.36
+          command: [sh, -c, "mkdir -p /var/otelcol/storage && chmod 777 /var/otelcol/storage"]
+          volumeMounts:
+            - name: otelcol-storage
+              mountPath: /var/otelcol/storage
+
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.104.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/conf/otelcol-agent.yaml"
+            - "--feature-gates=+exporter.datadogexporter.DisableAPMStats"
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DEPLOYMENT_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-environment
+                  key: DEPLOYMENT_ENV
+                  optional: true
+            # Go GC 튜닝: 메모리 사용 최적화
+            - name: GOGC
+              value: "80"
+            - name: GOMEMLIMIT
+              value: "400MiB"
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: jaeger-thrift
+              containerPort: 14268
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          securityContext:
+            runAsNonRoot: false
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+
+          volumeMounts:
+            - name: otelcol-agent-config
+              mountPath: /conf
+              readOnly: true
+            - name: otelcol-storage
+              mountPath: /var/otelcol/storage
+
+      volumes:
+        - name: otelcol-agent-config
+          configMap:
+            name: otel-collector-agent-config
+        # hostPath WAL: Collector Pod 재시작 시에도 미전송 데이터 보존
+        - name: otelcol-storage
+          hostPath:
+            path: /var/otelcol/agent/storage
+            type: DirectoryOrCreate
+
+---
+# Agent용 Headless Service: Prometheus가 개별 Pod를 직접 스크레이프
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-agent
+  namespace: monitoring
+  labels:
+    app: otel-collector
+    role: agent
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8888"
+spec:
+  selector:
+    app: otel-collector
+    role: agent
+  clusterIP: None   # Headless
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: metrics
+      port: 8888
+      targetPort: metrics
+    - name: health
+      port: 13133
+      targetPort: health

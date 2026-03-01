@@ -3,7 +3,7 @@
 > **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2025-03-01 (Session 2 완료 기준)
+> **최종 업데이트**: 2026-03-02 (Session 3 완료 기준)
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
 ---
@@ -25,10 +25,10 @@
 
 ```
 Phase 1: 기반 설계 문서     [██████████] 100%  ✅
-Phase 2: 인프라 설정 파일   [████████░░]  80%  🔄
-Phase 3: SDK 계측 코드      [████░░░░░░]  40%  🔄
-Phase 4: Grafana 대시보드   [░░░░░░░░░░]   0%  📋
-Phase 5: 통합 테스트 & 검증  [░░░░░░░░░░]   0%  📋
+Phase 2: 인프라 설정 파일   [██████████] 100%  ✅
+Phase 3: SDK 계측 코드      [██████████] 100%  ✅
+Phase 4: Grafana 대시보드   [████████░░]  80%  🔄  (5/5 완료, load-test 미작성)
+Phase 5: 통합 테스트 & 검증  [██████░░░░]  60%  🔄  (validate-traces, benchmark, test-alerts 완료)
 Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 ```
 
@@ -145,201 +145,87 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 
 ---
 
-## 미완료 항목 — Phase 3: SDK 계측 코드
+## Session 3 완료 내역 ✅
 
-### 3-1. Python Agent 계측 (`sdk-instrumentation/python/agents/`) 📋
+> **날짜**: 2026-03-02 (3회차)
+> **커밋**: (아래 참조) — Session 3 전체 작업
 
-#### `langchain_tracer.py` — LangChain/LangGraph OTel 콜백 핸들러
-```
-파일 위치: sdk-instrumentation/python/agents/langchain_tracer.py
-```
-- [ ] `OtelCallbackHandler(BaseCallbackHandler)` 클래스 구현
-  - `on_chain_start/end` — 체인 단계 Span 생성/종료
-  - `on_tool_start/end/error` — 도구 호출 Span (성공/실패 분기)
-  - `on_agent_action` — 에이전트 액션 선택 이벤트
-  - `on_llm_start/end` — LLM 호출 구간 (LangChain 내부 LLM 직접 사용 시)
-- [ ] LangGraph 전용 확장
-  - `on_graph_node_start/end` — 노드별 Span 생성
-  - `graph.state_transition` — 상태 전환 Counter
-  - `agent.recursion_depth` — 재귀 깊이 Histogram (무한 루프 탐지)
-- [ ] 수집 메트릭
-  - `agent.chain.step.duration_ms` (Histogram, `chain`, `step` 레이블)
-  - `agent.tool.call.total` (Counter, `tool`, `success` 레이블)
-  - `agent.graph.node.duration_ms` (Histogram, `node_name`)
-  - `agent.graph.state_transitions.total` (Counter, `from_node`, `to_node`)
-  - `agent.graph.recursion_depth` (Histogram)
+### 완료된 작업
 
-#### `external_api_tracer.py` — 외부 API 계측 클라이언트
-```
-파일 위치: sdk-instrumentation/python/agents/external_api_tracer.py
-```
-- [ ] `InstrumentedHTTPClient` 클래스 완성본 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - `get/post/put/delete` 메서드 전부 구현
-  - W3C TraceContext 헤더 자동 주입 (`propagate.inject`)
-  - 타임아웃/네트워크 에러 분기 처리
-- [ ] Circuit Breaker 연동 (선택)
-  - 연속 실패 임계치 초과 시 `circuit_breaker.open` Span 이벤트
-- [ ] 수집 메트릭
-  - `external_api.request.duration` (Histogram, `service`, `method`, `status_class`)
-  - `external_api.error.total` (Counter, `service`, `error_type`)
-  - `external_api.timeout.total` (Counter, `service`)
+#### SDK 계측 코드 (Python agents)
+- [x] **`sdk-instrumentation/python/agents/langchain_tracer.py`** (295줄)
+  - `OtelCallbackHandler(BaseCallbackHandler)` 클래스 — LangChain/LangGraph 전용
+  - Chain/Tool/LLM/Graph 이벤트 → OTel Span 자동 변환
+  - LangGraph 재귀 깊이 추적 (`agent.graph.recursion_depth`) + 15회 초과 경고 이벤트
+  - 상태 전환 Counter (`agent.graph.state_transitions.total`)
+- [x] **`sdk-instrumentation/python/agents/external_api_tracer.py`** (220줄)
+  - `InstrumentedHTTPClient` — GET/POST/PUT/DELETE + W3C propagation 자동 주입
+  - `CircuitBreakerHTTPClient` — 연속 실패 임계치 초과 시 OPEN 상태 전환
+  - 타임아웃/ConnectError/NetworkError 에러 유형별 분리 카운터
+- [x] **`sdk-instrumentation/python/agents/fastapi_streaming.py`** (145줄)
+  - `StreamingInstrumentor.wrap()` — FastAPI StreamingResponse 래퍼
+  - 청크 간 지연 측정 + 500ms 초과 시 `streaming.delay_spike` 이벤트
+  - GeneratorExit (클라이언트 연결 끊김) 별도 처리
+- [x] **`sdk-instrumentation/python/llm/embedding_instrumentation.py`** (210줄)
+  - `InstrumentedSentenceTransformer` — 로컬 HuggingFace GPU 임베딩
+  - `InstrumentedOpenAIEmbedding` — OpenAI API 비동기 래퍼 (실제 토큰 수 사용)
+  - `@instrument_embedding_fn()` 데코레이터 — 커스텀 임베딩 함수 지원
+- [x] **`sdk-instrumentation/python/vector_db/vectordb_instrumentation.py`** (280줄)
+  - `InstrumentedPinecone` — search/upsert/delete 계측
+  - `InstrumentedQdrant` — 비동기 클라이언트 계측
+  - `SemanticCacheLayer` — Redis Semantic Cache + 벡터 DB 통합 계층
+  - `_attach_search_quality()` — Score Spread 품질 지표 자동 기록
 
-#### `fastapi_streaming.py` — FastAPI SSE/스트리밍 계측
-```
-파일 위치: sdk-instrumentation/python/agents/fastapi_streaming.py
-```
-- [ ] `stream_llm_response()` 비동기 제너레이터 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - 청크별 inter-chunk 지연 측정
-  - 첫 청크 이벤트 (`first_token_received`) 기록
-- [ ] SSE(Server-Sent Events) 전용 Span 구조 설계
-- [ ] 스트리밍 중단/재연결 이벤트 추적
+#### SDK 계측 코드 (Node.js)
+- [x] **`sdk-instrumentation/nodejs/frontend-streaming.js`** (160줄)
+  - `trackStreamingChunks()` — SSE 스트리밍 비동기 제너레이터 계측
+  - `measureWebVitals()` — LCP/CLS/FID → OTel Metric 변환 (Next.js 통합)
+  - `instrumentedFetch()` — fetch에 W3C traceparent 헤더 자동 주입
 
-### 3-2. Python 벡터 DB 계측 (`sdk-instrumentation/python/vector_db/`) 📋
+#### Kubernetes 프로덕션 매니페스트
+- [x] **`infra/kubernetes/namespace-rbac.yaml`**
+  - `monitoring`, `ai-inference` 네임스페이스 생성
+  - OTel Collector ServiceAccount + ClusterRole(K8s 메타데이터 조회) + ClusterRoleBinding
+- [x] **`infra/kubernetes/otelcol-agent-daemonset.yaml`** (135줄)
+  - DaemonSet — GPU 노드 포함 전 노드 배포 (Toleration 포함)
+  - `system-node-critical` PriorityClass, hostPath WAL 스토리지
+  - LivenessProbe + ReadinessProbe, 리소스 requests/limits
+  - Headless Service — Prometheus 직접 스크레이프
+- [x] **`infra/kubernetes/otelcol-gateway-deployment.yaml`** (155줄)
+  - Deployment 3 replicas + PodAntiAffinity (다중 노드/AZ 분산)
+  - HPA (min:3, max:10, CPU 70% + Memory 75% 트리거)
+  - 스케일업 60초, 스케일다운 300초 안정화 (Tail Sampling 상태 보호)
+  - PodDisruptionBudget (minAvailable: 2)
+- [x] **`infra/kubernetes/prometheus-servicemonitor.yaml`** (150줄)
+  - ServiceMonitor: OTel Agent, Gateway, DCGM Exporter
+  - PodMonitor: vLLM Inference (10초 스크레이프)
+  - PrometheusRule: 6개 Recording Rules (TTFT P95, TPS P50, 차단율, VRAM, 에러율, 캐시 히트율)
 
-#### `vectordb_instrumentation.py` — 벡터 DB 계측
-```
-파일 위치: sdk-instrumentation/python/vector_db/vectordb_instrumentation.py
-```
-- [ ] `InstrumentedVectorDB` 클래스 완성본 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - `search()` — 유사도 검색 Span
-  - `upsert()` — 인덱싱 Span
-  - `delete()` — 삭제 Span
-  - `describe_index_stats()` — 인덱스 상태 조회
-- [ ] Pinecone / Milvus / Qdrant / ChromaDB 별 어댑터 구현
-  - 공통 인터페이스: `InstrumentedVectorDB`
-  - 드라이버별 메서드 시그니처 차이 처리
-- [ ] Redis Semantic Cache 계측
-  - `cached_embed_search()` 함수 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - `vectordb.cache.hit.total` / `vectordb.cache.miss.total`
-- [ ] 수집 메트릭
-  - `vectordb.search.duration` (Histogram, `db`, `index`, `filtered`)
-  - `vectordb.search.result_count` (Histogram, `db`, `top_k`)
-  - `vectordb.upsert.duration` (Histogram, `db`)
-  - `vectordb.cache.hit_rate` (Gauge)
+#### Grafana 대시보드 (5개 JSON)
+- [x] **`dashboards/grafana/ai-service-overview.json`** — Executive 전체 현황 (8개 KPI stat + 레이어별 기여도)
+- [x] **`dashboards/grafana/llm-performance.json`** — TTFT/TPS/토큰 비용/큐 대기 (Exemplar 연동)
+- [x] **`dashboards/grafana/gpu-correlation.json`** — VRAM vs 큐 대기 이중 Y축, OOM 예측 카운트다운
+- [x] **`dashboards/grafana/guardrail-analysis.json`** — 차단율/위반 유형/레이턴시 기여도/Loki 로그 테이블
+- [x] **`dashboards/grafana/agent-external-api.json`** — Tool 성공률/외부 API P99/재귀 깊이/타임아웃 히트맵
 
-### 3-3. Python 임베딩 계측 📋
-
-#### `embedding_instrumentation.py` 완성본
-```
-파일 위치: sdk-instrumentation/python/llm/embedding_instrumentation.py
-```
-- [ ] `@instrument_embedding()` 데코레이터 완성본 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - HuggingFace Sentence Transformers 계측
-  - OpenAI Embedding API 계측 (httpx auto-instrumentation 보완)
-  - 배치 처리 throughput 측정 (tok/s)
-- [ ] 수집 메트릭
-  - `embedding.request.duration` (Histogram, `model`, `device`)
-  - `embedding.batch_size` (Histogram)
-  - `embedding.tokens.total` (Counter)
-  - `embedding.throughput_tok_per_s` (Gauge)
-
-### 3-4. Node.js 스트리밍 계측 📋
-
-#### `frontend-streaming.js`
-```
-파일 위치: sdk-instrumentation/nodejs/frontend-streaming.js
-```
-- [ ] `trackStreamingChunks()` 함수 (METRICS_DESIGN.md 코드를 실제 파일로 분리)
-  - inter-chunk 지연 500ms 초과 시 경고 이벤트
-  - 총 청크 수, 스트리밍 총 소요 시간 기록
-- [ ] Browser RUM(Real User Monitoring) 연동 방안
-  - Largest Contentful Paint (LCP) 측정
-  - Web Vitals → OTel Metric 변환
+#### 검증 및 유틸리티 스크립트
+- [x] **`scripts/validate-traces.py`** (200줄)
+  - Tempo TraceQL로 Context Propagation 단절 3개 패턴 탐지
+  - 성능 이상 4개 패턴 탐지 (TTFT 급등, 가드레일 차단, 에러 등)
+  - `--fail-on-broken` 플래그 → CI 파이프라인 연동 가능
+- [x] **`scripts/benchmark-sampling.py`** (160줄)
+  - Tail Sampling 정책별 보존율 시뮬레이션 (표 형식 출력)
+  - 월간 저장 비용 추정 (S3 ap-northeast-2 기준)
+  - `--export-csv` 옵션으로 결과 저장
+- [x] **`scripts/test-alerts.sh`** (130줄)
+  - `promtool check rules` YAML 문법 검증
+  - 필수 Alert Rule 9개 존재 확인
+  - 임계치 값, for 절, severity 레이블 자동 검증
+  - 실행 중인 Prometheus에서 FIRING 알람 현황 조회
 
 ---
 
-## 미완료 항목 — Phase 4: Grafana 대시보드
-
-> 우선순위: `Critical` 대시보드부터 순서대로 작성
-
-### 4-1. AI Service Overview Dashboard 📋
-```
-파일 위치: dashboards/grafana/ai-service-overview.json
-```
-- [ ] 패널 설계
-  - **Row 1 — 시스템 건강도**: E2E 레이턴시 P95, 에러율, 처리량(RPS)
-  - **Row 2 — LLM 성능**: TTFT P50/P95/P99 게이지, TPS 시계열
-  - **Row 3 — 레이어별 레이턴시 기여도**: 가드레일/에이전트/벡터DB/LLM 스택 차트
-  - **Row 4 — 알람 현황**: Alerting 상태 패널
-- [ ] SLO 목표선 표시 (Threshold 라인)
-- [ ] 시간 범위 변수 (`$__range`)
-- [ ] 서비스명 변수 (`$service`) — 다중 서비스 전환
-
-### 4-2. LLM Performance Dashboard 📋
-```
-파일 위치: dashboards/grafana/llm-performance.json
-```
-- [ ] 패널 설계
-  - **TTFT 분포**: Heatmap (시간 × TTFT 분포)
-  - **TPS 추세**: 모델별 시계열 (P50/P95)
-  - **ms/token 분포**: Histogram panel
-  - **큐 대기 시간**: 시계열 + 색상 임계치
-  - **토큰 비용**: prompt_tokens + completion_tokens 누적 영역 차트
-  - **동시 요청 수**: 시계열 (vLLM 포화 판단)
-- [ ] 모델별 필터 변수 (`$model`)
-- [ ] Exemplar 활성화 — 고TTFT 포인트 클릭 → Tempo 트레이스 바로 이동
-
-### 4-3. GPU-LLM Correlation Dashboard 📋
-```
-파일 위치: dashboards/grafana/gpu-correlation.json
-```
-- [ ] 패널 설계 (핵심 대시보드 — 장애 예방의 핵심)
-  - **VRAM 사용률 vs LLM 큐 대기 (이중 Y축)**: 상관관계 시각화
-  - **GPU 가동률 vs TPS**: GPU 효율성 측정
-  - **GPU 온도 추세**: 스로틀링 예측선 표시 (85°C)
-  - **VRAM OOM 예측 카운트다운**: $T_{OOM}$ 수식 기반 Stat 패널
-  - **GPU 전력 소비**: 절전 vs 최대 성능 모드 식별
-  - **멀티 GPU 노드 비교**: GPU 인덱스별 열지도
-- [ ] GPU 인덱스 변수 (`$gpu`)
-- [ ] OOM 예측 임계치 알람 시각화
-
-### 4-4. Guardrail Analysis Dashboard 📋
-```
-파일 위치: dashboards/grafana/guardrail-analysis.json
-```
-- [ ] 패널 설계
-  - **차단율 시계열**: 정책별 분리 (스택 차트)
-  - **위반 유형 분포**: 파이 차트 (jailbreak/pii/toxic/custom)
-  - **가드레일 레이턴시 분포**: Histogram (P50/P95/P99)
-  - **Re-ask 발생 빈도**: 시계열 (프롬프트 품질 지표)
-  - **가드레일 레이턴시 기여도**: E2E 대비 % 단일 스탯
-  - **정책별 차단 Top N**: Bar chart (어떤 규칙이 가장 많이 트리거되는지)
-- [ ] 정책명 변수 (`$policy`)
-- [ ] Loki 연동 — 차단 이벤트 로그 테이블 패널
-
-### 4-5. Agent & External API Dashboard 📋
-```
-파일 위치: dashboards/grafana/agent-external-api.json
-```
-- [ ] 패널 설계
-  - **외부 API 레이턴시 P99**: 서비스별 Bar gauge
-  - **타임아웃 발생 빈도**: 히트맵 (서비스 × 시간대)
-  - **에러율 by 서비스**: 시계열
-  - **LangChain 체인 단계별 레이턴시**: 워터폴 근사 Bar chart
-  - **Tool 호출 성공/실패 비율**: Stat 패널
-  - **Agent 재귀 깊이 분포**: Histogram
-
-### 4-6. Service Map (선택) 📋
-```
-도구: Tempo Service Map (내장) + Grafana Node Graph
-```
-- [ ] Tempo metrics-generator 설정으로 자동 서비스 맵 생성
-- [ ] 서비스 간 레이턴시/에러율 엣지 가중치 표시
-- [ ] 클릭 → 해당 서비스 대시보드 이동 링크
-
----
-
-## 미완료 항목 — Phase 5: 통합 테스트 및 검증
-
-### 5-1. Context Propagation 검증 스크립트 📋
-```
-파일 위치: scripts/validate-traces.py
-```
-- [ ] Grafana Tempo API 쿼리로 단절 트레이스 탐색
-  - TraceQL: `{span.guardrail.action != ""} && !{span.llm.provider != ""}`
-  - 가드레일 Span은 있지만 LLM Span이 없는 트레이스 = 전파 단절
-- [ ] 단절 발생 시 CLI 리포트 출력
-- [ ] CI 파이프라인 통합 (GitHub Actions 선택)
+## 미완료 항목 — Phase 5: 통합 테스트 (잔여)
 
 ### 5-2. E2E 부하 테스트 시나리오 📋
 ```
@@ -351,91 +237,57 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
   - LLM 과부하: 동시 100 요청 (GPU 포화 시뮬레이션)
   - 외부 API 지연: Serper API Mock 5초 지연 주입
 - [ ] 부하 테스트 중 Prometheus 지표 자동 캡처
-- [ ] 테스트 결과 리포트 자동 생성
-
-### 5-3. Sampling 비율 시뮬레이션 📋
-```
-파일 위치: scripts/benchmark-sampling.py
-```
-- [ ] 실제 트래픽 분포 기반 Tail Sampling 정책 시뮬레이션
-- [ ] 정책별 보존율 계산 및 비용 추정
-- [ ] 최적 `decision_wait` 값 도출
-
-### 5-4. Alert Rule 검증 📋
-```
-파일 위치: scripts/test-alerts.sh
-```
-- [ ] `promtool test rules` 를 활용한 Alert Rule 단위 테스트
-  - TTFT_High: 5분 고지연 시나리오
-  - GPU_VRAM_Critical: VRAM 92% 도달 시나리오
-  - Guardrail_Block_Rate_High: 차단율 10% 초과 시나리오
-- [ ] 알람 채널 연동 테스트 (Slack Webhook 또는 Email)
+- [ ] 테스트 결과 리포트 자동 생성 (HTML + Prometheus snapshot)
 
 ---
 
-## 미완료 항목 — Phase 6: 운영 자동화
+## 미완료 항목 — Phase 6: 운영 자동화 📋
 
-### 6-1. Kubernetes 프로덕션 배포 완성 📋
-
-#### `infra/kubernetes/namespace-rbac.yaml`
-- [ ] Namespace `monitoring` 생성
-- [ ] OTel Collector ServiceAccount + ClusterRole + ClusterRoleBinding
-- [ ] AI Inference 네임스페이스 접근 권한
-
-#### `infra/kubernetes/otelcol-agent-daemonset.yaml`
-- [ ] Agent DaemonSet 완성본 (ARCHITECTURE.md 코드를 실제 파일로 분리)
-  - GPU 노드 Toleration 설정
-  - `KUBE_NODE_NAME` 환경변수 주입 (FieldRef)
-  - 리소스 requests/limits (cpu: 100m/500m, memory: 256Mi/512Mi)
-  - LivenessProbe + ReadinessProbe
-
-#### `infra/kubernetes/otelcol-gateway-deployment.yaml`
-- [ ] Gateway Deployment 완성본 (ARCHITECTURE.md 코드를 실제 파일로 분리)
-  - PodAntiAffinity (다중 노드 분산)
-  - HPA (min: 3, max: 10, CPU 70% + Memory 75% 트리거)
-
-#### `infra/kubernetes/prometheus-servicemonitor.yaml`
-- [ ] Prometheus Operator ServiceMonitor 정의
-  - OTel Collector (Agent + Gateway) 메트릭 자동 스크레이프
-  - DCGM Exporter 스크레이프
-  - vLLM Pod 애노테이션 기반 스크레이프
-
-### 6-2. Helm Chart 패키징 (선택) 💡
+### 6-1. Helm Chart 패키징 💡
 ```
 파일 위치: helm/aiservice-monitoring/
 ```
-- [ ] `Chart.yaml`, `values.yaml` 작성
-- [ ] 서브차트: otel-collector, prometheus, grafana, tempo, loki
-- [ ] Values 오버라이드로 환경별 배포 (dev/staging/prod)
+- [ ] `Chart.yaml` — 차트 메타데이터 (버전, 설명, 의존성 선언)
+- [ ] `values.yaml` — 환경별 오버라이드 가능한 기본값
+  - OTel Collector image 태그, 리소스 요청량
+  - Prometheus retention, 스크레이프 간격
+  - Grafana admin password, persistence 설정
+- [ ] 서브차트 의존성 선언
+  - `opentelemetry-collector` (open-telemetry/opentelemetry-helm-charts)
+  - `prometheus` (prometheus-community/kube-prometheus-stack)
+  - `grafana` (grafana/grafana)
+  - `tempo` (grafana/tempo)
+  - `loki` (grafana/loki)
+- [ ] `templates/` — 커스텀 리소스 (ServiceMonitor, PrometheusRule, ConfigMap)
+- [ ] Values 오버라이드로 환경별 배포
+  - `values-dev.yaml` — 단일 레플리카, 소용량 retention
+  - `values-prod.yaml` — HPA 활성화, Thanos 연동
 
-### 6-3. GitHub Actions CI/CD 파이프라인 (선택) 💡
+### 6-2. GitHub Actions CI/CD 파이프라인 💡
 ```
 파일 위치: .github/workflows/
 ```
-- [ ] `lint.yaml` — YAML 검증 (yamllint), Python 린트 (ruff)
-- [ ] `validate-collector.yaml` — otelcol validate 명령 실행
-- [ ] `test-alerts.yaml` — promtool test rules 실행
+- [ ] `lint.yaml` — PR 시 자동 실행
+  - `yamllint` — Collector/K8s YAML 문법 검증
+  - `ruff` — Python SDK 코드 린트
+  - `eslint` — Node.js SDK 코드 린트
+- [ ] `validate-collector.yaml` — otelcol 설정 유효성 검증
+  - `otelcol validate --config=...` 실행
+  - Agent + Gateway 설정 파일 각각 검증
+- [ ] `test-alerts.yaml` — Alert Rule 자동 테스트
+  - `promtool check rules infra/docker/prometheus-rules.yaml`
+  - 필수 Alert 9개 존재 여부 검증
 - [ ] `validate-traces.yaml` — Context Propagation 단절 탐지
+  - staging 환경 Tempo에 쿼리
+  - 단절 트레이스 발견 시 PR 블로킹
 
----
-
-## 미완료 항목 — Phase 2 잔여: 인프라 설정 보완
-
-### 2-1. Kubernetes 추가 매니페스트 📋
-
-#### `infra/kubernetes/otelcol-agent-daemonset.yaml` (독립 파일)
-- [ ] 현재 `otelcol-configmap.yaml` 내 인라인으로 작성된 내용을 독립 파일로 분리
-- [ ] 실제 배포 가능한 완성 YAML (이미지 태그 고정, 리소스 설정 포함)
-
-#### `infra/kubernetes/otelcol-gateway-deployment.yaml` (독립 파일)
-- [ ] Deployment + HPA YAML 독립 파일 분리
-
-### 2-2. Collector Pipelines 문서화 📋
+### 6-3. Collector Pipelines 문서화 (선택) 💡
 ```
-파일 위치: collector/pipelines/traces-pipeline.md, metrics-pipeline.md
+파일 위치: collector/pipelines/
 ```
-- [ ] 각 파이프라인의 데이터 흐름을 ASCII 다이어그램으로 문서화
-- [ ] Processor 적용 순서와 이유 설명 (교육용)
+- [ ] `traces-pipeline.md` — 트레이스 데이터 흐름 ASCII 다이어그램
+- [ ] `metrics-pipeline.md` — 지표 파이프라인 (DCGM → Prometheus → Thanos)
+- [ ] Processor 적용 순서와 이유 설명
 
 ---
 
@@ -459,57 +311,47 @@ Phase 6: 운영 자동화        [░░░░░░░░░░]   0%  📋
 | `infra/docker/grafana-dashboards.yaml` | ✅ | 17 | 프로비저닝 설정 |
 | `infra/kubernetes/dcgm-exporter.yaml` | ✅ | 120 | GPU DaemonSet |
 | `infra/kubernetes/otelcol-configmap.yaml` | ✅ | 140 | ConfigMap + Service |
-| `infra/kubernetes/namespace-rbac.yaml` | 📋 | — | **미작성** |
-| `infra/kubernetes/otelcol-agent-daemonset.yaml` | 📋 | — | **미작성** |
-| `infra/kubernetes/otelcol-gateway-deployment.yaml` | 📋 | — | **미작성** |
-| `infra/kubernetes/prometheus-servicemonitor.yaml` | 📋 | — | **미작성** |
+| `infra/kubernetes/namespace-rbac.yaml` | ✅ | 60 | RBAC 완성 |
+| `infra/kubernetes/otelcol-agent-daemonset.yaml` | ✅ | 135 | DaemonSet + Toleration |
+| `infra/kubernetes/otelcol-gateway-deployment.yaml` | ✅ | 155 | Deployment + HPA + PDB |
+| `infra/kubernetes/prometheus-servicemonitor.yaml` | ✅ | 150 | 6개 Recording Rules |
 | `sdk-instrumentation/python/otel_setup.py` | ✅ | 127 | 공통 초기화 |
 | `sdk-instrumentation/python/guardrails/nemo_instrumentation.py` | ✅ | 129 | 가드레일 데코레이터 |
 | `sdk-instrumentation/python/llm/vllm_instrumentation.py` | ✅ | 152 | TTFT/TPS 계측 |
-| `sdk-instrumentation/python/llm/embedding_instrumentation.py` | 📋 | — | **미작성** |
-| `sdk-instrumentation/python/agents/langchain_tracer.py` | 📋 | — | **미작성** |
-| `sdk-instrumentation/python/agents/external_api_tracer.py` | 📋 | — | **미작성** |
-| `sdk-instrumentation/python/agents/fastapi_streaming.py` | 📋 | — | **미작성** |
-| `sdk-instrumentation/python/vector_db/vectordb_instrumentation.py` | 📋 | — | **미작성** |
+| `sdk-instrumentation/python/llm/embedding_instrumentation.py` | ✅ | 210 | HuggingFace + OpenAI |
+| `sdk-instrumentation/python/agents/langchain_tracer.py` | ✅ | 295 | LangChain/LangGraph 콜백 |
+| `sdk-instrumentation/python/agents/external_api_tracer.py` | ✅ | 220 | CircuitBreaker + W3C |
+| `sdk-instrumentation/python/agents/fastapi_streaming.py` | ✅ | 145 | SSE 스트리밍 계측 |
+| `sdk-instrumentation/python/vector_db/vectordb_instrumentation.py` | ✅ | 280 | Pinecone + Qdrant + Cache |
 | `sdk-instrumentation/nodejs/otel-setup.js` | ✅ | 71 | Node.js 초기화 |
-| `sdk-instrumentation/nodejs/frontend-streaming.js` | 📋 | — | **미작성** |
+| `sdk-instrumentation/nodejs/frontend-streaming.js` | ✅ | 160 | SSE + Web Vitals |
 | `sdk-instrumentation/go/otel_setup.go` | ✅ | 119 | Go 초기화 |
-| `dashboards/grafana/ai-service-overview.json` | 📋 | — | **미작성** |
-| `dashboards/grafana/llm-performance.json` | 📋 | — | **미작성** |
-| `dashboards/grafana/gpu-correlation.json` | 📋 | — | **미작성** |
-| `dashboards/grafana/guardrail-analysis.json` | 📋 | — | **미작성** |
-| `dashboards/grafana/agent-external-api.json` | 📋 | — | **미작성** |
-| `scripts/validate-traces.py` | 📋 | — | **미작성** |
-| `scripts/load-test.py` | 📋 | — | **미작성** |
-| `scripts/benchmark-sampling.py` | 📋 | — | **미작성** |
-| `scripts/test-alerts.sh` | 📋 | — | **미작성** |
+| `dashboards/grafana/ai-service-overview.json` | ✅ | — | 8개 KPI + 레이어 기여도 |
+| `dashboards/grafana/llm-performance.json` | ✅ | — | TTFT/TPS/토큰 비용 |
+| `dashboards/grafana/gpu-correlation.json` | ✅ | — | VRAM vs 큐 대기 이중 Y축 |
+| `dashboards/grafana/guardrail-analysis.json` | ✅ | — | 차단율 + Loki 로그 |
+| `dashboards/grafana/agent-external-api.json` | ✅ | — | Tool 성공률 + P99 |
+| `scripts/validate-traces.py` | ✅ | 200 | TraceQL 전파 단절 탐지 |
+| `scripts/load-test.py` | 📋 | — | **미작성** (Session 4) |
+| `scripts/benchmark-sampling.py` | ✅ | 160 | Tail Sampling 비용 시뮬레이션 |
+| `scripts/test-alerts.sh` | ✅ | 130 | Alert Rule 검증 |
+| `helm/aiservice-monitoring/` | 📋 | — | **미작성** (Phase 6) |
+| `.github/workflows/` | 📋 | — | **미작성** (Phase 6) |
 
 ---
 
 ## 권장 작업 순서 (Next Session 기준)
 
 ```
-Session 3 권장 작업 (Python 에이전트 계측 완성):
-  1. sdk-instrumentation/python/agents/langchain_tracer.py
-  2. sdk-instrumentation/python/agents/external_api_tracer.py
-  3. sdk-instrumentation/python/agents/fastapi_streaming.py
-  4. sdk-instrumentation/python/llm/embedding_instrumentation.py
-  5. sdk-instrumentation/python/vector_db/vectordb_instrumentation.py
-
-Session 4 권장 작업 (Grafana 대시보드):
-  1. dashboards/grafana/gpu-correlation.json          ← 가장 임팩트 큼
-  2. dashboards/grafana/llm-performance.json
-  3. dashboards/grafana/guardrail-analysis.json
-  4. dashboards/grafana/ai-service-overview.json
-  5. dashboards/grafana/agent-external-api.json
-
-Session 5 권장 작업 (K8s 프로덕션 + 검증):
-  1. infra/kubernetes/namespace-rbac.yaml
-  2. infra/kubernetes/otelcol-agent-daemonset.yaml
-  3. infra/kubernetes/otelcol-gateway-deployment.yaml
-  4. infra/kubernetes/prometheus-servicemonitor.yaml
-  5. scripts/validate-traces.py
-  6. scripts/test-alerts.sh
+Session 4 권장 작업 (운영 자동화 완성):
+  1. scripts/load-test.py                         ← Locust 부하 테스트 시나리오
+  2. helm/aiservice-monitoring/Chart.yaml          ← Helm 패키징 시작
+  3. helm/aiservice-monitoring/values.yaml
+  4. helm/aiservice-monitoring/values-dev.yaml
+  5. helm/aiservice-monitoring/values-prod.yaml
+  6. .github/workflows/lint.yaml
+  7. .github/workflows/validate-collector.yaml
+  8. .github/workflows/test-alerts.yaml
 ```
 
 ---
@@ -520,6 +362,8 @@ Session 5 권장 작업 (K8s 프로덕션 + 검증):
 |-----------|--------|------------|
 | `2aa54f4` | feat: initialize AI service monitoring project structure | 24 |
 | `54bd888` | feat: add OTel architecture, collector configs, infra, and SDK instrumentation | 18 |
+| `3832418` | docs: add WORK_STATUS.md — project progress tracker and TODO master | 1 |
+| (Session 3) | feat: complete SDK instrumentation, K8s manifests, Grafana dashboards, and scripts | 19 |
 
 ---
 

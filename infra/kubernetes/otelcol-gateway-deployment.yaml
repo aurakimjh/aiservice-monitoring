@@ -1,0 +1,237 @@
+---
+# OTel Collector Gateway — Deployment (3+ replicas, HPA 적용)
+# 역할: Agent에서 받은 데이터를 Tail Sampling 후 백엔드로 팬아웃
+# Tail Sampling 일관성을 위해 동일 Trace ID는 동일 Pod로 라우팅해야 함
+#   → Agent에서 LoadBalancing Exporter로 Trace ID 기반 해시 라우팅 필요
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-gateway
+  namespace: monitoring
+  labels:
+    app: otel-collector
+    role: gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/version: "0.104.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: otel-collector
+      role: gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0    # 무중단 배포: 항상 최소 3개 유지
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        role: gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+    spec:
+      serviceAccountName: otel-collector
+
+      # Gateway Pod를 서로 다른 노드에 분산 (HA)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: otel-collector
+                    role: gateway
+                topologyKey: kubernetes.io/hostname
+          # 가능하면 서로 다른 AZ에 배포
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: otel-collector
+                    role: gateway
+                topologyKey: topology.kubernetes.io/zone
+
+      # 모니터링 워크로드는 AI 추론 노드에서 격리
+      nodeSelector:
+        node-role: monitoring
+
+      tolerations:
+        - key: monitoring
+          operator: Exists
+          effect: NoSchedule
+
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.104.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/conf/otelcol-gateway.yaml"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DEPLOYMENT_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-environment
+                  key: DEPLOYMENT_ENV
+                  optional: true
+            - name: GOGC
+              value: "80"
+            # Tail Sampling 버퍼: 50,000 traces × ~80KB = ~4GB 최대
+            - name: GOMEMLIMIT
+              value: "3500MiB"
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: prometheus
+              containerPort: 8889
+            - name: metrics
+              containerPort: 8888
+            - name: health
+              containerPort: 13133
+            - name: pprof
+              containerPort: 1777
+            - name: zpages
+              containerPort: 55679
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          volumeMounts:
+            - name: otelcol-gateway-config
+              mountPath: /conf
+              readOnly: true
+            - name: otelcol-tmp
+              mountPath: /var/otelcol
+
+      volumes:
+        - name: otelcol-gateway-config
+          configMap:
+            name: otel-collector-gateway-config
+        - name: otelcol-tmp
+          emptyDir:
+            sizeLimit: 2Gi
+
+---
+# Gateway ClusterIP Service — 내부 통신용 (Agent → Gateway)
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-gateway
+  namespace: monitoring
+  labels:
+    app: otel-collector
+    role: gateway
+spec:
+  selector:
+    app: otel-collector
+    role: gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: prometheus
+      port: 8889
+      targetPort: prometheus
+    - name: metrics
+      port: 8888
+      targetPort: metrics
+    - name: health
+      port: 13133
+      targetPort: health
+  type: ClusterIP
+
+---
+# HorizontalPodAutoscaler — CPU/Memory 기반 자동 스케일링
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: otel-collector-gateway
+  namespace: monitoring
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: otel-collector-gateway
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60    # 60초 안정화 후 스케일업
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60             # 60초마다 최대 2개 추가
+    scaleDown:
+      stabilizationWindowSeconds: 300   # 5분 안정화 후 스케일다운 (Tail Sampling 상태 보호)
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# PodDisruptionBudget — 롤링 업데이트/노드 드레인 시 최소 가용성 보장
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: otel-collector-gateway
+  namespace: monitoring
+spec:
+  minAvailable: 2   # 항상 최소 2개 Pod 유지
+  selector:
+    matchLabels:
+      app: otel-collector
+      role: gateway

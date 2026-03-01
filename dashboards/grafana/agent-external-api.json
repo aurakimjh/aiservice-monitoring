@@ -1,0 +1,176 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus" },
+    { "name": "DS_TEMPO",      "label": "Tempo",      "type": "datasource", "pluginId": "tempo" }
+  ],
+  "title": "Agent & External API — Tool 호출 / 외부 서비스 레이턴시",
+  "uid": "aiservice-agent-api",
+  "tags": ["ai", "agent", "external-api"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "description": "LangChain/LangGraph 에이전트의 Tool 호출 성공률과 외부 API 레이턴시를 추적합니다. 타임아웃과 에러가 에이전트 체인 전체에 미치는 영향을 시각화합니다.",
+  "templating": {
+    "list": [
+      {
+        "name": "service", "label": "외부 서비스",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_external_api_request_duration_bucket, service)",
+        "multi": true, "includeAll": true
+      },
+      {
+        "name": "tool", "label": "에이전트 Tool",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_agent_tool_call_total, tool)",
+        "multi": true, "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "Tool 성공률",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "red" },
+            { "value": 0.95,  "color": "yellow" },
+            { "value": 0.99,  "color": "green" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "1 - (sum(rate(aiservice_agent_tool_error_total{tool=~\"$tool\"}[5m])) / sum(rate(aiservice_agent_tool_call_total{tool=~\"$tool\"}[5m])))",
+        "legendFormat": "성공률"
+      }]
+    },
+    {
+      "id": 2, "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "외부 API P99 레이턴시",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 2000,  "color": "yellow" },
+            { "value": 5000,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(aiservice_external_api_request_duration_bucket{service=~\"$service\"}[5m])) by (le))",
+        "legendFormat": "P99"
+      }]
+    },
+    {
+      "id": 3, "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "타임아웃 발생률",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 0.02,  "color": "yellow" },
+            { "value": 0.05,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(rate(aiservice_external_api_timeout_total{service=~\"$service\"}[5m])) / sum(rate(aiservice_external_api_request_total{service=~\"$service\"}[5m]))",
+        "legendFormat": "타임아웃률"
+      }]
+    },
+    {
+      "id": 4, "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "LangGraph 재귀 깊이 P99",
+      "description": "에이전트 루프 깊이. 20 초과 시 무한 루프 가능성.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 10,   "color": "yellow" },
+            { "value": 20,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(aiservice_agent_graph_recursion_depth_bucket[5m])) by (le))",
+        "legendFormat": "재귀 깊이 P99"
+      }]
+    },
+    {
+      "id": 10, "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "type": "bargauge", "title": "외부 API 서비스별 P99 레이턴시",
+      "description": "어떤 외부 서비스가 가장 느린지 한눈에 비교.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 1000,  "color": "yellow" },
+            { "value": 3000,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "displayMode": "gradient" },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(aiservice_external_api_request_duration_bucket{service=~\"$service\"}[5m])) by (le, service))",
+        "legendFormat": "{{service}}"
+      }]
+    },
+    {
+      "id": 11, "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "외부 API 에러율 시계열",
+      "description": "서비스별 에러율 추이. 5xx + 타임아웃 + 네트워크 에러 합산.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [{
+        "expr": "rate(aiservice_external_api_error_total{service=~\"$service\"}[5m]) / rate(aiservice_external_api_request_total{service=~\"$service\"}[5m])",
+        "legendFormat": "{{service}}"
+      }]
+    },
+    {
+      "id": 20, "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "Tool 호출 성공/실패 추이",
+      "description": "LangChain Tool별 성공/실패율. 에러 급증 시 Tool 구현 또는 외부 의존성 확인.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(aiservice_agent_tool_call_total{tool=~\"$tool\",status=\"success\"}[5m])) by (tool)",
+          "legendFormat": "✅ {{tool}}"
+        },
+        {
+          "expr": "sum(rate(aiservice_agent_tool_error_total{tool=~\"$tool\"}[5m])) by (tool)",
+          "legendFormat": "❌ {{tool}} (에러)"
+        }
+      ]
+    },
+    {
+      "id": 21, "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "LangGraph 노드별 처리 시간",
+      "description": "그래프 각 노드의 평균 처리 시간. 가장 느린 노드가 전체 체인 병목.",
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
+      },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(aiservice_agent_graph_node_duration_bucket[5m])) by (le, node))",
+        "legendFormat": "{{node}} P95"
+      }]
+    }
+  ]
+}

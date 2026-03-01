@@ -1,0 +1,194 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus" },
+    { "name": "DS_LOKI",       "label": "Loki",       "type": "datasource", "pluginId": "loki" },
+    { "name": "DS_TEMPO",      "label": "Tempo",      "type": "datasource", "pluginId": "tempo" }
+  ],
+  "title": "Guardrail Analysis — 차단율 / 레이턴시 / 정책 위반",
+  "uid": "aiservice-guardrail",
+  "tags": ["ai", "guardrail", "security"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "description": "가드레일 레이어의 차단율, 정책 위반 유형, E2E 레이턴시 기여도를 분석합니다. 차단율 급등은 보안 공격, 레이턴시 급등은 모델 성능 이슈를 의미합니다.",
+  "templating": {
+    "list": [
+      {
+        "name": "policy", "label": "정책",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(aiservice_guardrail_block_total, policy)",
+        "multi": true, "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "현재 차단율",
+      "description": "최근 5분 차단율. 10% 초과 시 이상 트래픽 탐지 Alert 발동.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 0.05,  "color": "yellow" },
+            { "value": 0.10,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{
+        "expr": "sum(rate(aiservice_guardrail_block_total{policy=~\"$policy\"}[5m])) / sum(rate(aiservice_guardrail_request_total{policy=~\"$policy\"}[5m]))",
+        "legendFormat": "차단율"
+      }]
+    },
+    {
+      "id": 2, "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "가드레일 P99 레이턴시",
+      "description": "99번째 백분위수 검증 시간. SLO: < 800ms",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 500,   "color": "yellow" },
+            { "value": 1000,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(aiservice_guardrail_validation_duration_bucket{policy=~\"$policy\"}[5m])) by (le))",
+        "legendFormat": "P99"
+      }]
+    },
+    {
+      "id": 3, "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "Re-ask 발생 빈도",
+      "description": "Guardrails AI re-ask 발생률. 높을수록 프롬프트 품질 저하.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 0.5,   "color": "yellow" },
+            { "value": 2.0,   "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "sum(rate(aiservice_guardrail_reask_total{policy=~\"$policy\"}[5m]))",
+        "legendFormat": "Re-ask /s"
+      }]
+    },
+    {
+      "id": 4, "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "가드레일 레이턴시 기여도",
+      "description": "E2E 레이턴시 대비 가드레일 레이턴시 비율. 목표: < 20%",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null,  "color": "green" },
+            { "value": 0.20,  "color": "yellow" },
+            { "value": 0.35,  "color": "red" }
+          ]}
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.50, sum(rate(aiservice_guardrail_validation_duration_bucket[5m])) by (le)) / histogram_quantile(0.50, sum(rate(aiservice_http_server_request_duration_bucket[5m])) by (le))",
+        "legendFormat": "가드레일 기여도"
+      }]
+    },
+    {
+      "id": 5, "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "오늘 총 차단 횟수",
+      "description": "당일 누적 차단 이벤트 수.",
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{
+        "expr": "increase(aiservice_guardrail_block_total{policy=~\"$policy\"}[24h])",
+        "legendFormat": "차단"
+      }]
+    },
+    {
+      "id": 6, "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "type": "stat", "title": "처리량 (검증 /s)",
+      "description": "초당 가드레일 검증 처리량.",
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{
+        "expr": "sum(rate(aiservice_guardrail_request_total{policy=~\"$policy\"}[5m]))",
+        "legendFormat": "검증 /s"
+      }]
+    },
+    {
+      "id": 10, "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "정책별 차단율 추이",
+      "description": "정책별 차단율 시계열. 특정 정책의 급등은 타겟 공격 가능성.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "expr": "rate(aiservice_guardrail_block_total{policy=~\"$policy\"}[5m]) / rate(aiservice_guardrail_request_total{policy=~\"$policy\"}[5m])",
+        "legendFormat": "{{policy}}"
+      }]
+    },
+    {
+      "id": 11, "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "type": "piechart", "title": "정책 위반 유형 분포",
+      "description": "위반 유형별 누적 횟수. 어떤 종류의 악성 입력이 가장 많은지 파악.",
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "options": { "pieType": "donut", "displayLabels": ["percent", "name"] },
+      "targets": [{
+        "expr": "sum by (type) (increase(aiservice_guardrail_policy_violation_total{policy=~\"$policy\"}[24h]))",
+        "legendFormat": "{{type}}"
+      }]
+    },
+    {
+      "id": 20, "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "type": "timeseries", "title": "가드레일 레이턴시 분포 (P50 / P95 / P99)",
+      "description": "가드레일 처리 시간 분포. P99 급등은 LLM 기반 정책 과부하.",
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(aiservice_guardrail_validation_duration_bucket{policy=~\"$policy\"}[5m])) by (le, policy))",
+          "legendFormat": "P50 — {{policy}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aiservice_guardrail_validation_duration_bucket{policy=~\"$policy\"}[5m])) by (le, policy))",
+          "legendFormat": "P95 — {{policy}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(aiservice_guardrail_validation_duration_bucket{policy=~\"$policy\"}[5m])) by (le, policy))",
+          "legendFormat": "P99 — {{policy}}"
+        }
+      ]
+    },
+    {
+      "id": 21, "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "type": "logs", "title": "가드레일 차단 이벤트 로그",
+      "description": "Loki에서 실시간으로 가져온 차단 이벤트 로그. 위반 입력 패턴 분석.",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showLabels": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [{
+        "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+        "expr": "{guardrail_action=\"BLOCK\"} | json | line_format \"[{{.policy}}] {{.violation_type}}: {{.input_snippet}}\"",
+        "legendFormat": ""
+      }]
+    }
+  ]
+}
