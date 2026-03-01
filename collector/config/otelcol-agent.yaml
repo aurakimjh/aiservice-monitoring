@@ -1,0 +1,152 @@
+# OTel Collector — Agent Mode (DaemonSet: 노드당 1개)
+# 역할: SDK에서 텔레메트리를 수신하여 Gateway Collector로 전달
+# 처리 부하를 최소화하고 데이터 유실을 방지하는 것이 핵심 목표
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /health
+  file_storage:
+    directory: /var/otelcol/storage
+    timeout: 10s
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 32
+        keepalive:
+          server_parameters:
+            max_connection_idle: 300s
+            max_connection_age: 600s
+            time: 60s
+            timeout: 20s
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ["*"]
+
+  # 레거시 Jaeger 수신 (기존 서비스 마이그레이션 지원)
+  jaeger:
+    protocols:
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+
+  # 호스트 시스템 메트릭
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      network: {}
+      disk: {}
+
+processors:
+  # 메모리 보호 — 절대 제거 금지, 첫 번째로 항상 적용
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+  # K8s 메타데이터 자동 태깅
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    filter:
+      node_from_env_var: KUBE_NODE_NAME
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.deployment.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.node.name
+        - container.id
+        - container.image.name
+        - container.image.tag
+      labels:
+        - tag_name: ai.service.layer
+          key: ai-layer
+          from: pod
+        - tag_name: ai.model.name
+          key: model
+          from: pod
+
+  # 클라우드/환경 자동 감지
+  resourcedetection:
+    detectors: [env, k8s_node, docker]
+    timeout: 10s
+    override: false
+
+  # 헬스체크 스팬 제거
+  filter/drop_noise:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.route"] == "/health"'
+        - 'attributes["http.route"] == "/metrics"'
+        - 'attributes["http.route"] == "/readyz"'
+        - 'attributes["http.route"] == "/livez"'
+
+  # 배치 처리 — 네트워크 효율 최적화
+  batch:
+    send_batch_size: 512
+    send_batch_max_size: 1024
+    timeout: 5s
+
+exporters:
+  # Gateway Collector로 전달 (압축 + 재시도 + WAL)
+  otlp/gateway:
+    endpoint: "otel-collector-gateway:4317"
+    tls:
+      insecure: true   # 클러스터 내부 통신 (프로덕션에서는 mTLS 적용)
+    compression: gzip
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 1000
+      storage: file_storage   # 재시작 시에도 큐 유지
+
+  # 개발 환경 디버그 출력
+  debug:
+    verbosity: basic
+    sampling_initial: 2
+    sampling_thereafter: 500
+
+service:
+  extensions: [health_check, file_storage]
+
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      level: basic
+      address: 0.0.0.0:8888
+
+  pipelines:
+    traces:
+      receivers:  [otlp, jaeger]
+      processors: [memory_limiter, k8sattributes, resourcedetection, filter/drop_noise, batch]
+      exporters:  [otlp/gateway]
+
+    metrics:
+      receivers:  [otlp, hostmetrics]
+      processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+      exporters:  [otlp/gateway]
+
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, k8sattributes, resourcedetection, batch]
+      exporters:  [otlp/gateway]

@@ -1,0 +1,164 @@
+version: "3.9"
+
+# AI Service Monitoring — 로컬 개발 스택
+# 포함: OTel Collector, Prometheus, Grafana Tempo, Loki, Grafana
+#
+# 실행 방법:
+#   docker compose -f infra/docker/docker-compose.yaml up -d
+#
+# 접속 주소:
+#   Grafana:    http://localhost:3000  (admin / admin)
+#   Prometheus: http://localhost:9090
+#   Tempo:      http://localhost:3200
+#   Jaeger UI:  http://localhost:16686
+#   OTel Health: http://localhost:13133/health
+#   zpages:     http://localhost:55679/debug/tracez
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  tempo_data:
+  loki_data:
+  otelcol_storage:
+
+services:
+
+  # ── OTel Collector (단일 인스턴스 — 로컬 개발용) ──────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol/otelcol-local.yaml"]
+    volumes:
+      - ./otelcol-local.yaml:/etc/otelcol/otelcol-local.yaml:ro
+      - otelcol_storage:/var/otelcol/storage
+    ports:
+      - "4317:4317"    # OTLP gRPC  ← SDK가 여기로 전송
+      - "4318:4318"    # OTLP HTTP
+      - "8888:8888"    # Collector 자체 메트릭
+      - "8889:8889"    # Prometheus 스크레이프 엔드포인트
+      - "13133:13133"  # Health check
+      - "55679:55679"  # zpages 디버깅 UI
+    environment:
+      - GOGC=80
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.10
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://localhost:13133/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Prometheus ─────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-remote-write-receiver"
+      - "--web.enable-lifecycle"
+      - "--enable-feature=exemplar-storage"
+      - "--enable-feature=native-histograms"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prometheus-rules.yaml:/etc/prometheus/rules/ai-rules.yaml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.11
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Grafana Tempo (트레이스 백엔드) ────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"    # Tempo HTTP API (Grafana 데이터소스)
+      - "9095:9095"    # Tempo gRPC
+      - "4320:4317"    # OTLP gRPC (Collector → Tempo, 충돌 방지용 포트 변경)
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.12
+    restart: unless-stopped
+
+  # ── Grafana Loki (로그 백엔드) ─────────────────────────────────────
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.13
+    restart: unless-stopped
+
+  # ── Grafana (통합 시각화 대시보드) ────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor,metricsSummary,correlations
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ../../dashboards/grafana:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.14
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    restart: unless-stopped
+
+  # ── Jaeger UI (트레이스 시각화 대안 — 개발/디버깅용) ──────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+      - MEMORY_MAX_TRACES=10000
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger HTTP Thrift (레거시)
+      - "14250:14250"  # Jaeger gRPC
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.15
+    restart: unless-stopped

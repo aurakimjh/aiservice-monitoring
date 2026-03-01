@@ -1,0 +1,148 @@
+---
+# NVIDIA DCGM Exporter — GPU 메트릭 수집 DaemonSet
+# GPU가 장착된 노드에만 배포 (nodeSelector 활용)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dcgm-exporter
+  namespace: monitoring
+  labels:
+    app: dcgm-exporter
+    component: gpu-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: dcgm-exporter
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: dcgm-exporter
+        component: gpu-monitoring
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9400"
+        prometheus.io/path: "/metrics"
+    spec:
+      # GPU 노드에만 배포
+      nodeSelector:
+        accelerator: nvidia-gpu
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+
+      # GPU 접근을 위해 권한 필요
+      hostNetwork: false
+      hostPID: false
+
+      containers:
+        - name: dcgm-exporter
+          image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+          args:
+            - --collectors=/etc/dcgm-exporter/dcp-metrics-included.csv
+          env:
+            - name: DCGM_EXPORTER_LISTEN
+              value: ":9400"
+            - name: DCGM_EXPORTER_KUBERNETES
+              value: "true"
+            - name: DCGM_EXPORTER_KUBERNETES_GPU_ID_TYPE
+              value: uid
+          ports:
+            - name: metrics
+              containerPort: 9400
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            capabilities:
+              add: [SYS_ADMIN]
+          volumeMounts:
+            - name: dcgm-metrics-config
+              mountPath: /etc/dcgm-exporter
+            - name: nvidia-install-dir-host
+              mountPath: /usr/local/nvidia
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9400
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+      volumes:
+        - name: dcgm-metrics-config
+          configMap:
+            name: dcgm-metrics-config
+        - name: nvidia-install-dir-host
+          hostPath:
+            path: /usr/local/nvidia
+
+---
+# 수집할 GPU 메트릭 선택 (최소 필요 지표만 포함 — 성능 최적화)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dcgm-metrics-config
+  namespace: monitoring
+data:
+  dcp-metrics-included.csv: |
+    # AI 서비스 필수 GPU 지표
+    # Format: field_id, field_name
+
+    # GPU 가동률 (SM 코어 사용률)
+    DCGM_FI_DEV_GPU_UTIL, gauge, GPU utilization (%)
+
+    # VRAM 사용/여유 용량
+    DCGM_FI_DEV_FB_USED, gauge, Framebuffer memory used (MiB)
+    DCGM_FI_DEV_FB_FREE, gauge, Framebuffer memory free (MiB)
+
+    # 전력 소비 (과열 예측)
+    DCGM_FI_DEV_POWER_USAGE, gauge, Power draw (W)
+
+    # 온도 (스로틀링 예측)
+    DCGM_FI_DEV_GPU_TEMP, gauge, GPU temperature (C)
+    DCGM_FI_DEV_MEMORY_TEMP, gauge, Memory temperature (C)
+
+    # SM 클록 (스로틀링 시 저하됨)
+    DCGM_FI_DEV_SM_CLOCK, gauge, SM clock frequency (MHz)
+    DCGM_FI_DEV_MEM_CLOCK, gauge, Memory clock frequency (MHz)
+
+    # 메모리 대역폭 사용률
+    DCGM_FI_DEV_MEM_COPY_UTIL, gauge, Memory bandwidth utilization (%)
+
+    # PCIe 처리량 (CPU-GPU 데이터 전송)
+    DCGM_FI_DEV_PCIE_TX_THROUGHPUT, counter, PCIe TX throughput (KB)
+    DCGM_FI_DEV_PCIE_RX_THROUGHPUT, counter, PCIe RX throughput (KB)
+
+    # ECC 에러 (GPU 하드웨어 장애 조기 탐지)
+    DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, counter, ECC single bit errors (volatile)
+    DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, counter, ECC double bit errors (volatile)
+
+    # XID 에러 (GPU 패닉/리셋 원인 추적)
+    DCGM_FI_DEV_XID_ERRORS, gauge, XID errors
+
+---
+# OTel Collector가 DCGM 메트릭을 스크레이프하기 위한 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: dcgm-exporter
+  namespace: monitoring
+  labels:
+    app: dcgm-exporter
+spec:
+  selector:
+    app: dcgm-exporter
+  ports:
+    - name: metrics
+      port: 9400
+      targetPort: 9400
+  clusterIP: None   # Headless Service: 개별 Pod IP로 직접 스크레이프

@@ -1,0 +1,58 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus — 메트릭 소스
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo    # Metric → Trace 연동 (Exemplar 기반)
+      httpMethod: POST
+
+  # Grafana Tempo — 트레이스 소스
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    url: http://tempo:3200
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: prometheus   # Service Map에서 Prometheus 사용
+      search:
+        hide: false
+      nodeGraph:
+        enabled: true
+      lokiSearch:
+        datasourceUid: loki         # Trace → Log 연동
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        filterBySpanID: true
+        customQuery: true
+        query: '{service_name="${__span.tags["service.name"]}"} | json'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        queries:
+          - name: "요청 레이턴시"
+            query: "histogram_quantile(0.95, rate(aiservice_http_server_request_duration_bucket{$$__tags}[5m]))"
+          - name: "TTFT P95"
+            query: "histogram_quantile(0.95, rate(aiservice_llm_time_to_first_token_bucket{$$__tags}[5m]))"
+
+  # Grafana Loki — 로그 소스
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # 로그에서 Trace ID 추출 → Tempo 링크 생성
+        - name: TraceID
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: "$${__value.raw}"
+          datasourceUid: tempo
+          urlDisplayLabel: "Tempo에서 트레이스 보기"

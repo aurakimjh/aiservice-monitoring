@@ -1,0 +1,104 @@
+# OTel Collector — 로컬 개발 단일 인스턴스
+# Agent + Gateway 역할을 하나의 프로세스에서 처리
+# Tail Sampling 없이 전량 수집 (개발 환경 특성상 트래픽 적음)
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+  file_storage:
+    directory: /var/otelcol/storage
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ["*"]
+  jaeger:
+    protocols:
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  # 지표명 표준화
+  transform/normalize:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, "llm.time_to_first_token") where name == "vllm:time_to_first_token_seconds"
+          - set(name, "llm.tokens_per_second") where name == "vllm:generation_tokens_per_second"
+          - set(unit, "ms") where name == "llm.time_to_first_token"
+          - set(unit, "tok/s") where name == "llm.tokens_per_second"
+
+  batch:
+    send_batch_size: 256
+    timeout: 5s
+
+exporters:
+  # Prometheus 스크레이프 엔드포인트
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "aiservice"
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Tempo (트레이스)
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+  # Loki (로그)
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    labels:
+      resource:
+        service.name: "service_name"
+        deployment.environment: "env"
+      attributes:
+        guardrail.action: "guardrail_action"
+        llm.model: "llm_model"
+
+  # 디버그 콘솔 출력 (개발 시 확인용)
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 100
+
+service:
+  extensions: [health_check, zpages, file_storage]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+  pipelines:
+    traces:
+      receivers:  [otlp, jaeger]
+      processors: [memory_limiter, batch]
+      exporters:  [otlp/tempo, debug]
+
+    metrics:
+      receivers:  [otlp]
+      processors: [memory_limiter, transform/normalize, batch]
+      exporters:  [prometheus]
+
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [loki]

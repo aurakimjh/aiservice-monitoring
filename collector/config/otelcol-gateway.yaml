@@ -1,0 +1,269 @@
+# OTel Collector — Gateway Mode (Deployment: 3+ replicas)
+# 역할: Agent에서 받은 데이터를 Tail Sampling 후 각 백엔드로 팬아웃
+# Tail Sampling 상태를 유지하기 위해 동일 Trace ID는 동일 Gateway 인스턴스로 라우팅 필요
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /health
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+receivers:
+  # Agent Collector에서 수신
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 64
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # GPU 메트릭 직접 스크레이프 (DCGM Exporter)
+  prometheus/gpu:
+    config:
+      scrape_configs:
+        - job_name: dcgm-exporter
+          scrape_interval: 15s
+          kubernetes_sd_configs:
+            - role: pod
+              namespaces:
+                names: [monitoring, ai-inference]
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_label_app]
+              action: keep
+              regex: dcgm-exporter
+            - source_labels: [__meta_kubernetes_pod_ip]
+              target_label: __address__
+              replacement: "$1:9400"
+          metric_relabel_configs:
+            # 필요한 DCGM 지표만 보존 (나머지 드롭으로 부하 감소)
+            - source_labels: [__name__]
+              regex: "DCGM_FI_DEV_(GPU_UTIL|FB_USED|FB_FREE|POWER_USAGE|GPU_TEMP|SM_CLOCK|MEM_COPY_UTIL)"
+              action: keep
+
+        # vLLM 내장 Prometheus 엔드포인트
+        - job_name: vllm-inference
+          scrape_interval: 10s
+          kubernetes_sd_configs:
+            - role: pod
+              namespaces:
+                names: [ai-inference]
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_label_app]
+              action: keep
+              regex: "vllm-.*"
+            - source_labels: [__meta_kubernetes_pod_ip]
+              target_label: __address__
+              replacement: "$1:8000"
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+  # ── Tail-based Sampling ────────────────────────────────────────
+  # 트레이스 완료 후 전체 그림을 보고 보존 여부 결정
+  tail_sampling:
+    decision_wait: 10s       # 루트 Span 종료 후 최대 대기 시간
+    num_traces: 50000        # 메모리 내 최대 보관 트레이스 수
+    expected_new_traces_per_sec: 1000
+
+    policies:
+      # 정책 1: 에러 발생 트레이스 — 무조건 보존
+      - name: policy-error
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+
+      # 정책 2: 전체 E2E 레이턴시 고지연 (5초 초과)
+      - name: policy-high-latency-e2e
+        type: latency
+        latency:
+          threshold_ms: 5000
+
+      # 정책 3: TTFT 고지연 — LLM 응답성 저하 탐지
+      - name: policy-high-ttft
+        type: and
+        and:
+          and_sub_policy:
+            - name: has-ttft
+              type: span_attribute
+              span_attribute:
+                key: llm.ttft_ms
+                values: ["*"]
+                enabled_regex_matching: false
+            - name: ttft-over-threshold
+              type: latency
+              latency:
+                threshold_ms: 2000
+
+      # 정책 4: 가드레일 차단/재질문 이벤트 — 보안/품질 분석
+      - name: policy-guardrail-action
+        type: span_attribute
+        span_attribute:
+          key: guardrail.action
+          values: [BLOCK, REASK]
+          enabled_regex_matching: false
+
+      # 정책 5: 외부 API 타임아웃 — SLA 위반 추적
+      - name: policy-external-timeout
+        type: span_attribute
+        span_attribute:
+          key: external_api.timeout_occurred
+          values: ["true"]
+          enabled_regex_matching: false
+
+      # 정책 6: HTTP 5xx 에러 (status_code 정책과 보완)
+      - name: policy-http-5xx
+        type: span_attribute
+        span_attribute:
+          key: http.status_code
+          values: ["500", "502", "503", "504"]
+          enabled_regex_matching: false
+
+      # 정책 7: 엔터프라이즈/프리미엄 사용자 — 전량 추적
+      - name: policy-enterprise-user
+        type: span_attribute
+        span_attribute:
+          key: user.tier
+          values: [enterprise, premium]
+          enabled_regex_matching: false
+
+      # 정책 8: GPU VRAM 고압 트레이스 — 용량 계획 데이터
+      - name: policy-gpu-high-pressure
+        type: span_attribute
+        span_attribute:
+          key: gpu.vram_utilization_pct
+          values: ["*"]
+          enabled_regex_matching: false
+
+      # 정책 9: Agent 재귀 깊이 초과 — 무한 루프 탐지
+      - name: policy-agent-deep-recursion
+        type: span_attribute
+        span_attribute:
+          key: agent.recursion_depth
+          values: ["*"]
+          enabled_regex_matching: false
+
+      # 정책 10: 확률적 기준선 — 정상 트래픽 샘플 보존 (통계적 기준선 유지)
+      - name: policy-probabilistic-baseline
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 5
+
+  # vLLM 지표명을 OTel Semantic Conventions로 표준화
+  transform/normalize_metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          # vLLM Prometheus → OTel 표준명 변환
+          - set(name, "llm.time_to_first_token") where name == "vllm:time_to_first_token_seconds"
+          - set(name, "llm.tokens_per_second") where name == "vllm:generation_tokens_per_second"
+          - set(name, "llm.request.queue_time") where name == "vllm:scheduler_running"
+          # DCGM → OTel 표준명 변환
+          - set(name, "gpu.utilization") where name == "DCGM_FI_DEV_GPU_UTIL"
+          - set(name, "gpu.memory.used") where name == "DCGM_FI_DEV_FB_USED"
+          - set(name, "gpu.memory.free") where name == "DCGM_FI_DEV_FB_FREE"
+          - set(name, "gpu.power.draw") where name == "DCGM_FI_DEV_POWER_USAGE"
+          - set(name, "gpu.temperature") where name == "DCGM_FI_DEV_GPU_TEMP"
+          # 단위 표준화
+          - set(unit, "ms") where name == "llm.time_to_first_token"
+          - set(unit, "tok/s") where name == "llm.tokens_per_second"
+          - set(unit, "%") where name == "gpu.utilization"
+          - set(unit, "MiB") where name == "gpu.memory.used"
+          - set(unit, "MiB") where name == "gpu.memory.free"
+          - set(unit, "W") where name == "gpu.power.draw"
+          - set(unit, "Cel") where name == "gpu.temperature"
+
+  # 민감 정보 마스킹
+  attributes/redact:
+    actions:
+      - key: llm.prompt.full_text      # 전체 프롬프트는 저장하지 않음
+        action: delete
+      - key: http.request.header.authorization
+        action: delete
+      - key: db.statement               # SQL 쿼리 마스킹 (PII 포함 가능)
+        action: hash
+
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 10s
+
+exporters:
+  # Prometheus — 메트릭 저장 (Grafana 대시보드 소스)
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "aiservice"
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+    add_metric_suffixes: true
+
+  # Grafana Tempo — 트레이스 저장
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 8
+      queue_size: 2000
+
+  # Grafana Loki — 로그 저장
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    labels:
+      resource:
+        service.name: "service_name"
+        k8s.namespace.name: "namespace"
+        k8s.pod.name: "pod"
+        deployment.environment: "env"
+      attributes:
+        guardrail.action: "guardrail_action"
+        llm.model: "llm_model"
+        http.status_code: "status_code"
+
+  # 디버그 (개발 환경)
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  telemetry:
+    logs:
+      level: warn
+      encoding: json
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+  pipelines:
+    # Tail Sampling 적용 트레이스 파이프라인
+    traces:
+      receivers:  [otlp]
+      processors: [memory_limiter, tail_sampling, attributes/redact, batch]
+      exporters:  [otlp/tempo]
+
+    # 메트릭 파이프라인 (GPU + vLLM + 일반)
+    metrics:
+      receivers:  [otlp, prometheus/gpu]
+      processors: [memory_limiter, transform/normalize_metrics, batch]
+      exporters:  [prometheus]
+
+    # 로그 파이프라인
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters:  [loki]
