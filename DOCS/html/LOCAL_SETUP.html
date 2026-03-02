@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로컬 개발 환경 구성 가이드 (LOCAL_SETUP.md)</title>
+  <style>
+    /* ── 기본 레이아웃 ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+                   Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.75;
+      color: #24292f;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .page-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+    }
+
+    /* ── 제목 ── */
+    h1, h2, h3, h4, h5, h6 {
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2em;
+      margin-bottom: 0.6em;
+      color: #1f2328;
+    }
+    h1 { font-size: 2em;   border-bottom: 2px solid #d0d7de; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.25em; }
+    h3 { font-size: 1.25em; }
+    h4 { font-size: 1em; }
+
+    /* ── 단락·링크 ── */
+    p { margin: 0.8em 0; }
+    a { color: #0969da; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── 코드 ── */
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875em;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      color: #e85d04;
+    }
+    pre {
+      background: #161b22;
+      border-radius: 8px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin: 1.2em 0;
+      border: 1px solid #30363d;
+    }
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: #e6edf3;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    /* ── 표 ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2em 0;
+      font-size: 0.9em;
+    }
+    thead tr {
+      background: #f6f8fa;
+    }
+    th, td {
+      border: 1px solid #d0d7de;
+      padding: 8px 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      font-weight: 600;
+      color: #1f2328;
+    }
+    tbody tr:nth-child(even) {
+      background: #f6f8fa;
+    }
+    tbody tr:hover {
+      background: #eaf3fb;
+    }
+
+    /* ── 인용 블록 ── */
+    blockquote {
+      border-left: 4px solid #0969da;
+      margin: 1em 0;
+      padding: 8px 16px;
+      background: #f0f7ff;
+      border-radius: 0 6px 6px 0;
+      color: #444d56;
+    }
+    blockquote p { margin: 0.3em 0; }
+
+    /* ── 목록 ── */
+    ul, ol {
+      padding-left: 1.8em;
+      margin: 0.6em 0;
+    }
+    li { margin: 0.3em 0; }
+    li > ul, li > ol { margin: 0.2em 0; }
+
+    /* ── 구분선 ── */
+    hr {
+      border: none;
+      border-top: 2px solid #d0d7de;
+      margin: 2em 0;
+    }
+
+    /* ── 배지 스타일 (체크박스) ── */
+    input[type="checkbox"] { margin-right: 6px; }
+
+    /* ── 헤더 앵커 ── */
+    h1 .anchor, h2 .anchor, h3 .anchor {
+      opacity: 0;
+      font-size: 0.75em;
+      margin-left: 8px;
+      color: #57606a;
+    }
+    h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+
+    /* ── 상단 메타 배너 ── */
+    .doc-banner {
+      background: linear-gradient(135deg, #0969da 0%, #1a7f64 100%);
+      color: white;
+      border-radius: 10px;
+      padding: 20px 28px;
+      margin-bottom: 2em;
+    }
+    .doc-banner h1 {
+      color: white;
+      border: none;
+      margin: 0 0 4px;
+      font-size: 1.6em;
+    }
+    .doc-banner p { margin: 0; opacity: 0.85; font-size: 0.9em; }
+
+    /* ── 푸터 ── */
+    .doc-footer {
+      margin-top: 4em;
+      padding-top: 1.5em;
+      border-top: 1px solid #d0d7de;
+      font-size: 0.82em;
+      color: #57606a;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="doc-banner">
+      <h1>로컬 개발 환경 구성 가이드 (LOCAL_SETUP.md)</h1>
+      <p>aiservice-monitoring · OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션</p>
+    </div>
+
+<h1 id="로컬-개발-환경-구성-가이드-local_setupmd">로컬 개발 환경 구성 가이드 (LOCAL_SETUP.md)</h1>
+
+<blockquote>
+  <p><strong>프로젝트</strong>: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션<br />
+  <strong>대상 독자</strong>: aiservice-monitoring 프로젝트에 처음 합류하는 개발자<br />
+  <strong>최종 업데이트</strong>: 2026-03-02<br />
+  <strong>작성자</strong>: Aura Kim <code>&lt;aura.kimjh@gmail.com&gt;</code></p>
+</blockquote>
+
+<p>이 문서를 순서대로 따라 하면, <strong>환경 설정에 소요되는 시간 없이</strong> 첫날부터 코드를 작성하고 로컬에서 메트릭·트레이스를 확인할 수 있습니다.</p>
+
+<hr />
+
+<h2 id="목차">목차</h2>
+
+<ol>
+<li><a href="#1-사전-요구사항-체크리스트">사전 요구사항 체크리스트</a></li>
+<li><a href="#2-공통-런타임-설치">공통 런타임 설치</a>
+<ul>
+<li><a href="#2-1-python-310-및-가상환경venv">2-1. Python 3.10+ 및 가상환경(venv)</a></li>
+<li><a href="#2-2-nodejs-nvm-방식">2-2. Node.js (nvm 방식)</a></li>
+<li><a href="#2-3-go-sdk">2-3. Go SDK</a></li>
+</ul></li>
+<li><a href="#3-로컬-인프라-docker-compose">로컬 인프라 (Docker Compose)</a></li>
+<li><a href="#4-환경-변수-관리-env">환경 변수 관리 (.env)</a></li>
+<li><a href="#5-vs-code-설정">VS Code 설정</a>
+<ul>
+<li><a href="#5-1-필수-확장extensions">5-1. 필수 확장(Extensions)</a></li>
+<li><a href="#5-2-settingsjson">5-2. settings.json</a></li>
+<li><a href="#5-3-launchjson-디버그-구성">5-3. launch.json (디버그 구성)</a></li>
+</ul></li>
+<li><a href="#6-jetbrains-ide-설정">JetBrains IDE 설정</a>
+<ul>
+<li><a href="#6-1-플러그인-설치">6-1. 플러그인 설치</a></li>
+<li><a href="#6-2-프로젝트-sdk-및-모듈-구성">6-2. 프로젝트 SDK 및 모듈 구성</a></li>
+<li><a href="#6-3-rundebug-configurations">6-3. Run/Debug Configurations</a></li>
+</ul></li>
+<li><a href="#7-git-및-github-연동">Git 및 GitHub 연동</a></li>
+<li><a href="#8-첫-실행-검증-체크리스트">첫 실행 검증 체크리스트</a></li>
+<li><a href="#9-자주-발생하는-문제-troubleshooting">자주 발생하는 문제 (Troubleshooting)</a></li>
+</ol>
+
+<hr />
+
+<h2 id="1-사전-요구사항-체크리스트">1. 사전 요구사항 체크리스트</h2>
+
+<p>시작 전, 아래 항목이 모두 설치되어 있는지 확인합니다.</p>
+
+<table>
+<thead>
+<tr>
+  <th>도구</th>
+  <th>최소 버전</th>
+  <th>확인 명령어</th>
+  <th>설치 링크</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Git</td>
+  <td>2.40+</td>
+  <td><code>git --version</code></td>
+  <td>https://git-scm.com/downloads</td>
+</tr>
+<tr>
+  <td>Python</td>
+  <td>3.10+</td>
+  <td><code>python --version</code></td>
+  <td>https://www.python.org/downloads/</td>
+</tr>
+<tr>
+  <td>Node.js</td>
+  <td>20 LTS</td>
+  <td><code>node --version</code></td>
+  <td>nvm으로 설치 (§2-2 참고)</td>
+</tr>
+<tr>
+  <td>Go</td>
+  <td>1.22+</td>
+  <td><code>go version</code></td>
+  <td>https://go.dev/dl/</td>
+</tr>
+<tr>
+  <td>Docker Desktop</td>
+  <td>4.30+</td>
+  <td><code>docker --version</code></td>
+  <td>https://www.docker.com/products/docker-desktop/</td>
+</tr>
+<tr>
+  <td>Docker Compose</td>
+  <td>v2.x</td>
+  <td><code>docker compose version</code></td>
+  <td>Docker Desktop에 포함</td>
+</tr>
+</tbody>
+</table>
+
+<blockquote>
+  <p><strong>Windows 사용자 주의</strong>: 이 프로젝트의 모든 명령어는 <strong>Git Bash</strong> 또는 <strong>WSL2</strong> 터미널 기준입니다.<br />
+  PowerShell에서 실행하면 경로 구분자(<code>\</code>/<code>/</code>) 문제가 발생할 수 있습니다.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="2-공통-런타임-설치">2. 공통 런타임 설치</h2>
+
+<h3 id="2-1-python-310-및-가상환경venv">2-1. Python 3.10+ 및 가상환경(venv)</h3>
+
+<h4 id="설치-확인">설치 확인</h4>
+
+<div class="codehilite">
+<pre><span></span><code>python<span class="w"> </span>--version
+<span class="c1"># Python 3.10.x 이상이어야 함</span>
+<span class="c1"># Windows에서 python3로 호출해야 하는 경우:</span>
+python3<span class="w"> </span>--version
+</code></pre>
+</div>
+
+<h4 id="프로젝트-가상환경-생성">프로젝트 가상환경 생성</h4>
+
+<p><strong>모든 Python 서비스는 반드시 독립된 가상환경에서 실행합니다.</strong> 전역 Python 환경을 오염시키지 않기 위함입니다.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 프로젝트 루트로 이동</span>
+<span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring
+
+<span class="c1"># Python SDK 계측 코드용 가상환경 생성</span>
+<span class="nb">cd</span><span class="w"> </span>sdk-instrumentation/python
+python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+
+<span class="c1"># 가상환경 활성화</span>
+<span class="c1"># (Git Bash / Linux / macOS)</span>
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<span class="c1"># (Windows PowerShell)</span>
+<span class="c1"># .venv\Scripts\Activate.ps1</span>
+
+<span class="c1"># 활성화 확인 (프롬프트 앞에 (.venv)가 표시되어야 함)</span>
+which<span class="w"> </span>python
+<span class="c1"># /c/workspace/aiservice-monitoring/sdk-instrumentation/python/.venv/Scripts/python</span>
+
+<span class="c1"># OpenTelemetry SDK 의존성 설치</span>
+pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
+pip<span class="w"> </span>install<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-sdk<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-api<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-exporter-otlp-proto-grpc<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-instrumentation-fastapi<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-instrumentation-httpx<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-instrumentation-redis<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>opentelemetry-instrumentation-pymongo<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>fastapi<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>uvicorn<span class="o">[</span>standard<span class="o">]</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>httpx<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>langchain<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>langchain-openai<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sentence-transformers
+
+<span class="c1"># 설치 목록을 requirements.txt로 저장 (팀원과 공유)</span>
+pip<span class="w"> </span>freeze<span class="w"> </span>&gt;<span class="w"> </span>requirements.txt
+</code></pre>
+</div>
+
+<blockquote>
+  <p><strong>팁</strong>: 이미 <code>requirements.txt</code>가 있다면 <code>pip install -r requirements.txt</code> 한 줄로 해결됩니다.</p>
+</blockquote>
+
+<h4 id="환경-변수로-가상환경-자동-활성화-bashrc-zshrc">환경 변수로 가상환경 자동 활성화 (.bashrc / .zshrc)</h4>
+
+<p>매번 <code>source .venv/bin/activate</code>를 입력하기 번거롭다면, VS Code의 자동 활성화 기능을 활용하세요 (§5-2 참고).</p>
+
+<hr />
+
+<h3 id="2-2-nodejs-nvm-방식">2-2. Node.js (nvm 방식)</h3>
+
+<p>Node.js는 <strong>nvm(Node Version Manager)</strong> 으로 설치하면 프로젝트별 버전 전환이 쉽습니다.</p>
+
+<h4 id="nvm-설치-windows-nvm-windows">nvm 설치 (Windows: nvm-windows)</h4>
+
+<ol>
+<li>https://github.com/coreybutler/nvm-windows/releases 에서 <code>nvm-setup.exe</code> 다운로드</li>
+<li>설치 후 터미널 재시작</li>
+<li>설치 확인:</li>
+</ol>
+
+<div class="codehilite">
+<pre><span></span><code>nvm<span class="w"> </span>--version
+<span class="c1"># 1.1.x</span>
+</code></pre>
+</div>
+
+<h4 id="nodejs-lts-버전-설치">Node.js LTS 버전 설치</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Node.js 20 LTS 설치</span>
+nvm<span class="w"> </span>install<span class="w"> </span><span class="m">20</span>
+nvm<span class="w"> </span>use<span class="w"> </span><span class="m">20</span>
+nvm<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>default<span class="w"> </span><span class="m">20</span>
+
+<span class="c1"># 설치 확인</span>
+node<span class="w"> </span>--version<span class="w">   </span><span class="c1"># v20.x.x</span>
+npm<span class="w"> </span>--version<span class="w">    </span><span class="c1"># 10.x.x</span>
+</code></pre>
+</div>
+
+<h4 id="nodejs-의존성-설치">Node.js 의존성 설치</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring/sdk-instrumentation/nodejs
+
+<span class="c1"># package.json이 있는 경우</span>
+npm<span class="w"> </span>install
+
+<span class="c1"># 없는 경우 직접 설치 (최초 1회)</span>
+npm<span class="w"> </span>install<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/sdk-node<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/api<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/exporter-trace-otlp-grpc<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/exporter-metrics-otlp-grpc<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/sdk-metrics<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/resources<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/semantic-conventions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/auto-instrumentations-node<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>@opentelemetry/core
+</code></pre>
+</div>
+
+<hr />
+
+<h3 id="2-3-go-sdk">2-3. Go SDK</h3>
+
+<h4 id="go-설치-확인">Go 설치 확인</h4>
+
+<div class="codehilite">
+<pre><span></span><code>go<span class="w"> </span>version
+<span class="c1"># go version go1.22.x windows/amd64</span>
+</code></pre>
+</div>
+
+<h4 id="gopath-및-환경-변수-설정">GOPATH 및 환경 변수 설정</h4>
+
+<p>Go 설치 후 아래 환경 변수가 올바른지 확인합니다.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 현재 설정 확인</span>
+go<span class="w"> </span>env<span class="w"> </span>GOPATH
+go<span class="w"> </span>env<span class="w"> </span>GOROOT
+
+<span class="c1"># Windows 기준 기본값 (자동 설정됨):</span>
+<span class="c1"># GOROOT = C:\Program Files\Go</span>
+<span class="c1"># GOPATH = C:\Users\aurak\go</span>
+</code></pre>
+</div>
+
+<p>Git Bash <code>~/.bashrc</code> 또는 <code>~/.zshrc</code>에 추가 (없는 경우):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Go 환경 변수</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">GOPATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/go&quot;</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$GOPATH</span><span class="s2">/bin:</span><span class="nv">$PATH</span><span class="s2">&quot;</span>
+</code></pre>
+</div>
+
+<h4 id="go-모듈-및-의존성-설치">Go 모듈 및 의존성 설치</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring/sdk-instrumentation/go
+
+<span class="c1"># go.mod 파일 초기화 (없는 경우)</span>
+go<span class="w"> </span>mod<span class="w"> </span>init<span class="w"> </span>github.com/your-org/aiservice-monitoring/sdk-instrumentation/go
+
+<span class="c1"># OTel Go SDK 의존성 추가</span>
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/sdk/trace@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/sdk/metric@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/sdk/resource@latest
+go<span class="w"> </span>get<span class="w"> </span>go.opentelemetry.io/otel/semconv/v1.26.0@latest
+go<span class="w"> </span>get<span class="w"> </span>google.golang.org/grpc@latest
+
+<span class="c1"># 의존성 정리</span>
+go<span class="w"> </span>mod<span class="w"> </span>tidy
+</code></pre>
+</div>
+
+<hr />
+
+<h2 id="3-로컬-인프라-docker-compose">3. 로컬 인프라 (Docker Compose)</h2>
+
+<p>개발 중에는 로컬에 경량 모니터링 스택을 띄워서 <strong>실시간으로 메트릭과 트레이스를 확인</strong>합니다.</p>
+
+<h3 id="구성-요소">구성 요소</h3>
+
+<table>
+<thead>
+<tr>
+  <th>서비스</th>
+  <th>역할</th>
+  <th>로컬 접속 주소</th>
+  <th>포트</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>OTel Collector</strong></td>
+  <td>텔레메트리 수집·변환·라우팅 허브</td>
+  <td>http://localhost:13133/health</td>
+  <td>4317(gRPC), 4318(HTTP)</td>
+</tr>
+<tr>
+  <td><strong>Prometheus</strong></td>
+  <td>메트릭 저장 및 Alert 평가</td>
+  <td>http://localhost:9090</td>
+  <td>9090</td>
+</tr>
+<tr>
+  <td><strong>Grafana Tempo</strong></td>
+  <td>트레이스(분산 추적) 백엔드</td>
+  <td>http://localhost:3200</td>
+  <td>3200</td>
+</tr>
+<tr>
+  <td><strong>Grafana Loki</strong></td>
+  <td>로그 저장소</td>
+  <td>http://localhost:3100</td>
+  <td>3100</td>
+</tr>
+<tr>
+  <td><strong>Grafana</strong></td>
+  <td>통합 시각화 대시보드</td>
+  <td>http://localhost:3000 (admin/admin)</td>
+  <td>3000</td>
+</tr>
+<tr>
+  <td><strong>Jaeger UI</strong></td>
+  <td>트레이스 빠른 확인용 (개발·디버깅)</td>
+  <td>http://localhost:16686</td>
+  <td>16686</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="스택-시작">스택 시작</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 프로젝트 루트에서 실행</span>
+<span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring
+
+<span class="c1"># 백그라운드로 전체 스택 시작</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>up<span class="w"> </span>-d
+
+<span class="c1"># 시작 상태 확인 (모든 서비스가 &quot;healthy&quot; 또는 &quot;running&quot;이어야 함)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>ps
+</code></pre>
+</div>
+
+<p>기대 출력:</p>
+
+<pre><code>NAME              IMAGE                                      STATUS          PORTS
+otel-collector    otel/opentelemetry-collector-contrib:...   Up (healthy)    0.0.0.0:4317-&gt;4317/tcp, ...
+prometheus        prom/prometheus:v2.53.0                    Up              0.0.0.0:9090-&gt;9090/tcp
+tempo             grafana/tempo:2.5.0                        Up              0.0.0.0:3200-&gt;3200/tcp
+loki              grafana/loki:3.1.0                         Up              0.0.0.0:3100-&gt;3100/tcp
+grafana           grafana/grafana:11.1.0                     Up              0.0.0.0:3000-&gt;3000/tcp
+jaeger            jaegertracing/all-in-one:1.58              Up              0.0.0.0:16686-&gt;16686/tcp
+</code></pre>
+
+<h3 id="collector-동작-확인">Collector 동작 확인</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 헬스체크 (200 OK이면 정상)</span>
+curl<span class="w"> </span>http://localhost:13133/health
+
+<span class="c1"># zpages 디버깅 UI (파이프라인 상태 시각 확인)</span>
+<span class="c1"># 브라우저에서 열기: http://localhost:55679/debug/tracez</span>
+</code></pre>
+</div>
+
+<h3 id="스택-중지-및-데이터-초기화">스택 중지 및 데이터 초기화</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 컨테이너 중지 (데이터 볼륨 유지)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>down
+
+<span class="c1"># 컨테이너 + 데이터 볼륨 완전 삭제 (깨끗한 상태로 재시작)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>down<span class="w"> </span>-v
+</code></pre>
+</div>
+
+<h3 id="grafana-대시보드-즉시-확인">Grafana 대시보드 즉시 확인</h3>
+
+<ol>
+<li>브라우저에서 http://localhost:3000 접속</li>
+<li>ID: <code>admin</code>, PW: <code>admin</code> 으로 로그인</li>
+<li>좌측 메뉴 → <strong>Dashboards</strong> 클릭</li>
+<li><code>AI Service Overview</code> 대시보드 선택</li>
+</ol>
+
+<blockquote>
+  <p>로컬에서 SDK를 통해 텔레메트리를 발생시키면 수 초 내에 대시보드에 반영됩니다.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="4-환경-변수-관리-env">4. 환경 변수 관리 (.env)</h2>
+
+<h3 id="핵심-원칙">핵심 원칙</h3>
+
+<ul>
+<li><strong><code>.env</code> 파일은 절대 Git에 커밋하지 않습니다</strong> (<code>.gitignore</code>에 이미 포함됨)</li>
+<li>API 키, 토큰 등 비밀 값은 <code>.env</code>에만 저장하고 코드에 하드코딩 금지</li>
+<li>팀원에게는 <code>.env.example</code>을 통해 필요한 변수 목록만 공유</li>
+</ul>
+
+<h3 id="envexample-파일-git에-포함">.env.example 파일 (Git에 포함)</h3>
+
+<p>프로젝트 루트에 아래 파일을 만들어 팀원과 공유합니다:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># .env.example</span>
+<span class="c1"># ────────────────────────────────────────────────────────────────</span>
+<span class="c1"># 이 파일을 복사하여 .env로 저장 후 실제 값을 채워 넣으세요:</span>
+<span class="c1">#   cp .env.example .env</span>
+<span class="c1"># ────────────────────────────────────────────────────────────────</span>
+
+<span class="c1"># ── OTel Collector 엔드포인트 ──────────────────────────────────</span>
+<span class="c1"># 로컬 개발: Docker Compose로 띄운 Collector</span>
+<span class="nv">OTEL_EXPORTER_OTLP_ENDPOINT</span><span class="o">=</span>http://localhost:4317
+<span class="c1"># K8s 개발 클러스터: Agent DaemonSet 사용</span>
+<span class="c1"># OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector-agent:4317</span>
+
+<span class="c1"># ── 서비스 식별 정보 ─────────────────────────────────────────</span>
+<span class="nv">DEPLOYMENT_ENV</span><span class="o">=</span>development
+<span class="nv">SERVICE_NAME</span><span class="o">=</span>my-service
+<span class="nv">SERVICE_VERSION</span><span class="o">=</span><span class="m">0</span>.1.0
+<span class="nv">AI_SERVICE_LAYER</span><span class="o">=</span>app<span class="w">  </span><span class="c1"># app | guardrails | llm | vector_db | infra</span>
+
+<span class="c1"># ── LLM API 키 (개발용) ──────────────────────────────────────</span>
+<span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+<span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>sk-ant-...
+
+<span class="c1"># ── 벡터 DB ──────────────────────────────────────────────────</span>
+<span class="nv">PINECONE_API_KEY</span><span class="o">=</span>...
+<span class="nv">QDRANT_URL</span><span class="o">=</span>http://localhost:6333
+
+<span class="c1"># ── Redis ────────────────────────────────────────────────────</span>
+<span class="nv">REDIS_URL</span><span class="o">=</span>redis://localhost:6379
+
+<span class="c1"># ── K8s Pod 정보 (로컬에서는 기본값 사용) ─────────────────────</span>
+<span class="nv">POD_NAME</span><span class="o">=</span>local-dev
+<span class="nv">POD_NAMESPACE</span><span class="o">=</span>default
+<span class="nv">KUBE_NODE_NAME</span><span class="o">=</span><span class="nb">local</span>
+</code></pre>
+</div>
+
+<h3 id="실제-env-파일-생성">실제 .env 파일 생성</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring
+
+<span class="c1"># 예시 파일을 복사하여 실제 .env 생성</span>
+cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+
+<span class="c1"># 에디터로 열어 실제 값 입력</span>
+code<span class="w"> </span>.env<span class="w">          </span><span class="c1"># VS Code</span>
+<span class="c1"># 또는</span>
+idea<span class="w"> </span>.env<span class="w">          </span><span class="c1"># IntelliJ</span>
+</code></pre>
+</div>
+
+<h3 id="python에서-env-로드">Python에서 .env 로드</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 서비스 엔트리포인트 최상단에 추가</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
+<span class="n">load_dotenv</span><span class="p">()</span>  <span class="c1"># .env 파일을 자동으로 읽어 os.environ에 등록</span>
+
+<span class="c1"># 이후 os.getenv()로 사용</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="n">endpoint</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;OTEL_EXPORTER_OTLP_ENDPOINT&quot;</span><span class="p">,</span> <span class="s2">&quot;http://localhost:4317&quot;</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># python-dotenv 설치</span>
+pip<span class="w"> </span>install<span class="w"> </span>python-dotenv
+</code></pre>
+</div>
+
+<h3 id="nodejs에서-env-로드">Node.js에서 .env 로드</h3>
+
+<div class="codehilite">
+<pre><span></span><code>npm<span class="w"> </span>install<span class="w"> </span>dotenv
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// 서비스 엔트리포인트 최상단</span>
+<span class="nx">require</span><span class="p">(</span><span class="s1">&#39;dotenv&#39;</span><span class="p">).</span><span class="nx">config</span><span class="p">();</span>
+</code></pre>
+</div>
+
+<h3 id="gitignore-확인">.gitignore 확인</h3>
+
+<p>프로젝트 루트의 <code>.gitignore</code>에 아래 항목이 포함되어 있는지 확인합니다:</p>
+
+<pre><code># 환경 변수 파일 (절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+*.secret
+</code></pre>
+
+<hr />
+
+<h2 id="5-vs-code-설정">5. VS Code 설정</h2>
+
+<h3 id="5-1-필수-확장extensions">5-1. 필수 확장(Extensions)</h3>
+
+<p>VS Code에서 <code>Ctrl+Shift+X</code>로 확장 패널을 열고 아래 확장을 설치합니다.</p>
+
+<h4 id="언어-및-런타임-지원">언어 및 런타임 지원</h4>
+
+<table>
+<thead>
+<tr>
+  <th>확장명</th>
+  <th>ID</th>
+  <th>용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Python</strong></td>
+  <td><code>ms-python.python</code></td>
+  <td>Python 언어 지원, IntelliSense, 디버거</td>
+</tr>
+<tr>
+  <td><strong>Pylance</strong></td>
+  <td><code>ms-python.vscode-pylance</code></td>
+  <td>고속 Python 타입 검사 및 자동완성</td>
+</tr>
+<tr>
+  <td><strong>Go</strong></td>
+  <td><code>golang.go</code></td>
+  <td>Go 언어 지원, 디버거(Delve), 린터</td>
+</tr>
+<tr>
+  <td><strong>ESLint</strong></td>
+  <td><code>dbaeumer.vscode-eslint</code></td>
+  <td>JavaScript/Node.js 코드 품질 검사</td>
+</tr>
+<tr>
+  <td><strong>Prettier</strong></td>
+  <td><code>esbenp.prettier-vscode</code></td>
+  <td>코드 자동 포맷팅 (JS/TS/YAML/JSON)</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="인프라-및-otel-지원">인프라 및 OTel 지원</h4>
+
+<table>
+<thead>
+<tr>
+  <th>확장명</th>
+  <th>ID</th>
+  <th>용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Docker</strong></td>
+  <td><code>ms-azuretools.vscode-docker</code></td>
+  <td>Dockerfile, Compose 편집 및 컨테이너 관리</td>
+</tr>
+<tr>
+  <td><strong>YAML</strong></td>
+  <td><code>redhat.vscode-yaml</code></td>
+  <td>OTel Collector 설정 파일 편집</td>
+</tr>
+<tr>
+  <td><strong>Thunder Client</strong></td>
+  <td><code>rangav.vscode-thunder-client</code></td>
+  <td>API 테스트 (Postman 대안, 로컬 실행)</td>
+</tr>
+<tr>
+  <td><strong>Remote - Containers</strong></td>
+  <td><code>ms-vscode-remote.remote-containers</code></td>
+  <td>컨테이너 안에서 개발할 때 사용</td>
+</tr>
+<tr>
+  <td><strong>DotENV</strong></td>
+  <td><code>mikestead.dotenv</code></td>
+  <td><code>.env</code> 파일 문법 강조</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="생산성-향상">생산성 향상</h4>
+
+<table>
+<thead>
+<tr>
+  <th>확장명</th>
+  <th>ID</th>
+  <th>용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>GitLens</strong></td>
+  <td><code>eamodio.gitlens</code></td>
+  <td>Git 히스토리 인라인 표시, blame</td>
+</tr>
+<tr>
+  <td><strong>Error Lens</strong></td>
+  <td><code>usernamehw.errorlens</code></td>
+  <td>에러/경고를 코드 줄에 인라인 표시</td>
+</tr>
+<tr>
+  <td><strong>indent-rainbow</strong></td>
+  <td><code>oderwat.indent-rainbow</code></td>
+  <td>YAML 들여쓰기 시각화</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>일괄 설치 (터미널에서)</strong>:</p>
+
+<div class="codehilite">
+<pre><span></span><code>code<span class="w"> </span>--install-extension<span class="w"> </span>ms-python.python
+code<span class="w"> </span>--install-extension<span class="w"> </span>ms-python.vscode-pylance
+code<span class="w"> </span>--install-extension<span class="w"> </span>golang.go
+code<span class="w"> </span>--install-extension<span class="w"> </span>dbaeumer.vscode-eslint
+code<span class="w"> </span>--install-extension<span class="w"> </span>esbenp.prettier-vscode
+code<span class="w"> </span>--install-extension<span class="w"> </span>ms-azuretools.vscode-docker
+code<span class="w"> </span>--install-extension<span class="w"> </span>redhat.vscode-yaml
+code<span class="w"> </span>--install-extension<span class="w"> </span>rangav.vscode-thunder-client
+code<span class="w"> </span>--install-extension<span class="w"> </span>mikestead.dotenv
+code<span class="w"> </span>--install-extension<span class="w"> </span>eamodio.gitlens
+code<span class="w"> </span>--install-extension<span class="w"> </span>usernamehw.errorlens
+code<span class="w"> </span>--install-extension<span class="w"> </span>oderwat.indent-rainbow
+</code></pre>
+</div>
+
+<hr />
+
+<h3 id="5-2-settingsjson">5-2. settings.json</h3>
+
+<p>프로젝트 전용 설정을 <code>.vscode/settings.json</code>에 저장합니다. (이 파일은 팀 공유를 권장합니다)</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># .vscode 폴더 생성</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>/c/workspace/aiservice-monitoring/.vscode
+</code></pre>
+</div>
+
+<p><code>.vscode/settings.json</code> 내용:</p>
+
+<pre><code>{
+  // ── Python 설정 ────────────────────────────────────────────────
+  "python.defaultInterpreterPath": "${workspaceFolder}/sdk-instrumentation/python/.venv/Scripts/python.exe",
+  "python.terminal.activateEnvironment": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+
+  // 유닛 테스트 자동 발견
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [
+    "sdk-instrumentation/python",
+    "-v",
+    "--tb=short"
+  ],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+
+  // ── Go 설정 ───────────────────────────────────────────────────
+  "go.gopath": "${env:GOPATH}",
+  "go.toolsManagement.autoUpdate": true,
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "package",
+  "gopls": {
+    "ui.semanticTokens": true
+  },
+
+  // ── JavaScript / Node.js 설정 ─────────────────────────────────
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "eslint.validate": ["javascript", "typescript"],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // ── YAML 설정 (OTel Collector 설정 파일) ──────────────────────
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
+  },
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector/main/confmap/provider/yamlprovider/testdata/schema.json": [
+      "collector/config/*.yaml",
+      "infra/docker/otelcol-*.yaml"
+    ]
+  },
+
+  // ── 에디터 공통 ───────────────────────────────────────────────
+  "editor.rulers": [88, 120],
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // ── 파일 제외 (탐색기에서 숨기기) ────────────────────────────
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/.pytest_cache": true
+  },
+
+  // ── Docker ────────────────────────────────────────────────────
+  "docker.defaultRegistryPath": "docker.io",
+
+  // ── 터미널 ───────────────────────────────────────────────────
+  "terminal.integrated.defaultProfile.windows": "Git Bash"
+}
+</code></pre>
+
+<hr />
+
+<h3 id="5-3-launchjson-디버그-구성">5-3. launch.json (디버그 구성)</h3>
+
+<p><code>Ctrl+Shift+D</code>로 Run and Debug 패널을 열고, <code>.vscode/launch.json</code>을 생성합니다.</p>
+
+<p><code>.vscode/launch.json</code> 내용:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0.2.0&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;configurations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+
+<span class="w">    </span><span class="c1">// ── (1) FastAPI 서비스 디버그 (Python) ──────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FastAPI: Debug (Python)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;module&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uvicorn&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;main:app&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;--host&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;--port&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;8000&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;--reload&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/python&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;python&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/python/.venv/Scripts/python.exe&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;OTEL_EXPORTER_OTLP_ENDPOINT&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://localhost:4317&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;DEPLOYMENT_ENV&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;development&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;SERVICE_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fastapi-debug&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;AI_SERVICE_LAYER&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;app&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;POD_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;local-dev&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;POD_NAMESPACE&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;KUBE_NODE_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;local&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;justMyCode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integratedTerminal&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (2) Python 단독 스크립트 디버그 ─────────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Python: Current File&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${file}&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;python&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/python/.venv/Scripts/python.exe&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integratedTerminal&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;justMyCode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (3) Python unittest 디버그 ───────────────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Python: pytest (현재 파일)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;module&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;${file}&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;-v&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;--tb=short&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;-s&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;python&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/python/.venv/Scripts/python.exe&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integratedTerminal&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;justMyCode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (4) Go 서비스 디버그 ────────────────────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Go: Debug Service&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;go&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/go&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;OTEL_EXPORTER_OTLP_ENDPOINT&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost:4317&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;DEPLOYMENT_ENV&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;development&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;SERVICE_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;go-service-debug&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">      </span><span class="nt">&quot;showLog&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (5) Go 테스트 디버그 ────────────────────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Go: Test Current Package&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;go&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/go&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-v&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-run&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;showLog&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (6) Node.js 서비스 디버그 ───────────────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Node.js: Debug with OTel&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;runtimeArgs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;-r&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/nodejs/otel-setup.js&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/nodejs/server.js&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/nodejs&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;OTEL_EXPORTER_OTLP_ENDPOINT&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://localhost:4317&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;SERVICE_NAME&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;nodejs-debug&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;NODE_ENV&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;development&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">&quot;skipFiles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;node_internals&gt;/**&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integratedTerminal&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+
+<span class="w">    </span><span class="c1">// ── (7) validate-traces.py 스크립트 실행 ─────────────────────</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Script: validate-traces&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debugpy&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/scripts/validate-traces.py&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;python&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/sdk-instrumentation/python/.venv/Scripts/python.exe&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--fail-on-broken&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;envFile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/.env&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integratedTerminal&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+
+<span class="w">  </span><span class="c1">// ── 복합 실행 구성 (전체 스택 동시 디버그) ────────────────────</span>
+<span class="w">  </span><span class="nt">&quot;compounds&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Full Stack: FastAPI + Node.js&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;configurations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;FastAPI: Debug (Python)&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;Node.js: Debug with OTel&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;stopAll&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<blockquote>
+  <p><strong>디버그 시작 방법</strong>: <code>F5</code> 키를 누르거나, 상단 드롭다운에서 구성을 선택 후 재생(▷) 버튼 클릭.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="6-jetbrains-ide-설정">6. JetBrains IDE 설정</h2>
+
+<p>IntelliJ IDEA / PyCharm / GoLand 사용자를 위한 설정입니다. 프로젝트 성격에 따라 IDE를 선택합니다:</p>
+
+<ul>
+<li><strong>PyCharm Professional</strong>: Python 전담 개발 시 권장</li>
+<li><strong>GoLand</strong>: Go 서비스 전담 개발 시 권장</li>
+<li><strong>IntelliJ IDEA Ultimate</strong>: Python + Go 동시 개발 시 권장 (플러그인 필요)</li>
+</ul>
+
+<h3 id="6-1-플러그인-설치">6-1. 플러그인 설치</h3>
+
+<p><code>File → Settings → Plugins</code> (<code>Ctrl+Alt+S</code>) 에서 아래 플러그인을 설치합니다.</p>
+
+<h4 id="intellij-idea-ultimate-사용자-필수">IntelliJ IDEA Ultimate 사용자 (필수)</h4>
+
+<table>
+<thead>
+<tr>
+  <th>플러그인</th>
+  <th>용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Python</strong></td>
+  <td>Python 언어 지원, 가상환경 인식</td>
+</tr>
+<tr>
+  <td><strong>Go</strong></td>
+  <td>Go 언어 지원, Delve 디버거</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="공통-필수-플러그인">공통 필수 플러그인</h4>
+
+<table>
+<thead>
+<tr>
+  <th>플러그인</th>
+  <th>용도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Docker</strong></td>
+  <td>Docker Compose 파일 편집, 컨테이너 관리 GUI</td>
+</tr>
+<tr>
+  <td><strong>Protocol Buffers</strong></td>
+  <td>gRPC/OTLP <code>.proto</code> 파일 문법 강조 및 자동완성</td>
+</tr>
+<tr>
+  <td><strong>EnvFile</strong></td>
+  <td>Run Configuration에서 <code>.env</code> 파일 자동 로드</td>
+</tr>
+<tr>
+  <td><strong>.ignore</strong></td>
+  <td><code>.gitignore</code> 파일 편집 지원</td>
+</tr>
+<tr>
+  <td><strong>YAML/Ansible</strong></td>
+  <td>OTel Collector YAML 구성 파일 지원</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="설치-방법">설치 방법</h4>
+
+<ol>
+<li><code>File</code> → <code>Settings</code> → <code>Plugins</code> → <code>Marketplace</code> 탭</li>
+<li>플러그인 이름 검색 후 <code>Install</code> 클릭</li>
+<li>IDE 재시작</li>
+</ol>
+
+<hr />
+
+<h3 id="6-2-프로젝트-sdk-및-모듈-구성">6-2. 프로젝트 SDK 및 모듈 구성</h3>
+
+<h4 id="python-인터프리터-설정-pycharm-intellij">Python 인터프리터 설정 (PyCharm / IntelliJ)</h4>
+
+<ol>
+<li><code>File</code> → <code>Settings</code> → <code>Project: aiservice-monitoring</code> → <code>Python Interpreter</code></li>
+<li>우측 톱니바퀴(⚙) 아이콘 → <code>Add Interpreter...</code></li>
+<li><code>Existing environment</code> 선택</li>
+<li>경로 입력:<br />
+<pre><code>C:\workspace\aiservice-monitoring\sdk-instrumentation\python\.venv\Scripts\python.exe<br />
+</code></pre></li>
+<li><code>OK</code> 클릭 → 패키지 목록이 표시되면 성공</li>
+</ol>
+
+<h4 id="go-sdk-설정-goland-intellij">Go SDK 설정 (GoLand / IntelliJ)</h4>
+
+<ol>
+<li><code>File</code> → <code>Settings</code> → <code>Go</code> → <code>GOROOT</code></li>
+<li>Go 설치 경로 지정:<br />
+<pre><code>C:\Program Files\Go<br />
+</code></pre></li>
+<li><code>Go Modules</code> 탭에서 <code>Enable Go Modules integration</code> 체크</li>
+</ol>
+
+<h4 id="다중-언어-모듈-구조-설정-intellij-idea-ultimate">다중 언어 모듈 구조 설정 (IntelliJ IDEA Ultimate)</h4>
+
+<p>IntelliJ에서 Python과 Go를 동시에 인식시키려면 각 언어 디렉토리를 별도 모듈로 등록합니다:</p>
+
+<ol>
+<li><code>File</code> → <code>Project Structure</code> (<code>Ctrl+Alt+Shift+S</code>)</li>
+<li>좌측 <code>Modules</code> 탭 선택</li>
+<li><code>+</code> 버튼 → <code>Import Module</code></li>
+<li><code>sdk-instrumentation/python</code> 폴더 선택 → <code>Python</code> 모듈 유형 선택</li>
+<li>다시 <code>+</code> 버튼 → <code>sdk-instrumentation/go</code> 폴더 선택 → <code>Go</code> 모듈 유형 선택</li>
+<li><code>Apply</code> → <code>OK</code></li>
+</ol>
+
+<blockquote>
+  <p>이후 Python 파일을 열면 <code>.venv</code> 인터프리터가, Go 파일을 열면 Go SDK가 자동으로 연결됩니다.</p>
+</blockquote>
+
+<hr />
+
+<h3 id="6-3-rundebug-configurations">6-3. Run/Debug Configurations</h3>
+
+<p><code>Run</code> → <code>Edit Configurations...</code> (<code>Shift+Alt+F10</code>) 에서 아래 구성을 추가합니다.</p>
+
+<h4 id="1-fastapi-서비스-디버그">(1) FastAPI 서비스 디버그</h4>
+
+<p><code>+</code> 버튼 → <code>Python</code> 선택:</p>
+
+<table>
+<thead>
+<tr>
+  <th>항목</th>
+  <th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Name</strong></td>
+  <td><code>FastAPI: Debug</code></td>
+</tr>
+<tr>
+  <td><strong>Script path</strong></td>
+  <td><code>-m uvicorn</code> 또는 Module 필드에 <code>uvicorn</code></td>
+</tr>
+<tr>
+  <td><strong>Parameters</strong></td>
+  <td><code>main:app --host 0.0.0.0 --port 8000 --reload</code></td>
+</tr>
+<tr>
+  <td><strong>Python interpreter</strong></td>
+  <td>프로젝트 venv 인터프리터 선택</td>
+</tr>
+<tr>
+  <td><strong>Working directory</strong></td>
+  <td><code>C:\workspace\aiservice-monitoring\sdk-instrumentation\python</code></td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Environment variables 탭</strong> 에서 아래 값 입력 (또는 EnvFile 플러그인으로 <code>.env</code> 지정):</p>
+
+<pre><code>OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+DEPLOYMENT_ENV=development
+SERVICE_NAME=fastapi-debug
+AI_SERVICE_LAYER=app
+POD_NAME=local-dev
+POD_NAMESPACE=default
+KUBE_NODE_NAME=local
+</code></pre>
+
+<blockquote>
+  <p><strong>EnvFile 플러그인 사용 시</strong>: <code>EnvFile</code> 탭에서 <code>Enable EnvFile</code> 체크 후, <code>.env</code> 파일 경로를 <code>C:\workspace\aiservice-monitoring\.env</code>로 지정하면 환경 변수를 일일이 입력할 필요가 없습니다.</p>
+</blockquote>
+
+<h4 id="2-go-서비스-디버그-goland-기준">(2) Go 서비스 디버그 (GoLand 기준)</h4>
+
+<p><code>+</code> 버튼 → <code>Go Build</code> 선택:</p>
+
+<table>
+<thead>
+<tr>
+  <th>항목</th>
+  <th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Name</strong></td>
+  <td><code>Go: Debug Service</code></td>
+</tr>
+<tr>
+  <td><strong>Run kind</strong></td>
+  <td><code>Package</code></td>
+</tr>
+<tr>
+  <td><strong>Package path</strong></td>
+  <td><code>github.com/your-org/aiservice-monitoring/sdk-instrumentation/go</code></td>
+</tr>
+<tr>
+  <td><strong>Working directory</strong></td>
+  <td><code>C:\workspace\aiservice-monitoring\sdk-instrumentation\go</code></td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Environment variables</strong>:</p>
+
+<pre><code>OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+DEPLOYMENT_ENV=development
+SERVICE_NAME=go-service-debug
+</code></pre>
+
+<h4 id="3-go-테스트-실행">(3) Go 테스트 실행</h4>
+
+<p><code>+</code> 버튼 → <code>Go Test</code> 선택:</p>
+
+<table>
+<thead>
+<tr>
+  <th>항목</th>
+  <th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Name</strong></td>
+  <td><code>Go: Tests</code></td>
+</tr>
+<tr>
+  <td><strong>Test kind</strong></td>
+  <td><code>Package</code></td>
+</tr>
+<tr>
+  <td><strong>Package path</strong></td>
+  <td><code>./...</code> (전체 패키지)</td>
+</tr>
+<tr>
+  <td><strong>Go tool arguments</strong></td>
+  <td><code>-v -count=1</code></td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="4-nodejs-otel-디버그">(4) Node.js OTel 디버그</h4>
+
+<p><code>+</code> 버튼 → <code>Node.js</code> 선택:</p>
+
+<table>
+<thead>
+<tr>
+  <th>항목</th>
+  <th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Name</strong></td>
+  <td><code>Node.js: Debug with OTel</code></td>
+</tr>
+<tr>
+  <td><strong>Node interpreter</strong></td>
+  <td>시스템 Node.js (<code>node</code>)</td>
+</tr>
+<tr>
+  <td><strong>Node parameters</strong></td>
+  <td><code>-r ./otel-setup.js</code></td>
+</tr>
+<tr>
+  <td><strong>JavaScript file</strong></td>
+  <td><code>server.js</code></td>
+</tr>
+<tr>
+  <td><strong>Working directory</strong></td>
+  <td><code>C:\workspace\aiservice-monitoring\sdk-instrumentation\nodejs</code></td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Environment variables</strong>:</p>
+
+<pre><code>OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+SERVICE_NAME=nodejs-debug
+NODE_ENV=development
+</code></pre>
+
+<h4 id="5-docker-compose-빠른-실행">(5) Docker Compose 빠른 실행</h4>
+
+<p><code>+</code> 버튼 → <code>Docker</code> → <code>Docker Compose</code> 선택:</p>
+
+<table>
+<thead>
+<tr>
+  <th>항목</th>
+  <th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Name</strong></td>
+  <td><code>Local Stack: Start</code></td>
+</tr>
+<tr>
+  <td><strong>Compose file(s)</strong></td>
+  <td><code>C:\workspace\aiservice-monitoring\infra\docker\docker-compose.yaml</code></td>
+</tr>
+<tr>
+  <td><strong>Command</strong></td>
+  <td><code>up -d</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>이 구성을 저장하면 IDE 내 Run 버튼 한 번으로 로컬 모니터링 스택을 시작할 수 있습니다.</p>
+
+<hr />
+
+<h2 id="7-git-및-github-연동">7. Git 및 GitHub 연동</h2>
+
+<h3 id="7-1-로컬-git-config-설정">7-1. 로컬 Git Config 설정</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 사용자 정보 설정 (전역)</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>user.name<span class="w"> </span><span class="s2">&quot;Aura Kim&quot;</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>user.email<span class="w"> </span><span class="s2">&quot;aura.kimjh@gmail.com&quot;</span>
+
+<span class="c1"># 기본 브랜치명을 main으로 설정</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>init.defaultBranch<span class="w"> </span>main
+
+<span class="c1"># 줄바꿈 문자 처리 (Windows에서 CRLF → LF 자동 변환)</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>core.autocrlf<span class="w"> </span>input
+
+<span class="c1"># Pull 전략 설정 (rebase 권장)</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>pull.rebase<span class="w"> </span><span class="nb">true</span>
+
+<span class="c1"># 설정 확인</span>
+git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>--list
+</code></pre>
+</div>
+
+<h3 id="7-2-ssh-키-생성-및-github-등록">7-2. SSH 키 생성 및 GitHub 등록</h3>
+
+<p>패스워드 입력 없이 GitHub과 안전하게 통신하기 위해 SSH 키를 사용합니다.</p>
+
+<h4 id="ssh-키-생성">SSH 키 생성</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Ed25519 알고리즘으로 SSH 키 생성 (RSA보다 보안성 높음)</span>
+ssh-keygen<span class="w"> </span>-t<span class="w"> </span>ed25519<span class="w"> </span>-C<span class="w"> </span><span class="s2">&quot;aura.kimjh@gmail.com&quot;</span>
+
+<span class="c1"># 저장 경로: 기본값(~/.ssh/id_ed25519) 사용 권장 — Enter 입력</span>
+<span class="c1"># 패스프레이즈: 빈 값(Enter) 또는 보안을 위해 입력</span>
+</code></pre>
+</div>
+
+<h4 id="ssh-agent에-키-등록">SSH Agent에 키 등록</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># SSH Agent 시작</span>
+<span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>ssh-agent<span class="w"> </span>-s<span class="k">)</span><span class="s2">&quot;</span>
+
+<span class="c1"># 키 등록</span>
+ssh-add<span class="w"> </span>~/.ssh/id_ed25519
+
+<span class="c1"># 등록 확인</span>
+ssh-add<span class="w"> </span>-l
+</code></pre>
+</div>
+
+<h4 id="github에-공개-키-등록">GitHub에 공개 키 등록</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 공개 키 내용 출력 (이 내용 전체를 복사)</span>
+cat<span class="w"> </span>~/.ssh/id_ed25519.pub
+</code></pre>
+</div>
+
+<ol>
+<li>브라우저에서 GitHub → 우측 상단 프로필 클릭 → <strong>Settings</strong></li>
+<li>좌측 메뉴 → <strong>SSH and GPG keys</strong></li>
+<li><strong>New SSH key</strong> 클릭</li>
+<li>Title: <code>aiservice-monitoring-dev</code> (임의 이름)</li>
+<li>Key type: <code>Authentication Key</code></li>
+<li>Key: 위에서 복사한 공개 키 붙여넣기</li>
+<li><strong>Add SSH key</strong> 클릭</li>
+</ol>
+
+<h4 id="연결-테스트">연결 테스트</h4>
+
+<div class="codehilite">
+<pre><span></span><code>ssh<span class="w"> </span>-T<span class="w"> </span>git@github.com
+<span class="c1"># Hi Aura Kim! You&#39;ve successfully authenticated, but GitHub does not provide shell access.</span>
+<span class="c1"># 위 메시지가 출력되면 성공</span>
+</code></pre>
+</div>
+
+<h3 id="7-3-저장소-클론-신규-팀원">7-3. 저장소 클론 (신규 팀원)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># SSH 방식으로 클론 (HTTPS보다 권장)</span>
+git<span class="w"> </span>clone<span class="w"> </span>git@github.com:your-org/aiservice-monitoring.git<span class="w"> </span>/c/workspace/aiservice-monitoring
+
+<span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring
+
+<span class="c1"># 로컬 Git 사용자 확인</span>
+git<span class="w"> </span>config<span class="w"> </span>user.email
+<span class="c1"># aura.kimjh@gmail.com</span>
+</code></pre>
+</div>
+
+<h3 id="7-4-프로젝트-레이아웃과-git-브랜치-전략">7-4. 프로젝트 레이아웃과 Git 브랜치 전략</h3>
+
+<pre><code>aiservice-monitoring/               ← 단일 저장소 (Monorepo)
+├── sdk-instrumentation/
+│   ├── python/                     ← Python 에이전트·LLM 계측
+│   ├── nodejs/                     ← Next.js 프론트엔드 계측
+│   └── go/                         ← Go 수집기·프록시 계측
+├── collector/config/               ← OTel Collector 설정
+├── infra/
+│   ├── docker/                     ← 로컬 개발 Docker Compose
+│   └── kubernetes/                 ← K8s 프로덕션 매니페스트
+├── dashboards/grafana/             ← Grafana 대시보드 JSON
+├── scripts/                        ← 검증·부하 테스트 스크립트
+└── helm/                           ← Helm 패키지 (운영 배포)
+</code></pre>
+
+<h4 id="권장-브랜치-전략">권장 브랜치 전략</h4>
+
+<pre><code>main              ← 항상 배포 가능 상태 유지
+├── feat/XXX      ← 기능 개발 (예: feat/langchain-tracer)
+├── fix/XXX       ← 버그 수정 (예: fix/ttft-calculation)
+└── docs/XXX      ← 문서 작업 (예: docs/local-setup)
+</code></pre>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 새 기능 개발 시작</span>
+git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feat/my-new-feature
+
+<span class="c1"># 작업 후 커밋</span>
+git<span class="w"> </span>add<span class="w"> </span>sdk-instrumentation/python/my_new_file.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add my-new-feature instrumentation&quot;</span>
+
+<span class="c1"># PR 생성 전 main 브랜치 변경사항 반영</span>
+git<span class="w"> </span>fetch<span class="w"> </span>origin
+git<span class="w"> </span>rebase<span class="w"> </span>origin/main
+
+<span class="c1"># GitHub에 푸시</span>
+git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>feat/my-new-feature
+</code></pre>
+</div>
+
+<hr />
+
+<h2 id="8-첫-실행-검증-체크리스트">8. 첫 실행 검증 체크리스트</h2>
+
+<p>모든 설정을 완료한 후, 아래 순서로 검증합니다.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># ── Step 1: 로컬 인프라 시작 ───────────────────────────────────</span>
+<span class="nb">cd</span><span class="w"> </span>/c/workspace/aiservice-monitoring
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>up<span class="w"> </span>-d
+
+<span class="c1"># 30초 대기 후 헬스체크</span>
+sleep<span class="w"> </span><span class="m">30</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:13133/health<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-q<span class="w"> </span><span class="s2">&quot;Server available&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;✅ OTel Collector 정상&quot;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;❌ OTel Collector 비정상&quot;</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/-/ready<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-q<span class="w"> </span><span class="s2">&quot;Prometheus&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;✅ Prometheus 정상&quot;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;❌ Prometheus 비정상&quot;</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:3000/api/health<span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; d=json.load(sys.stdin); print(&#39;✅ Grafana 정상&#39; if d.get(&#39;database&#39;)==&#39;ok&#39; else &#39;❌ Grafana 비정상&#39;)&quot;</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># ── Step 2: Python SDK 동작 확인 ──────────────────────────────</span>
+<span class="nb">cd</span><span class="w"> </span>sdk-instrumentation/python
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import os; os.environ[&#39;OTEL_EXPORTER_OTLP_ENDPOINT&#39;] = &#39;http://localhost:4317&#39;</span>
+<span class="s2">from otel_setup import setup_otel</span>
+<span class="s2">tracer, meter = setup_otel(&#39;test-service&#39;)</span>
+<span class="s2">with tracer.start_as_current_span(&#39;test-span&#39;) as span:</span>
+<span class="s2">    span.set_attribute(&#39;test.key&#39;, &#39;hello&#39;)</span>
+<span class="s2">    print(&#39;✅ Python OTel SDK 정상 동작&#39;)</span>
+<span class="s2">&quot;</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># ── Step 3: Jaeger에서 트레이스 확인 ─────────────────────────</span>
+<span class="c1"># 브라우저에서 http://localhost:16686 접속</span>
+<span class="c1"># Service 드롭다운에서 &quot;test-service&quot; 선택</span>
+<span class="c1"># &quot;Find Traces&quot; 클릭 → 트레이스 1개가 표시되면 성공 ✅</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># ── Step 4: Alert Rule 검증 스크립트 실행 ─────────────────────</span>
+bash<span class="w"> </span>scripts/test-alerts.sh
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># ── Step 5: Context Propagation 단절 탐지 ─────────────────────</span>
+python<span class="w"> </span>scripts/validate-traces.py
+</code></pre>
+</div>
+
+<p>모든 항목에서 ✅가 표시되면 <strong>로컬 환경 설정 완료</strong>입니다.</p>
+
+<hr />
+
+<h2 id="9-자주-발생하는-문제-troubleshooting">9. 자주 발생하는 문제 (Troubleshooting)</h2>
+
+<h3 id="otel-collector가-시작되지-않는-경우">OTel Collector가 시작되지 않는 경우</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 로그 확인</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>logs<span class="w"> </span>otel-collector<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+
+<span class="c1"># 포트 충돌 확인 (4317, 4318이 다른 프로세스에 점유된 경우)</span>
+<span class="c1"># Windows</span>
+netstat<span class="w"> </span>-ano<span class="w"> </span><span class="p">|</span><span class="w"> </span>findstr<span class="w"> </span>:4317
+<span class="c1"># Git Bash</span>
+ss<span class="w"> </span>-tlnp<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">4317</span>
+</code></pre>
+</div>
+
+<p><strong>해결</strong>: 포트를 점유 중인 프로세스를 종료하거나, <code>docker-compose.yaml</code>에서 호스트 포트를 변경합니다.</p>
+
+<h3 id="python-가상환경-인터프리터를-vs-code가-인식-못-하는-경우">Python 가상환경 인터프리터를 VS Code가 인식 못 하는 경우</h3>
+
+<ol>
+<li><code>Ctrl+Shift+P</code> → <code>Python: Select Interpreter</code></li>
+<li><code>Enter interpreter path...</code> → <code>.venv/Scripts/python.exe</code> 직접 입력</li>
+</ol>
+
+<p>또는 터미널에서:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 인터프리터 경로 확인</span>
+which<span class="w"> </span>python
+<span class="c1"># 출력에 .venv가 포함되어 있어야 함</span>
+</code></pre>
+</div>
+
+<h3 id="go-모듈-의존성-오류-go-module-not-found">Go 모듈 의존성 오류 (<code>go: module not found</code>)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="nb">cd</span><span class="w"> </span>sdk-instrumentation/go
+
+<span class="c1"># 모듈 캐시 정리 후 재다운로드</span>
+go<span class="w"> </span>clean<span class="w"> </span>-modcache
+go<span class="w"> </span>mod<span class="w"> </span>download
+go<span class="w"> </span>mod<span class="w"> </span>tidy
+</code></pre>
+</div>
+
+<h3 id="grafana에-대시보드가-표시되지-않는-경우">Grafana에 대시보드가 표시되지 않는 경우</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Grafana 로그 확인</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>logs<span class="w"> </span>grafana<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
+
+<span class="c1"># 대시보드 파일 경로 확인 (docker-compose.yaml의 volume 마운트와 일치해야 함)</span>
+ls<span class="w"> </span>dashboards/grafana/*.json
+</code></pre>
+</div>
+
+<p>대시보드 JSON 파일이 있는데도 표시되지 않으면, Grafana 컨테이너를 재시작합니다:</p>
+
+<div class="codehilite">
+<pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>restart<span class="w"> </span>grafana
+</code></pre>
+</div>
+
+<h3 id="windows에서-ssh-키가-동작하지-않는-경우">Windows에서 SSH 키가 동작하지 않는 경우</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># SSH Agent 서비스 상태 확인 (PowerShell 관리자 권한)</span>
+Get-Service<span class="w"> </span>ssh-agent
+
+<span class="c1"># 자동 시작으로 설정</span>
+Set-Service<span class="w"> </span>-Name<span class="w"> </span>ssh-agent<span class="w"> </span>-StartupType<span class="w"> </span>Automatic
+Start-Service<span class="w"> </span>ssh-agent
+
+<span class="c1"># Git Bash에서 키 재등록</span>
+ssh-add<span class="w"> </span>~/.ssh/id_ed25519
+</code></pre>
+</div>
+
+<h3 id="docker-compose-명령어를-찾을-수-없는-경우"><code>docker compose</code> 명령어를 찾을 수 없는 경우</h3>
+
+<p>Docker Desktop이 최신 버전인지 확인합니다. 구버전은 <code>docker-compose</code>(하이픈 포함)를 사용합니다:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 버전 확인</span>
+docker<span class="w"> </span>compose<span class="w"> </span>version<span class="w">  </span><span class="c1"># v2.x → 공백 방식</span>
+docker-compose<span class="w"> </span>--version<span class="w">  </span><span class="c1"># 1.x → 하이픈 방식 (구버전, 권장하지 않음)</span>
+</code></pre>
+</div>
+
+<hr />
+
+<h2 id="부록-유용한-명령어-모음">부록: 유용한 명령어 모음</h2>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># 로컬 스택 전체 재시작</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>restart
+
+<span class="c1"># 특정 서비스 로그 실시간 확인</span>
+docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>infra/docker/docker-compose.yaml<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>otel-collector
+
+<span class="c1"># Prometheus 메트릭 직접 쿼리 (예: TTFT P95)</span>
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/api/v1/query?query=histogram_quantile(0.95,rate(llm_ttft_seconds_bucket[5m]))&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>json.tool
+
+<span class="c1"># Grafana 대시보드 목록 API</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://admin:admin@localhost:3000/api/search<span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>json.tool
+
+<span class="c1"># OTel Collector zpages (파이프라인 상태 시각화)</span>
+<span class="c1"># 브라우저: http://localhost:55679/debug/tracez</span>
+
+<span class="c1"># 부하 테스트 실행</span>
+python<span class="w"> </span>scripts/load-test.py<span class="w"> </span>--users<span class="w"> </span><span class="m">10</span><span class="w"> </span>--spawn-rate<span class="w"> </span><span class="m">2</span><span class="w"> </span>--run-time<span class="w"> </span>60s
+
+<span class="c1"># Alert Rule 유효성 검증</span>
+bash<span class="w"> </span>scripts/test-alerts.sh
+
+<span class="c1"># Context Propagation 단절 탐지</span>
+python<span class="w"> </span>scripts/validate-traces.py<span class="w"> </span>--fail-on-broken
+</code></pre>
+</div>
+
+<hr />
+
+<p><em>문서 관련 문의: Aura Kim <code>&lt;aura.kimjh@gmail.com&gt;</code></em><br />
+<em>이 문서는 프로젝트 환경이 변경될 때마다 업데이트합니다.</em></p>
+
+
+    <div class="doc-footer">
+      Generated from <code>LOCAL_SETUP.md</code> &nbsp;|&nbsp;
+      aiservice-monitoring project &nbsp;|&nbsp;
+      Aura Kim &lt;aura.kimjh@gmail.com&gt;
+    </div>
+  </div>
+</body>
+</html>

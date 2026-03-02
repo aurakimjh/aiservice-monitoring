@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계</title>
+  <style>
+    /* ── 기본 레이아웃 ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+                   Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.75;
+      color: #24292f;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .page-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+    }
+
+    /* ── 제목 ── */
+    h1, h2, h3, h4, h5, h6 {
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2em;
+      margin-bottom: 0.6em;
+      color: #1f2328;
+    }
+    h1 { font-size: 2em;   border-bottom: 2px solid #d0d7de; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.25em; }
+    h3 { font-size: 1.25em; }
+    h4 { font-size: 1em; }
+
+    /* ── 단락·링크 ── */
+    p { margin: 0.8em 0; }
+    a { color: #0969da; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── 코드 ── */
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875em;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      color: #e85d04;
+    }
+    pre {
+      background: #161b22;
+      border-radius: 8px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin: 1.2em 0;
+      border: 1px solid #30363d;
+    }
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: #e6edf3;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    /* ── 표 ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2em 0;
+      font-size: 0.9em;
+    }
+    thead tr {
+      background: #f6f8fa;
+    }
+    th, td {
+      border: 1px solid #d0d7de;
+      padding: 8px 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      font-weight: 600;
+      color: #1f2328;
+    }
+    tbody tr:nth-child(even) {
+      background: #f6f8fa;
+    }
+    tbody tr:hover {
+      background: #eaf3fb;
+    }
+
+    /* ── 인용 블록 ── */
+    blockquote {
+      border-left: 4px solid #0969da;
+      margin: 1em 0;
+      padding: 8px 16px;
+      background: #f0f7ff;
+      border-radius: 0 6px 6px 0;
+      color: #444d56;
+    }
+    blockquote p { margin: 0.3em 0; }
+
+    /* ── 목록 ── */
+    ul, ol {
+      padding-left: 1.8em;
+      margin: 0.6em 0;
+    }
+    li { margin: 0.3em 0; }
+    li > ul, li > ol { margin: 0.2em 0; }
+
+    /* ── 구분선 ── */
+    hr {
+      border: none;
+      border-top: 2px solid #d0d7de;
+      margin: 2em 0;
+    }
+
+    /* ── 배지 스타일 (체크박스) ── */
+    input[type="checkbox"] { margin-right: 6px; }
+
+    /* ── 헤더 앵커 ── */
+    h1 .anchor, h2 .anchor, h3 .anchor {
+      opacity: 0;
+      font-size: 0.75em;
+      margin-left: 8px;
+      color: #57606a;
+    }
+    h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+
+    /* ── 상단 메타 배너 ── */
+    .doc-banner {
+      background: linear-gradient(135deg, #0969da 0%, #1a7f64 100%);
+      color: white;
+      border-radius: 10px;
+      padding: 20px 28px;
+      margin-bottom: 2em;
+    }
+    .doc-banner h1 {
+      color: white;
+      border: none;
+      margin: 0 0 4px;
+      font-size: 1.6em;
+    }
+    .doc-banner p { margin: 0; opacity: 0.85; font-size: 0.9em; }
+
+    /* ── 푸터 ── */
+    .doc-footer {
+      margin-top: 4em;
+      padding-top: 1.5em;
+      border-top: 1px solid #d0d7de;
+      font-size: 0.82em;
+      color: #57606a;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="doc-banner">
+      <h1>AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계</h1>
+      <p>aiservice-monitoring · OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션</p>
+    </div>
+
+<h1 id="ai-서비스-성능-모니터링-지표-정의-및-수집-방안-설계">AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계</h1>
+
+<blockquote>
+  <p><strong>문서 버전</strong>: v1.0.0<br />
+  <strong>작성 기준</strong>: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26<br />
+  <strong>관점</strong>: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준</p>
+</blockquote>
+
+<hr />
+
+<h2 id="목차">목차</h2>
+
+<ol>
+<li><a href="#1-설계-원칙">설계 원칙</a></li>
+<li><a href="#2-지표-수집-전략-auto-vs-manual-instrumentation">지표 수집 전략: Auto vs Manual Instrumentation</a></li>
+<li><a href="#3-sampling-전략">Sampling 전략</a></li>
+<li><a href="#4-레이어별-상세-지표-설계">레이어별 상세 지표 설계</a>
+<ul>
+<li><a href="#layer-1-uiapp">Layer 1: UI / App</a></li>
+<li><a href="#layer-2-agent-오케스트레이션--외부-도구">Layer 2: Agent (오케스트레이션 &amp; 외부 도구)</a></li>
+<li><a href="#layer-3-model-추론-엔진--임베딩">Layer 3: Model (추론 엔진 &amp; 임베딩)</a></li>
+<li><a href="#layer-4-data-벡터-db--캐시">Layer 4: Data (벡터 DB &amp; 캐시)</a></li>
+<li><a href="#layer-5-infra-k8s--gpu">Layer 5: Infra (K8s &amp; GPU)</a></li>
+</ul></li>
+<li><a href="#5-ai-특화-핵심-성능-수식">AI 특화 핵심 성능 수식</a></li>
+<li><a href="#6-병목-구간별-시각화-전략">병목 구간별 시각화 전략</a></li>
+<li><a href="#7-장애-예방-alert-임계치-정의">장애 예방 Alert 임계치 정의</a></li>
+<li><a href="#8-context-propagation-설계">Context Propagation 설계</a></li>
+</ol>
+
+<hr />
+
+<h2 id="1-설계-원칙">1. 설계 원칙</h2>
+
+<h3 id="11-three-pillars-ai-확장">1.1 Three Pillars + AI 확장</h3>
+
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│              AI 서비스 Observability 4 Pillars                   │
+├──────────────┬──────────────┬──────────────┬────────────────────┤
+│   Traces     │   Metrics    │    Logs      │   AI-Specific      │
+│              │              │              │                    │
+│ 요청 경로    │ 집계 수치    │ 이벤트 기록  │ TTFT / TPS         │
+│ 레이턴시     │ 처리량       │ 에러 컨텍스트 │ Token Economics    │
+│ 인과관계     │ 리소스 사용  │ 정책 위반    │ GPU Correlation    │
+└──────────────┴──────────────┴──────────────┴────────────────────┘
+</code></pre>
+
+<h3 id="12-수집-우선순위-분류">1.2 수집 우선순위 분류</h3>
+
+<table>
+<thead>
+<tr>
+  <th>우선순위</th>
+  <th>레이블</th>
+  <th>기준</th>
+  <th>대상</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>P0</strong></td>
+  <td><code>Critical</code></td>
+  <td>SLO 직결, 장애 탐지 필수</td>
+  <td>vLLM TTFT, Guardrail 차단율, GPU VRAM</td>
+</tr>
+<tr>
+  <td><strong>P1</strong></td>
+  <td><code>High</code></td>
+  <td>성능 최적화 핵심</td>
+  <td>Agent 체인 레이턴시, 벡터 검색 시간</td>
+</tr>
+<tr>
+  <td><strong>P2</strong></td>
+  <td><code>Medium</code></td>
+  <td>트렌드 분석, 용량 계획</td>
+  <td>문서 파싱 시간, Streamlit 세션</td>
+</tr>
+<tr>
+  <td><strong>P3</strong></td>
+  <td><code>Low</code></td>
+  <td>감사/디버그 목적</td>
+  <td>전체 LLM 프롬프트 로그</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2 id="2-지표-수집-전략-auto-vs-manual-instrumentation">2. 지표 수집 전략: Auto vs Manual Instrumentation</h2>
+
+<h3 id="21-전략-매트릭스">2.1 전략 매트릭스</h3>
+
+<pre><code>                        자동 계측 가능도
+                   LOW ◄────────────────► HIGH
+              ┌────────────┬─────────────┬──────────────┐
+HIGH  수동    │ vLLM TTFT  │  LangChain  │  FastAPI     │
+      계측    │ GPU DCGM   │  Guardrails │  HTTP Client │
+      필요도  ├────────────┼─────────────┼──────────────┤
+              │ Triton Inf │  LlamaIndex │  Redis       │
+              │ 커스텀Tool  │  Embedding  │  Postgres    │
+LOW           └────────────┴─────────────┴──────────────┘
+</code></pre>
+
+<h3 id="22-auto-instrumentation-적용-대상-즉시-적용">2.2 Auto-Instrumentation 적용 대상 (즉시 적용)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># opentelemetry-bootstrap 로 자동 탐지 및 계측 가능한 라이브러리</span>
+<span class="n">AUTO_INSTRUMENT_PACKAGES</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-fastapi&quot;</span><span class="p">,</span>    <span class="c1"># FastAPI HTTP spans</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-flask&quot;</span><span class="p">,</span>      <span class="c1"># Flask HTTP spans</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-django&quot;</span><span class="p">,</span>     <span class="c1"># Django + DB query spans</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-httpx&quot;</span><span class="p">,</span>      <span class="c1"># 외부 HTTP 호출 (Serper, API)</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-redis&quot;</span><span class="p">,</span>      <span class="c1"># Redis 캐시 히트/미스</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-pymongo&quot;</span><span class="p">,</span>    <span class="c1"># MongoDB chat history</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-grpc&quot;</span><span class="p">,</span>       <span class="c1"># gRPC (Triton 등)</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-requests&quot;</span><span class="p">,</span>   <span class="c1"># requests 라이브러리</span>
+    <span class="s2">&quot;opentelemetry-instrumentation-aiohttp&quot;</span><span class="p">,</span>    <span class="c1"># aiohttp 비동기 HTTP</span>
+<span class="p">]</span>
+</code></pre>
+</div>
+
+<h3 id="23-manual-instrumentation-필수-대상-커스텀-계측">2.3 Manual Instrumentation 필수 대상 (커스텀 계측)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># AI 도메인 전용 — 자동 계측으로 절대 포착 불가</span>
+<span class="n">MANUAL_INSTRUMENT_REQUIRED</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;llm.ttft&quot;</span><span class="p">:</span>          <span class="s2">&quot;첫 스트리밍 청크 수신 시각 - 요청 시각&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;llm.tps&quot;</span><span class="p">:</span>           <span class="s2">&quot;완료 토큰 수 / 총 생성 시간(초)&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;llm.token_count&quot;</span><span class="p">:</span>   <span class="s2">&quot;prompt_tokens + completion_tokens&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;guardrail.blocked&quot;</span><span class="p">:</span> <span class="s2">&quot;정책 위반 탐지 및 차단 이벤트&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;agent.tool_calls&quot;</span><span class="p">:</span>  <span class="s2">&quot;각 Tool 호출 성공/실패/레이턴시&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;embedding.dims&quot;</span><span class="p">:</span>    <span class="s2">&quot;임베딩 벡터 차원수 및 배치 크기&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;gpu.vram_pressure&quot;</span><span class="p">:</span> <span class="s2">&quot;VRAM 사용률과 OOM 예측 지표&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;vector.recall&quot;</span><span class="p">:</span>     <span class="s2">&quot;Top-K 검색 결과 품질 지표&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<h3 id="24-계측-비율-가이드">2.4 계측 비율 가이드</h3>
+
+<table>
+<thead>
+<tr>
+  <th>계층</th>
+  <th>Auto 비율</th>
+  <th>Manual 비율</th>
+  <th>핵심 이유</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>HTTP/API 레이어</td>
+  <td><strong>85%</strong></td>
+  <td>15%</td>
+  <td>표준 HTTP 시맨틱 활용</td>
+</tr>
+<tr>
+  <td>Agent 오케스트레이션</td>
+  <td>40%</td>
+  <td><strong>60%</strong></td>
+  <td>비즈니스 로직 커스텀 스팬 필수</td>
+</tr>
+<tr>
+  <td>LLM 추론 엔진</td>
+  <td>10%</td>
+  <td><strong>90%</strong></td>
+  <td>스트리밍, TTFT 등 AI 전용</td>
+</tr>
+<tr>
+  <td>벡터 DB</td>
+  <td>50%</td>
+  <td>50%</td>
+  <td>gRPC 자동 + 쿼리 파라미터 수동</td>
+</tr>
+<tr>
+  <td>GPU/HW 지표</td>
+  <td>5%</td>
+  <td><strong>95%</strong></td>
+  <td>DCGM exporter 별도 파이프라인</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2 id="3-sampling-전략">3. Sampling 전략</h2>
+
+<h3 id="31-head-based-sampling-수집-입구-단계">3.1 Head-based Sampling (수집 입구 단계)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># collector/config/head-sampling.yaml</span>
+<span class="c1"># 목적: 전체 트래픽 부하를 줄이되, 중요 샘플은 반드시 포착</span>
+<span class="nt">sampler</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span>
+<span class="w">  </span><span class="nt">ratio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span><span class="w">          </span><span class="c1"># 일반 트래픽: 5% 샘플링</span>
+
+<span class="w">  </span><span class="c1"># 강제 포함 규칙 (Override — 항상 수집)</span>
+<span class="w">  </span><span class="nt">force_sample_rules</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http.status_code&quot;</span>
+<span class="w">      </span><span class="nt">op</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gte&quot;</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span><span class="w">        </span><span class="c1"># 5xx 에러: 100% 수집</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;user.tier&quot;</span>
+<span class="w">      </span><span class="nt">op</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;eq&quot;</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;enterprise&quot;</span><span class="w"> </span><span class="c1"># 엔터프라이즈 사용자: 100% 수집</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">attribute</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;llm.provider&quot;</span>
+<span class="w">      </span><span class="nt">op</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;eq&quot;</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;internal&quot;</span><span class="w">  </span><span class="c1"># 내부 vLLM 호출: 20% 수집 (ratio override)</span>
+<span class="w">      </span><span class="nt">override_ratio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.2</span>
+</code></pre>
+</div>
+
+<h3 id="32-tail-based-sampling-collector-집계-단계">3.2 Tail-based Sampling (Collector 집계 단계)</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># collector/config/tail-sampling.yaml</span>
+<span class="c1"># 목적: 트레이스 완료 후, 전체 그림을 보고 중요 트레이스를 선별</span>
+<span class="nt">processors</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tail_sampling</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">decision_wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span><span class="w">     </span><span class="c1"># 트레이스 완료 대기 시간</span>
+<span class="w">    </span><span class="nt">num_traces</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50000</span><span class="w">      </span><span class="c1"># 메모리 내 보관 트레이스 수</span>
+<span class="w">    </span><span class="nt">expected_new_traces_per_sec</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+
+<span class="w">    </span><span class="nt">policies</span><span class="p">:</span>
+<span class="w">      </span><span class="c1"># 1. 고레이턴시 트레이스 — LLM 병목 탐지</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high-latency-llm</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latency</span>
+<span class="w">        </span><span class="nt">latency</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">threshold_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">      </span><span class="c1"># 5초 초과 전체 요청</span>
+
+<span class="w">      </span><span class="c1"># 2. LLM 추론 단계 고레이턴시</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high-ttft</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">span_attribute</span>
+<span class="w">        </span><span class="nt">span_attribute</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;llm.ttft_ms&quot;</span>
+<span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="c1"># 후처리: TTFT &gt; 2000ms 필터</span>
+<span class="w">        </span><span class="nt">and</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latency</span>
+<span class="w">            </span><span class="nt">latency</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">threshold_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2000</span>
+
+<span class="w">      </span><span class="c1"># 3. 에러 포함 트레이스 — 항상 보존</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">error-traces</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">status_code</span>
+<span class="w">        </span><span class="nt">status_code</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">status_codes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ERROR</span><span class="p p-Indicator">]</span>
+
+<span class="w">      </span><span class="c1"># 4. 가드레일 차단 이벤트</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">guardrail-blocked</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">span_attribute</span>
+<span class="w">        </span><span class="nt">span_attribute</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;guardrail.action&quot;</span>
+<span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;BLOCK&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;REASK&quot;</span><span class="p p-Indicator">]</span>
+
+<span class="w">      </span><span class="c1"># 5. GPU VRAM 임계치 초과</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-pressure</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">span_attribute</span>
+<span class="w">        </span><span class="nt">span_attribute</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gpu.vram_utilization_pct&quot;</span>
+<span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;*&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="c1"># 후처리: &gt; 90% 필터</span>
+
+<span class="w">      </span><span class="c1"># 6. 외부 API 타임아웃</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-api-timeout</span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">span_attribute</span>
+<span class="w">        </span><span class="nt">span_attribute</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http.status_code&quot;</span>
+<span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;408&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;504&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;524&quot;</span><span class="p p-Indicator">]</span>
+
+<span class="w">    </span><span class="c1"># Composite: 위 정책 중 하나라도 해당하면 보존</span>
+<span class="w">    </span><span class="nt">decision_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OR</span>
+</code></pre>
+</div>
+
+<h3 id="33-샘플링-결과-예측-비용-절감">3.3 샘플링 결과 예측 비용 절감</h3>
+
+<p>$$<br />
+C<em>{saved} = C</em>{total} \times \left(1 - r<em>{head} - r</em>{tail} \cdot (1 - r_{head})\right)<br />
+$$</p>
+
+<p>여기서:</p>
+
+<ul>
+<li>$C_{total}$: 샘플링 없는 전체 수집 비용</li>
+<li>$r_{head}$: Head-based 샘플링 비율 (예: 0.05)</li>
+<li>$r_{tail}$: Tail-based에서 선별 후 보존 비율 (예: 0.15)</li>
+</ul>
+
+<p>예시 계산 (100만 요청/일 기준):</p>
+
+<p>$$<br />
+C_{saved} = 100\% \times \left(1 - 0.05 - 0.15 \times (1 - 0.05)\right) = 100\% - 0.05 - 0.1425 = 80.75\%\ 절감<br />
+$$</p>
+
+<hr />
+
+<h2 id="4-레이어별-상세-지표-설계">4. 레이어별 상세 지표 설계</h2>
+
+<hr />
+
+<h3 id="layer-1-uiapp">Layer 1: UI/App</h3>
+
+<h4 id="1-a-fastapi-python-critical">1-A. FastAPI (Python) — <code>Critical</code></h4>
+
+<p><strong>Auto-instrumentation으로 커버:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>OTel 지표명</th>
+  <th>OTel 타입</th>
+  <th>단위</th>
+  <th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>http.server.request.duration</code></td>
+  <td>Histogram</td>
+  <td>ms</td>
+  <td>요청 처리 전체 시간</td>
+</tr>
+<tr>
+  <td><code>http.server.active_requests</code></td>
+  <td>UpDownCounter</td>
+  <td>count</td>
+  <td>현재 처리 중인 요청 수</td>
+</tr>
+<tr>
+  <td><code>http.server.request.body.size</code></td>
+  <td>Histogram</td>
+  <td>bytes</td>
+  <td>요청 본문 크기 (프롬프트 크기 추정)</td>
+</tr>
+<tr>
+  <td><code>http.server.response.body.size</code></td>
+  <td>Histogram</td>
+  <td>bytes</td>
+  <td>응답 크기</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Manual Instrumentation — Streaming 응답 전용:</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/agents/fastapi_streaming.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanKind</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.service.api&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">stream_llm_response</span><span class="p">(</span><span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+        <span class="s2">&quot;api.streaming.response&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="n">SpanKind</span><span class="o">.</span><span class="n">SERVER</span><span class="p">,</span>
+        <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;request.id&quot;</span><span class="p">:</span> <span class="n">request_id</span><span class="p">,</span>
+            <span class="s2">&quot;http.route&quot;</span><span class="p">:</span> <span class="s2">&quot;/v1/chat/completions&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;streaming&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+        <span class="n">first_chunk_time</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">chunk_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">request_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">llm_backend</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">first_chunk_time</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">first_chunk_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">ttft_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">first_chunk_time</span> <span class="o">-</span> <span class="n">request_start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                <span class="c1"># TTFT를 Span 이벤트로 기록</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;first_token_received&quot;</span><span class="p">,</span> <span class="p">{</span>
+                    <span class="s2">&quot;llm.ttft_ms&quot;</span><span class="p">:</span> <span class="n">ttft_ms</span><span class="p">,</span>
+                    <span class="s2">&quot;streaming.chunk_index&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="p">})</span>
+                <span class="c1"># Metric으로도 기록 (히스토그램)</span>
+                <span class="n">ttft_histogram</span><span class="o">.</span><span class="n">record</span><span class="p">(</span>
+                    <span class="n">ttft_ms</span><span class="p">,</span>
+                    <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">span</span><span class="o">.</span><span class="n">attributes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm.model&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)}</span>
+                <span class="p">)</span>
+            <span class="n">chunk_count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">yield</span> <span class="n">chunk</span>
+
+        <span class="n">total_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">request_start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+        <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+            <span class="s2">&quot;llm.ttft_ms&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">first_chunk_time</span> <span class="o">-</span> <span class="n">request_start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span> <span class="k">if</span> <span class="n">first_chunk_time</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;streaming.total_chunks&quot;</span><span class="p">:</span> <span class="n">chunk_count</span><span class="p">,</span>
+            <span class="s2">&quot;http.response.duration_ms&quot;</span><span class="p">:</span> <span class="n">total_ms</span><span class="p">,</span>
+        <span class="p">})</span>
+</code></pre>
+</div>
+
+<p><strong>핵심 Span 속성:</strong></p>
+
+<pre><code>ai.service.api spans:
+  ├── http.method: "POST"
+  ├── http.route: "/v1/chat/completions"
+  ├── http.status_code: 200
+  ├── llm.ttft_ms: 342.5          ← AI 전용
+  ├── streaming.enabled: true
+  └── user.tier: "enterprise"
+</code></pre>
+
+<hr />
+
+<h4 id="1-b-nextjs-react-tsjs-critical-스트리밍-청크-지연">1-B. Next.js / React (TS/JS) — <code>Critical</code> (스트리밍 청크 지연)</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// sdk-instrumentation/nodejs/frontend-streaming.js</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">trace</span><span class="p">,</span><span class="w"> </span><span class="nx">context</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@opentelemetry/api&#39;</span><span class="p">;</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">tracer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">trace</span><span class="p">.</span><span class="nx">getTracer</span><span class="p">(</span><span class="s1">&#39;ai.service.frontend&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;1.0.0&#39;</span><span class="p">);</span>
+
+<span class="k">async</span><span class="w"> </span><span class="kd">function</span><span class="o">*</span><span class="w"> </span><span class="nx">trackStreamingChunks</span><span class="p">(</span><span class="nx">responseStream</span><span class="p">,</span><span class="w"> </span><span class="nx">parentSpan</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">streamSpan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">tracer</span><span class="p">.</span><span class="nx">startSpan</span><span class="p">(</span><span class="s1">&#39;frontend.streaming.receive&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">attributes</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="s1">&#39;streaming.source&#39;</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;server-sent-events&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span><span class="w"> </span><span class="nx">trace</span><span class="p">.</span><span class="nx">setSpan</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">active</span><span class="p">(),</span><span class="w"> </span><span class="nx">parentSpan</span><span class="p">));</span>
+
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nx">prevChunkTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nx">chunkIndex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">chunk</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">responseStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="kd">const</span><span class="w"> </span><span class="nx">now</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+<span class="w">      </span><span class="kd">const</span><span class="w"> </span><span class="nx">interChunkDelay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">now</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">prevChunkTime</span><span class="p">;</span>
+
+<span class="w">      </span><span class="c1">// 청크 간 지연이 500ms 초과 시 이벤트 기록 (사용자 체감 끊김)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">interChunkDelay</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">500</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">streamSpan</span><span class="p">.</span><span class="nx">addEvent</span><span class="p">(</span><span class="s1">&#39;streaming.chunk.delay_detected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="s1">&#39;streaming.chunk_index&#39;</span><span class="o">:</span><span class="w"> </span><span class="nx">chunkIndex</span><span class="p">,</span>
+<span class="w">          </span><span class="s1">&#39;streaming.inter_chunk_delay_ms&#39;</span><span class="o">:</span><span class="w"> </span><span class="nx">interChunkDelay</span><span class="p">,</span>
+<span class="w">          </span><span class="s1">&#39;streaming.delay_threshold_exceeded&#39;</span><span class="o">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="nx">prevChunkTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">now</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">chunkIndex</span><span class="o">++</span><span class="p">;</span>
+<span class="w">      </span><span class="k">yield</span><span class="w"> </span><span class="nx">chunk</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">finally</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">streamSpan</span><span class="p">.</span><span class="nx">setAttribute</span><span class="p">(</span><span class="s1">&#39;streaming.total_chunks&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">chunkIndex</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">streamSpan</span><span class="p">.</span><span class="nx">end</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<p><strong>수집 지표:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명</th>
+  <th>타입</th>
+  <th>핵심 속성</th>
+  <th>임계치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>frontend.streaming.chunk_delay_ms</code></td>
+  <td>Histogram</td>
+  <td><code>chunk_index</code></td>
+  <td>P99 &gt; 500ms → Alert</td>
+</tr>
+<tr>
+  <td><code>frontend.lcp_ms</code></td>
+  <td>Histogram</td>
+  <td><code>page_route</code></td>
+  <td>&gt; 2500ms → 경고</td>
+</tr>
+<tr>
+  <td><code>frontend.streaming.total_chunks</code></td>
+  <td>Histogram</td>
+  <td><code>model</code></td>
+  <td>모델별 응답 길이 트렌드</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h4 id="1-c-nemo-guardrails-guardrails-ai-critical-병목-핵심">1-C. NeMo Guardrails / Guardrails AI — <code>Critical</code> (병목 핵심)</h4>
+
+<blockquote>
+  <p><strong>병목 시나리오</strong>: 가드레일은 LLM 앞단에서 모든 입력을 검증하므로, 레이턴시가 높으면 전체 P99 레이턴시를 지배합니다.</p>
+</blockquote>
+
+<p><strong>Manual Instrumentation — 가드레일 전/후 분리 계측:</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/guardrails/nemo_instrumentation.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span><span class="p">,</span> <span class="n">metrics</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanKind</span><span class="p">,</span> <span class="n">StatusCode</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">wraps</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.guardrails.nemo&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+<span class="n">meter</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_meter</span><span class="p">(</span><span class="s2">&quot;ai.guardrails.nemo&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="c1"># Metrics 정의</span>
+<span class="n">guardrail_latency</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;guardrail.validation.duration&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;가드레일 검증 처리 시간&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">guardrail_block_counter</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;guardrail.block.total&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;가드레일 차단 누적 횟수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">guardrail_reask_counter</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;guardrail.reask.total&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Guardrails AI re-ask 발생 횟수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">policy_violation_counter</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;guardrail.policy_violation.total&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;정책 유형별 위반 횟수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">instrument_guardrail</span><span class="p">(</span><span class="n">policy_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;가드레일 함수에 OTel 계측을 자동 주입하는 데코레이터&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+        <span class="nd">@wraps</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="n">user_input</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+            <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;guardrail.validate.</span><span class="si">{</span><span class="n">policy_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">kind</span><span class="o">=</span><span class="n">SpanKind</span><span class="o">.</span><span class="n">INTERNAL</span><span class="p">,</span>
+                <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;guardrail.policy&quot;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span>
+                    <span class="s2">&quot;guardrail.engine&quot;</span><span class="p">:</span> <span class="s2">&quot;nemo&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;guardrails_ai&quot;</span>
+                    <span class="s2">&quot;input.char_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">user_input</span><span class="p">),</span>
+                    <span class="s2">&quot;input.token_estimate&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">user_input</span><span class="o">.</span><span class="n">split</span><span class="p">()),</span>
+                <span class="p">}</span>
+            <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">fn</span><span class="p">(</span><span class="n">user_input</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;action&quot;</span><span class="p">,</span> <span class="s2">&quot;PASS&quot;</span><span class="p">)</span>
+                    <span class="n">violation_type</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;violation_type&quot;</span><span class="p">,</span> <span class="s2">&quot;none&quot;</span><span class="p">)</span>
+
+                    <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                        <span class="s2">&quot;guardrail.action&quot;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>          <span class="c1"># PASS / BLOCK / REASK</span>
+                        <span class="s2">&quot;guardrail.violation_type&quot;</span><span class="p">:</span> <span class="n">violation_type</span><span class="p">,</span>  <span class="c1"># jailbreak/pii/toxic</span>
+                        <span class="s2">&quot;guardrail.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed_ms</span><span class="p">,</span>
+                        <span class="s2">&quot;guardrail.confidence_score&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;confidence&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+                    <span class="p">})</span>
+
+                    <span class="c1"># 메트릭 기록</span>
+                    <span class="n">labels</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span>
+                        <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                        <span class="s2">&quot;violation_type&quot;</span><span class="p">:</span> <span class="n">violation_type</span><span class="p">,</span>
+                    <span class="p">}</span>
+                    <span class="n">guardrail_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+
+                    <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="s2">&quot;BLOCK&quot;</span><span class="p">:</span>
+                        <span class="n">guardrail_block_counter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+                        <span class="n">policy_violation_counter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">violation_type</span><span class="p">})</span>
+                        <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">OK</span><span class="p">,</span> <span class="s2">&quot;Blocked by policy&quot;</span><span class="p">)</span>
+                        <span class="c1"># 이벤트로 상세 기록 (tail sampling이 이 span을 선별)</span>
+                        <span class="n">span</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;guardrail.block.detail&quot;</span><span class="p">,</span> <span class="p">{</span>
+                            <span class="s2">&quot;input.snippet&quot;</span><span class="p">:</span> <span class="n">user_input</span><span class="p">[:</span><span class="mi">100</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>  <span class="c1"># 최초 100자만</span>
+                            <span class="s2">&quot;matched_rule&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;matched_rule&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">),</span>
+                        <span class="p">})</span>
+
+                    <span class="k">elif</span> <span class="n">action</span> <span class="o">==</span> <span class="s2">&quot;REASK&quot;</span><span class="p">:</span>
+                        <span class="n">guardrail_reask_counter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+                        <span class="n">span</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;guardrail.reask.issued&quot;</span><span class="p">,</span> <span class="p">{</span>
+                            <span class="s2">&quot;reask_count&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reask_count&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+                            <span class="s2">&quot;reask_prompt&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reask_prompt&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">200</span><span class="p">],</span>
+                        <span class="p">})</span>
+
+                    <span class="k">return</span> <span class="n">result</span>
+
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                    <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                    <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                    <span class="n">guardrail_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="n">policy_name</span><span class="p">,</span> <span class="s2">&quot;action&quot;</span><span class="p">:</span> <span class="s2">&quot;ERROR&quot;</span><span class="p">})</span>
+                    <span class="k">raise</span>
+
+        <span class="k">return</span> <span class="n">wrapper</span>
+    <span class="k">return</span> <span class="n">decorator</span>
+</code></pre>
+</div>
+
+<p><strong>핵심 수집 지표 정의:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명</th>
+  <th>타입</th>
+  <th>레이블</th>
+  <th>P0 임계치</th>
+  <th>의미</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>guardrail.validation.duration</code></td>
+  <td>Histogram</td>
+  <td><code>policy</code>, <code>action</code></td>
+  <td>P99 &gt; 800ms</td>
+  <td>전체 레이턴시 기여도</td>
+</tr>
+<tr>
+  <td><code>guardrail.block.total</code></td>
+  <td>Counter</td>
+  <td><code>policy</code>, <code>violation_type</code></td>
+  <td>Rate &gt; 5%/min</td>
+  <td>이상 공격 트래픽 탐지</td>
+</tr>
+<tr>
+  <td><code>guardrail.reask.total</code></td>
+  <td>Counter</td>
+  <td><code>policy</code></td>
+  <td>Rate &gt; 10%/min</td>
+  <td>프롬프트 품질 저하</td>
+</tr>
+<tr>
+  <td><code>guardrail.policy_violation.total</code></td>
+  <td>Counter</td>
+  <td><code>type</code></td>
+  <td>급등 시 Alert</td>
+  <td>보안 이벤트</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h3 id="layer-2-agent-오케스트레이션-외부-도구">Layer 2: Agent (오케스트레이션 &amp; 외부 도구)</h3>
+
+<h4 id="2-a-langchain-langgraph-critical">2-A. LangChain / LangGraph — <code>Critical</code></h4>
+
+<p><strong>핵심 계측 포인트: Chain Step 단위 분리</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/agents/langchain_tracer.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">langchain.callbacks.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseCallbackHandler</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.agent.langchain&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">OtelCallbackHandler</span><span class="p">(</span><span class="n">BaseCallbackHandler</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;LangChain 콜백을 OTel Span으로 변환하는 핸들러&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_chain_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">serialized</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">chain_name</span> <span class="o">=</span> <span class="n">serialized</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown_chain&quot;</span><span class="p">)</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;agent.chain.</span><span class="si">{</span><span class="n">chain_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;agent.chain.name&quot;</span><span class="p">:</span> <span class="n">chain_name</span><span class="p">,</span>
+                <span class="s2">&quot;agent.chain.run_id&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">),</span>
+                <span class="s2">&quot;agent.input.char_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">inputs</span><span class="p">)),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">)]</span> <span class="o">=</span> <span class="n">span</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">)]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_chain_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">run_id_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">)</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">run_id_str</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">span</span><span class="p">:</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">run_id_str</span><span class="p">))</span> <span class="o">*</span> <span class="mi">1000</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                <span class="s2">&quot;agent.chain.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed</span><span class="p">,</span>
+                <span class="s2">&quot;agent.output.char_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">outputs</span><span class="p">)),</span>
+            <span class="p">})</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_tool_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">serialized</span><span class="p">,</span> <span class="n">input_str</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">tool_name</span> <span class="o">=</span> <span class="n">serialized</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown_tool&quot;</span><span class="p">)</span>
+        <span class="n">parent_span</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_current_span</span><span class="p">()</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;agent.tool.</span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;agent.tool.name&quot;</span><span class="p">:</span> <span class="n">tool_name</span><span class="p">,</span>
+                <span class="s2">&quot;agent.tool.run_id&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">),</span>
+                <span class="s2">&quot;agent.tool.input_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">input_str</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;tool_</span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">span</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;tool_</span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_tool_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;tool_</span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">span</span><span class="p">:</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">))</span> <span class="o">*</span> <span class="mi">1000</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                <span class="s2">&quot;agent.tool.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed</span><span class="p">,</span>
+                <span class="s2">&quot;agent.tool.success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;agent.tool.output_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output</span><span class="p">)),</span>
+            <span class="p">})</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_tool_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;tool_</span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">span</span><span class="p">:</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_timings</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()))</span> <span class="o">*</span> <span class="mi">1000</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                <span class="s2">&quot;agent.tool.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed</span><span class="p">,</span>
+                <span class="s2">&quot;agent.tool.success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;agent.tool.error&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">),</span>
+            <span class="p">})</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_agent_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_current_span</span><span class="p">()</span>
+        <span class="n">span</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;agent.action.selected&quot;</span><span class="p">,</span> <span class="p">{</span>
+            <span class="s2">&quot;agent.action.tool&quot;</span><span class="p">:</span> <span class="n">action</span><span class="o">.</span><span class="n">tool</span><span class="p">,</span>
+            <span class="s2">&quot;agent.action.input&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">tool_input</span><span class="p">)[:</span><span class="mi">500</span><span class="p">],</span>
+        <span class="p">})</span>
+
+    <span class="c1"># LangGraph 전용: 상태 전환 추적</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_graph_node_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_name</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">run_id</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">span</span> <span class="o">=</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;langgraph.node.</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;graph.node.name&quot;</span><span class="p">:</span> <span class="n">node_name</span><span class="p">,</span>
+                <span class="s2">&quot;graph.state.keys&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">keys</span><span class="p">())),</span>
+                <span class="s2">&quot;graph.run_id&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">run_id</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_span_stack</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;graph_</span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">span</span>
+</code></pre>
+</div>
+
+<p><strong>LangGraph 상태 전환 지표:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명</th>
+  <th>타입</th>
+  <th>레이블</th>
+  <th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>agent.graph.node.duration_ms</code></td>
+  <td>Histogram</td>
+  <td><code>node_name</code>, <code>graph_id</code></td>
+  <td>노드별 처리 시간</td>
+</tr>
+<tr>
+  <td><code>agent.graph.state_transitions.total</code></td>
+  <td>Counter</td>
+  <td><code>from_node</code>, <code>to_node</code></td>
+  <td>상태 전환 빈도</td>
+</tr>
+<tr>
+  <td><code>agent.graph.recursion_depth</code></td>
+  <td>Histogram</td>
+  <td><code>graph_id</code></td>
+  <td>재귀 깊이 (무한루프 탐지)</td>
+</tr>
+<tr>
+  <td><code>agent.chain.step.duration_ms</code></td>
+  <td>Histogram</td>
+  <td><code>chain</code>, <code>step</code></td>
+  <td>체인 단계별 시간</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h4 id="2-b-외부-api-호출-serper-custom-tools-critical-병목-핵심">2-B. 외부 API 호출 (Serper, Custom Tools) — <code>Critical</code> (병목 핵심)</h4>
+
+<blockquote>
+  <p><strong>병목 시나리오</strong>: 외부 API 타임아웃은 전체 Agent 체인을 블록킹합니다. 네트워크 레이턴시와 외부 서비스 SLA를 독립적으로 측정해야 합니다.</p>
+</blockquote>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/agents/external_api_tracer.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">httpx</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span><span class="p">,</span> <span class="n">metrics</span><span class="p">,</span> <span class="n">propagate</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanKind</span><span class="p">,</span> <span class="n">StatusCode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.semconv.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanAttributes</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.agent.external_api&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+<span class="n">meter</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_meter</span><span class="p">(</span><span class="s2">&quot;ai.agent.external_api&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="n">external_api_latency</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="s2">&quot;external_api.request.duration&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;외부 API 요청 레이턴시 (네트워크 포함)&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">external_api_errors</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="s2">&quot;external_api.error.total&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;외부 API 에러 횟수 (4xx/5xx/timeout)&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">external_api_timeout</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="s2">&quot;external_api.timeout.total&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;외부 API 타임아웃 발생 횟수&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">InstrumentedHTTPClient</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;외부 API 호출에 OTel Context Propagation을 자동 주입하는 HTTP 클라이언트&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">service_name</span> <span class="o">=</span> <span class="n">service_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_url</span> <span class="o">=</span> <span class="n">base_url</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">httpx</span><span class="o">.</span><span class="n">AsyncClient</span><span class="p">(</span><span class="n">base_url</span><span class="o">=</span><span class="n">base_url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">post</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">httpx</span><span class="o">.</span><span class="n">Response</span><span class="p">:</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">base_url</span><span class="si">}{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;headers&quot;</span><span class="p">,</span> <span class="p">{})</span>
+
+        <span class="c1"># W3C TraceContext 헤더 주입 — 외부 서비스까지 Trace ID 전파</span>
+        <span class="n">propagate</span><span class="o">.</span><span class="n">inject</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;external_api.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">service_name</span><span class="si">}</span><span class="s2">.request&quot;</span><span class="p">,</span>
+            <span class="n">kind</span><span class="o">=</span><span class="n">SpanKind</span><span class="o">.</span><span class="n">CLIENT</span><span class="p">,</span>
+            <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">SpanAttributes</span><span class="o">.</span><span class="n">HTTP_METHOD</span><span class="p">:</span> <span class="s2">&quot;POST&quot;</span><span class="p">,</span>
+                <span class="n">SpanAttributes</span><span class="o">.</span><span class="n">HTTP_URL</span><span class="p">:</span> <span class="n">url</span><span class="p">,</span>
+                <span class="n">SpanAttributes</span><span class="o">.</span><span class="n">NET_PEER_NAME</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_name</span><span class="p">,</span>
+                <span class="s2">&quot;external_api.service&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_name</span><span class="p">,</span>
+                <span class="s2">&quot;external_api.timeout_configured_s&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;service&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_name</span><span class="p">,</span> <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;POST&quot;</span><span class="p">}</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+
+                <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                    <span class="n">SpanAttributes</span><span class="o">.</span><span class="n">HTTP_STATUS_CODE</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span>
+                    <span class="s2">&quot;external_api.response_time_ms&quot;</span><span class="p">:</span> <span class="n">elapsed_ms</span><span class="p">,</span>
+                    <span class="s2">&quot;external_api.response_size_bytes&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">),</span>
+                <span class="p">})</span>
+
+                <span class="n">labels</span><span class="p">[</span><span class="s2">&quot;status_code&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span>
+                <span class="n">labels</span><span class="p">[</span><span class="s2">&quot;status_class&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="mi">100</span><span class="si">}</span><span class="s2">xx&quot;</span>
+                <span class="n">external_api_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">&gt;=</span> <span class="mi">400</span><span class="p">:</span>
+                    <span class="n">external_api_errors</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span>
+                        <span class="o">**</span><span class="n">labels</span><span class="p">,</span>
+                        <span class="s2">&quot;error_type&quot;</span><span class="p">:</span> <span class="s2">&quot;http_error&quot;</span><span class="p">,</span>
+                    <span class="p">})</span>
+                    <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">&gt;=</span> <span class="mi">500</span><span class="p">:</span>
+                        <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;HTTP </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+                <span class="k">return</span> <span class="n">response</span>
+
+            <span class="k">except</span> <span class="n">httpx</span><span class="o">.</span><span class="n">TimeoutException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span> <span class="s2">&quot;Request timeout&quot;</span><span class="p">)</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;external_api.timeout_occurred&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+                <span class="n">external_api_timeout</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="o">**</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;error_type&quot;</span><span class="p">:</span> <span class="s2">&quot;timeout&quot;</span><span class="p">})</span>
+                <span class="n">external_api_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="p">{</span><span class="o">**</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;status_code&quot;</span><span class="p">:</span> <span class="s2">&quot;timeout&quot;</span><span class="p">})</span>
+                <span class="k">raise</span>
+
+            <span class="k">except</span> <span class="n">httpx</span><span class="o">.</span><span class="n">NetworkError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span> <span class="s2">&quot;Network error&quot;</span><span class="p">)</span>
+                <span class="n">external_api_errors</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="o">**</span><span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;error_type&quot;</span><span class="p">:</span> <span class="s2">&quot;network_error&quot;</span><span class="p">})</span>
+                <span class="k">raise</span>
+</code></pre>
+</div>
+
+<p><strong>외부 API 병목 시각화 전략:</strong></p>
+
+<pre><code>[Grafana 대시보드 패널 구성]
+
+패널 1: 서비스별 외부 API 레이턴시 (P50/P95/P99)
+  → histogram_quantile(0.99, external_api.request.duration{service="serper"})
+
+패널 2: 외부 API 에러율 (5분 이동평균)
+  → rate(external_api.error.total[5m]) / rate(external_api.request.total[5m]) * 100
+
+패널 3: 타임아웃 발생 빈도 (히트맵)
+  → 서비스별 × 시간대별 타임아웃 발생 패턴 → 외부 서비스 SLA 문제 탐지
+
+패널 4: Trace 워터폴 (병목 구간 시각화)
+  → Jaeger/Tempo에서 agent.chain → external_api.serper.request Span 계층 표시
+</code></pre>
+
+<hr />
+
+<h3 id="layer-3-model-추론-엔진-임베딩">Layer 3: Model (추론 엔진 &amp; 임베딩)</h3>
+
+<h4 id="3-a-vllm-critical-가장-중요한-ai-특화-계측">3-A. vLLM — <code>Critical</code> (가장 중요한 AI 특화 계측)</h4>
+
+<p><strong>vLLM 내부 메트릭 수집 (Prometheus Exporter 활용 + OTel 브릿지):</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/llm/vllm_instrumentation.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span><span class="p">,</span> <span class="n">metrics</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanKind</span><span class="p">,</span> <span class="n">StatusCode</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncGenerator</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.model.vllm&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+<span class="n">meter</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_meter</span><span class="p">(</span><span class="s2">&quot;ai.model.vllm&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="c1"># AI 핵심 지표 정의</span>
+<span class="n">ttft_histogram</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.time_to_first_token&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Time To First Token — 스트리밍 응답에서 첫 토큰 수신까지의 시간&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">tps_histogram</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.tokens_per_second&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Token Per Second — 초당 토큰 생성 속도&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;tok/s&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">token_latency_histogram</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.ms_per_token&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;토큰당 생성 시간 (TPS의 역수, 지연 분석용)&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms/tok&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">queue_time_histogram</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.queue_wait_time&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;vLLM 내부 요청 큐 대기 시간 (GPU 포화 지표)&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">prompt_tokens_counter</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.prompt_tokens.total&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;처리된 프롬프트 토큰 누적 수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;tok&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">completion_tokens_counter</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.completion_tokens.total&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;생성된 완료 토큰 누적 수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;tok&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">concurrent_requests_gauge</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_up_down_counter</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;llm.concurrent_requests&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;vLLM 현재 처리 중인 동시 요청 수&quot;</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">instrument_vllm_generate</span><span class="p">(</span>
+    <span class="n">engine</span><span class="p">,</span>
+    <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">sampling_params</span><span class="p">,</span>
+    <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncGenerator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;vLLM generate() 호출을 OTel로 감싸는 계측 함수&quot;&quot;&quot;</span>
+
+    <span class="n">prompt_tokens</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>  <span class="c1"># 실제는 tokenizer 사용</span>
+
+    <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+        <span class="s2">&quot;llm.vllm.generate&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="n">SpanKind</span><span class="o">.</span><span class="n">INTERNAL</span><span class="p">,</span>
+        <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;llm.model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">,</span>
+            <span class="s2">&quot;llm.provider&quot;</span><span class="p">:</span> <span class="s2">&quot;vllm&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;llm.request_id&quot;</span><span class="p">:</span> <span class="n">request_id</span><span class="p">,</span>
+            <span class="s2">&quot;llm.prompt_tokens&quot;</span><span class="p">:</span> <span class="n">prompt_tokens</span><span class="p">,</span>
+            <span class="s2">&quot;llm.max_tokens&quot;</span><span class="p">:</span> <span class="n">sampling_params</span><span class="o">.</span><span class="n">max_tokens</span><span class="p">,</span>
+            <span class="s2">&quot;llm.temperature&quot;</span><span class="p">:</span> <span class="n">sampling_params</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+        <span class="n">request_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+        <span class="n">concurrent_requests_gauge</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># vLLM 큐 진입 전 대기 시간 측정</span>
+            <span class="n">queue_enter_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+            <span class="n">first_token_received</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">completion_tokens</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">output_text</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+            <span class="k">async</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">engine</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">sampling_params</span><span class="p">,</span> <span class="n">request_id</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">first_token_received</span> <span class="ow">and</span> <span class="n">output</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+                    <span class="c1"># TTFT 계산</span>
+                    <span class="n">ttft_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">request_start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                    <span class="n">first_token_received</span> <span class="o">=</span> <span class="kc">True</span>
+
+                    <span class="n">span</span><span class="o">.</span><span class="n">add_event</span><span class="p">(</span><span class="s2">&quot;llm.first_token&quot;</span><span class="p">,</span> <span class="p">{</span>
+                        <span class="s2">&quot;llm.ttft_ms&quot;</span><span class="p">:</span> <span class="n">ttft_ms</span><span class="p">,</span>
+                        <span class="s2">&quot;llm.queue_position&quot;</span><span class="p">:</span> <span class="n">output</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;queue_position&quot;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+                    <span class="p">})</span>
+
+                    <span class="c1"># 큐 대기 시간 (vLLM metrics에서 추출)</span>
+                    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="s1">&#39;metrics&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">output</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+                        <span class="n">queue_wait_ms</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scheduler_wait_ms&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                        <span class="n">queue_time_histogram</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">queue_wait_ms</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+                        <span class="n">span</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;llm.queue_wait_ms&quot;</span><span class="p">,</span> <span class="n">queue_wait_ms</span><span class="p">)</span>
+
+                    <span class="n">ttft_histogram</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">ttft_ms</span><span class="p">,</span> <span class="p">{</span>
+                        <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">,</span>
+                        <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">sampling_params</span><span class="o">.</span><span class="n">temperature</span><span class="p">),</span>
+                    <span class="p">})</span>
+
+                <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+                    <span class="n">completion_tokens</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">token_ids</span><span class="p">)</span>
+                    <span class="n">output_text</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">text</span>
+
+                <span class="k">yield</span> <span class="n">output</span>
+
+            <span class="c1"># 완료 후 TPS 및 전체 지표 기록</span>
+            <span class="n">total_time_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">request_start</span>
+            <span class="k">if</span> <span class="n">completion_tokens</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">total_time_s</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># 생성 구간만의 TPS (TTFT 이후부터)</span>
+                <span class="n">generation_time_s</span> <span class="o">=</span> <span class="n">total_time_s</span> <span class="o">-</span> <span class="p">(</span><span class="n">ttft_ms</span> <span class="o">/</span> <span class="mi">1000</span> <span class="k">if</span> <span class="n">first_token_received</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">tps</span> <span class="o">=</span> <span class="n">completion_tokens</span> <span class="o">/</span> <span class="n">generation_time_s</span> <span class="k">if</span> <span class="n">generation_time_s</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+                <span class="n">ms_per_token</span> <span class="o">=</span> <span class="p">(</span><span class="n">generation_time_s</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span> <span class="o">/</span> <span class="n">completion_tokens</span>
+
+                <span class="n">tps_histogram</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">tps</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+                <span class="n">token_latency_histogram</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">ms_per_token</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+
+                <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                    <span class="s2">&quot;llm.completion_tokens&quot;</span><span class="p">:</span> <span class="n">completion_tokens</span><span class="p">,</span>
+                    <span class="s2">&quot;llm.total_tokens&quot;</span><span class="p">:</span> <span class="n">prompt_tokens</span> <span class="o">+</span> <span class="n">completion_tokens</span><span class="p">,</span>
+                    <span class="s2">&quot;llm.tps&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">tps</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                    <span class="s2">&quot;llm.ms_per_token&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">ms_per_token</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                    <span class="s2">&quot;llm.total_duration_ms&quot;</span><span class="p">:</span> <span class="n">total_time_s</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+                    <span class="s2">&quot;llm.finish_reason&quot;</span><span class="p">:</span> <span class="s2">&quot;stop&quot;</span><span class="p">,</span>
+                <span class="p">})</span>
+
+                <span class="n">prompt_tokens_counter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">prompt_tokens</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+                <span class="n">completion_tokens_counter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">completion_tokens</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">StatusCode</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            <span class="k">raise</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">concurrent_requests_gauge</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">})</span>
+</code></pre>
+</div>
+
+<p><strong>vLLM 핵심 지표 요약:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명</th>
+  <th>타입</th>
+  <th>핵심 레이블</th>
+  <th>SLO 기준</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>llm.time_to_first_token</code></td>
+  <td>Histogram</td>
+  <td><code>model</code></td>
+  <td>P95 &lt; 2,000ms</td>
+</tr>
+<tr>
+  <td><code>llm.tokens_per_second</code></td>
+  <td>Histogram</td>
+  <td><code>model</code></td>
+  <td>P50 &gt; 30 tok/s</td>
+</tr>
+<tr>
+  <td><code>llm.ms_per_token</code></td>
+  <td>Histogram</td>
+  <td><code>model</code></td>
+  <td>P99 &lt; 100 ms/tok</td>
+</tr>
+<tr>
+  <td><code>llm.queue_wait_time</code></td>
+  <td>Histogram</td>
+  <td><code>model</code></td>
+  <td>P95 &lt; 1,000ms</td>
+</tr>
+<tr>
+  <td><code>llm.concurrent_requests</code></td>
+  <td>UpDownCounter</td>
+  <td><code>model</code></td>
+  <td>&lt; Max Batch</td>
+</tr>
+<tr>
+  <td><code>llm.prompt_tokens.total</code></td>
+  <td>Counter</td>
+  <td><code>model</code></td>
+  <td>비용 추적</td>
+</tr>
+<tr>
+  <td><code>llm.completion_tokens.total</code></td>
+  <td>Counter</td>
+  <td><code>model</code></td>
+  <td>비용 추적</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h4 id="3-b-huggingface-embedding-로컬-gpu-critical">3-B. HuggingFace Embedding (로컬 GPU) — <code>Critical</code></h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/llm/embedding_instrumentation.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span><span class="p">,</span> <span class="n">metrics</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.model.embedding&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+<span class="n">meter</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_meter</span><span class="p">(</span><span class="s2">&quot;ai.model.embedding&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="n">embedding_latency</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="s2">&quot;embedding.request.duration&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span>
+<span class="p">)</span>
+<span class="n">embedding_batch_size</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="s2">&quot;embedding.batch_size&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span>
+<span class="p">)</span>
+<span class="n">embedding_tokens</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="s2">&quot;embedding.tokens.total&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;tok&quot;</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">instrument_embedding</span><span class="p">(</span><span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">embed_fn</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="n">texts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>
+            <span class="n">total_tokens</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">texts</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+                <span class="s2">&quot;embedding.encode&quot;</span><span class="p">,</span>
+                <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;embedding.model&quot;</span><span class="p">:</span> <span class="n">model_name</span><span class="p">,</span>
+                    <span class="s2">&quot;embedding.device&quot;</span><span class="p">:</span> <span class="n">device</span><span class="p">,</span>
+                    <span class="s2">&quot;embedding.batch_size&quot;</span><span class="p">:</span> <span class="n">batch_size</span><span class="p">,</span>
+                    <span class="s2">&quot;embedding.total_tokens&quot;</span><span class="p">:</span> <span class="n">total_tokens</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">embed_fn</span><span class="p">(</span><span class="n">texts</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+
+                <span class="n">dims</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="s1">&#39;shape&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                    <span class="s2">&quot;embedding.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed_ms</span><span class="p">,</span>
+                    <span class="s2">&quot;embedding.dimensions&quot;</span><span class="p">:</span> <span class="n">dims</span><span class="p">,</span>
+                    <span class="s2">&quot;embedding.throughput_tok_per_s&quot;</span><span class="p">:</span> <span class="n">total_tokens</span> <span class="o">/</span> <span class="p">(</span><span class="n">elapsed_ms</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">),</span>
+                <span class="p">})</span>
+
+                <span class="n">embedding_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="p">{</span>
+                    <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;device&quot;</span><span class="p">:</span> <span class="n">device</span>
+                <span class="p">})</span>
+                <span class="n">embedding_batch_size</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model_name</span><span class="p">})</span>
+                <span class="n">embedding_tokens</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">total_tokens</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model_name</span><span class="p">})</span>
+                <span class="k">return</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">wrapper</span>
+    <span class="k">return</span> <span class="n">decorator</span>
+</code></pre>
+</div>
+
+<hr />
+
+<h3 id="layer-4-data-벡터-db-캐시">Layer 4: Data (벡터 DB &amp; 캐시)</h3>
+
+<h4 id="4-a-pinecone-milvus-qdrant-critical">4-A. Pinecone / Milvus / Qdrant — <code>Critical</code></h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># sdk-instrumentation/python/vector_db/vectordb_instrumentation.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace</span><span class="p">,</span> <span class="n">metrics</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanKind</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">tracer</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">get_tracer</span><span class="p">(</span><span class="s2">&quot;ai.data.vectordb&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+<span class="n">meter</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_meter</span><span class="p">(</span><span class="s2">&quot;ai.data.vectordb&quot;</span><span class="p">,</span> <span class="s2">&quot;1.0.0&quot;</span><span class="p">)</span>
+
+<span class="n">vector_search_latency</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="s2">&quot;vectordb.search.duration&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ms&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;벡터 유사도 검색 레이턴시&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">vector_search_results</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_histogram</span><span class="p">(</span>
+    <span class="s2">&quot;vectordb.search.result_count&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;검색 결과 수 (Top-K 실제 반환 수)&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">vector_cache_hit</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="s2">&quot;vectordb.cache.hit.total&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">vector_cache_miss</span> <span class="o">=</span> <span class="n">meter</span><span class="o">.</span><span class="n">create_counter</span><span class="p">(</span>
+    <span class="s2">&quot;vectordb.cache.miss.total&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">InstrumentedVectorDB</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">index_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="n">client</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span> <span class="o">=</span> <span class="n">db_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">index_name</span> <span class="o">=</span> <span class="n">index_name</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">query_vector</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+        <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">filters</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">dims</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_vector</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;vectordb.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="si">}</span><span class="s2">.search&quot;</span><span class="p">,</span>
+            <span class="n">kind</span><span class="o">=</span><span class="n">SpanKind</span><span class="o">.</span><span class="n">CLIENT</span><span class="p">,</span>
+            <span class="n">attributes</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;db.system&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">,</span>       <span class="c1"># OTel Semantic Convention</span>
+                <span class="s2">&quot;db.name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">index_name</span><span class="p">,</span>
+                <span class="s2">&quot;db.operation&quot;</span><span class="p">:</span> <span class="s2">&quot;vector_search&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;vectordb.query.dimensions&quot;</span><span class="p">:</span> <span class="n">dims</span><span class="p">,</span>
+                <span class="s2">&quot;vectordb.query.top_k&quot;</span><span class="p">:</span> <span class="n">top_k</span><span class="p">,</span>
+                <span class="s2">&quot;vectordb.namespace&quot;</span><span class="p">:</span> <span class="n">namespace</span><span class="p">,</span>
+                <span class="s2">&quot;vectordb.filter_applied&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">filters</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+                    <span class="n">vector</span><span class="o">=</span><span class="n">query_vector</span><span class="p">,</span>
+                    <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">,</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="n">filters</span><span class="p">,</span>
+                    <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+                <span class="n">result_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;matches&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+
+                <span class="c1"># Recall 품질 추적: 최고 점수 vs 최저 점수</span>
+                <span class="k">if</span> <span class="n">results</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;matches&quot;</span><span class="p">):</span>
+                    <span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s2">&quot;matches&quot;</span><span class="p">]]</span>
+                    <span class="n">span</span><span class="o">.</span><span class="n">set_attributes</span><span class="p">({</span>
+                        <span class="s2">&quot;vectordb.result.count&quot;</span><span class="p">:</span> <span class="n">result_count</span><span class="p">,</span>
+                        <span class="s2">&quot;vectordb.result.top_score&quot;</span><span class="p">:</span> <span class="n">scores</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                        <span class="s2">&quot;vectordb.result.min_score&quot;</span><span class="p">:</span> <span class="n">scores</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                        <span class="s2">&quot;vectordb.result.score_spread&quot;</span><span class="p">:</span> <span class="n">scores</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">scores</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                        <span class="s2">&quot;vectordb.search.duration_ms&quot;</span><span class="p">:</span> <span class="n">elapsed_ms</span><span class="p">,</span>
+                    <span class="p">})</span>
+
+                <span class="n">vector_search_latency</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">elapsed_ms</span><span class="p">,</span> <span class="p">{</span>
+                    <span class="s2">&quot;db&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">,</span>
+                    <span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">index_name</span><span class="p">,</span>
+                    <span class="s2">&quot;filtered&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="nb">bool</span><span class="p">(</span><span class="n">filters</span><span class="p">)),</span>
+                <span class="p">})</span>
+                <span class="n">vector_search_results</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">result_count</span><span class="p">,</span> <span class="p">{</span>
+                    <span class="s2">&quot;db&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">,</span>
+                    <span class="s2">&quot;top_k&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">top_k</span><span class="p">),</span>
+                <span class="p">})</span>
+
+                <span class="k">return</span> <span class="n">results</span>
+
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">record_exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="k">raise</span>
+</code></pre>
+</div>
+
+<p><strong>Redis Semantic Cache 계측:</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Redis 캐시 히트/미스 추적 — 임베딩 비용 절감 지표</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cached_embed_search</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">redis_client</span><span class="p">,</span> <span class="n">embed_fn</span><span class="p">,</span> <span class="n">vector_db</span><span class="p">):</span>
+    <span class="n">cache_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;sem_cache:</span><span class="si">{</span><span class="nb">hash</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="k">with</span> <span class="n">tracer</span><span class="o">.</span><span class="n">start_as_current_span</span><span class="p">(</span><span class="s2">&quot;cache.semantic.lookup&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="k">await</span> <span class="n">redis_client</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cache_key</span><span class="p">)</span>
+        <span class="n">span</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;cache.key&quot;</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">[:</span><span class="mi">50</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">cached</span><span class="p">:</span>
+            <span class="n">vector_cache_hit</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;cache&quot;</span><span class="p">:</span> <span class="s2">&quot;redis_semantic&quot;</span><span class="p">})</span>
+            <span class="n">span</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;cache.hit&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">cached</span>
+
+        <span class="n">vector_cache_miss</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;cache&quot;</span><span class="p">:</span> <span class="s2">&quot;redis_semantic&quot;</span><span class="p">})</span>
+        <span class="n">span</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;cache.hit&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+        <span class="c1"># 캐시 미스: 임베딩 + 검색 수행</span>
+        <span class="n">embedding</span> <span class="o">=</span> <span class="k">await</span> <span class="n">embed_fn</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">vector_db</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">embedding</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">redis_client</span><span class="o">.</span><span class="n">setex</span><span class="p">(</span><span class="n">cache_key</span><span class="p">,</span> <span class="mi">3600</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>  <span class="c1"># 1시간 TTL</span>
+        <span class="k">return</span> <span class="n">results</span>
+</code></pre>
+</div>
+
+<p><strong>수집 지표:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명</th>
+  <th>타입</th>
+  <th>레이블</th>
+  <th>임계치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>vectordb.search.duration</code></td>
+  <td>Histogram</td>
+  <td><code>db</code>, <code>index</code>, <code>filtered</code></td>
+  <td>P99 &gt; 500ms</td>
+</tr>
+<tr>
+  <td><code>vectordb.search.result_count</code></td>
+  <td>Histogram</td>
+  <td><code>db</code>, <code>top_k</code></td>
+  <td>결과 0개 → Alert</td>
+</tr>
+<tr>
+  <td><code>vectordb.cache.hit.total</code></td>
+  <td>Counter</td>
+  <td><code>cache</code></td>
+  <td>Hit Rate &lt; 20% → 리뷰</td>
+</tr>
+<tr>
+  <td><code>redis.semantic_cache.hit_rate</code></td>
+  <td>Gauge</td>
+  <td>—</td>
+  <td>&lt; 30% → 비용 증가</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h3 id="layer-5-infra-k8s-gpu">Layer 5: Infra (K8s &amp; GPU)</h3>
+
+<h4 id="5-a-nvidia-dcgm-critical-gpu-상관관계-분석-핵심">5-A. NVIDIA DCGM — <code>Critical</code> (GPU 상관관계 분석 핵심)</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># infra/kubernetes/dcgm-exporter.yaml</span>
+<span class="c1"># DCGM Exporter를 통해 GPU 지표를 Prometheus에 노출 후 OTel로 브릿지</span>
+
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DaemonSet</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dcgm-exporter</span>
+<span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dcgm-exporter</span>
+<span class="w">  </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dcgm-exporter</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04</span>
+<span class="w">        </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DCGM_EXPORTER_LISTEN</span>
+<span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;:9400&quot;</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DCGM_EXPORTER_KUBERNETES</span>
+<span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">        </span><span class="nt">ports</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9400</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+</code></pre>
+</div>
+
+<p><strong>수집 GPU 지표 (DCGM Field IDs):</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>지표명 (OTel 변환 후)</th>
+  <th>DCGM 원본 필드</th>
+  <th>단위</th>
+  <th>임계치</th>
+  <th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>gpu.utilization_pct</code></td>
+  <td><code>DCGM_FI_DEV_GPU_UTIL</code></td>
+  <td>%</td>
+  <td>&gt; 95% → Alert</td>
+  <td>SM 코어 가동률</td>
+</tr>
+<tr>
+  <td><code>gpu.vram.used_bytes</code></td>
+  <td><code>DCGM_FI_DEV_FB_USED</code></td>
+  <td>bytes</td>
+  <td>&gt; 90% capacity</td>
+  <td>VRAM 사용량</td>
+</tr>
+<tr>
+  <td><code>gpu.vram.free_bytes</code></td>
+  <td><code>DCGM_FI_DEV_FB_FREE</code></td>
+  <td>bytes</td>
+  <td>&lt; 2GB → Alert</td>
+  <td>가용 VRAM</td>
+</tr>
+<tr>
+  <td><code>gpu.power.draw_watts</code></td>
+  <td><code>DCGM_FI_DEV_POWER_USAGE</code></td>
+  <td>W</td>
+  <td>&gt; TDP 90%</td>
+  <td>전력 소비</td>
+</tr>
+<tr>
+  <td><code>gpu.temperature_c</code></td>
+  <td><code>DCGM_FI_DEV_GPU_TEMP</code></td>
+  <td>°C</td>
+  <td>&gt; 85°C → Alert</td>
+  <td>온도 (스로틀링 전조)</td>
+</tr>
+<tr>
+  <td><code>gpu.sm_clock_hz</code></td>
+  <td><code>DCGM_FI_DEV_SM_CLOCK</code></td>
+  <td>MHz</td>
+  <td>급격한 감소 → 스로틀링</td>
+  <td>SM 클록 속도</td>
+</tr>
+<tr>
+  <td><code>gpu.memory_bandwidth_pct</code></td>
+  <td><code>DCGM_FI_DEV_MEM_COPY_UTIL</code></td>
+  <td>%</td>
+  <td>&gt; 90% → 병목</td>
+  <td>메모리 대역폭</td>
+</tr>
+<tr>
+  <td><code>gpu.nvlink_bandwidth_bytes</code></td>
+  <td><code>DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL</code></td>
+  <td>bytes/s</td>
+  <td>—</td>
+  <td>NVLink 전송량</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>GPU-LLM 상관관계 분석 쿼리 (Prometheus):</strong></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># GPU VRAM 사용률과 LLM 큐 대기 시간 상관관계</span>
+<span class="c1"># 두 지표를 시계열로 오버레이하여 VRAM 포화 → 큐 증가 패턴 탐지</span>
+
+<span class="c1"># VRAM 사용률 (%)</span>
+<span class="o">(</span><span class="nv">gpu_vram_used_bytes</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nv">gpu_vram_total_bytes</span><span class="o">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span>
+
+<span class="c1"># LLM 큐 대기 시간 P95 (ms) — 같은 시간축에 오버레이</span>
+<span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.95</span><span class="p">,</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">llm_queue_wait_time_bucket</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span>
+<span class="o">)</span>
+
+<span class="c1"># 상관관계 경보: VRAM &gt; 85% AND 큐 대기 &gt; 2000ms</span>
+<span class="o">(</span><span class="nv">gpu_vram_utilization_pct</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">85</span><span class="o">)</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="o">(</span><span class="nv">llm_queue_p95_ms</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">2000</span><span class="o">)</span>
+</code></pre>
+</div>
+
+<hr />
+
+<h2 id="5-ai-특화-핵심-성능-수식">5. AI 특화 핵심 성능 수식</h2>
+
+<h3 id="51-ttft-time-to-first-token">5.1 TTFT (Time to First Token)</h3>
+
+<p>$$<br />
+\text{TTFT} = T<em>{\text{first_chunk}} - T</em>{\text{request_start}}<br />
+$$</p>
+
+<p>여기서 스트리밍 지연 구성요소 분해:</p>
+
+<p>$$<br />
+\text{TTFT}<em>{total} = \underbrace{T</em>{guardrail}}<em>{\text{가드레일 검증}} + \underbrace{T</em>{queue}}<em>{\text{vLLM 큐 대기}} + \underbrace{T</em>{prefill}}<em>{\text{프롬프트 프리필}} + \underbrace{T</em>{network}}_{\text{네트워크 전송}}<br />
+$$</p>
+
+<p><strong>SLO 목표:</strong> $\text{TTFT}_{P95} \leq 2{,}000\ \text{ms}$</p>
+
+<hr />
+
+<h3 id="52-tps-tokens-per-second">5.2 TPS (Tokens Per Second)</h3>
+
+<p>$$<br />
+\text{TPS} = \frac{N<em>{completion_tokens}}{T</em>{total} - \text{TTFT}}<br />
+$$</p>
+
+<p>배치 처리 시 유효 TPS:</p>
+
+<p>$$<br />
+\text{TPS}<em>{effective} = \text{TPS}</em>{single} \times B<em>{size} \times \eta</em>{gpu}<br />
+$$</p>
+
+<p>여기서:</p>
+
+<ul>
+<li>$B_{size}$: 배치 크기</li>
+<li>$\eta_{gpu}$: GPU 병렬 처리 효율 (0 ~ 1)</li>
+</ul>
+
+<p><strong>SLO 목표:</strong> $\text{TPS}_{P50} \geq 30\ \text{tok/s}$</p>
+
+<hr />
+
+<h3 id="53-mstoken-토큰당-생성-시간">5.3 ms/token (토큰당 생성 시간)</h3>
+
+<p>$$<br />
+\text{ms/token} = \frac{(T<em>{total} - \text{TTFT}) \times 1000}{N</em>{completion_tokens}}<br />
+$$</p>
+
+<p><strong>해석:</strong></p>
+
+<ul>
+<li>$\text{ms/token} &lt; 33\ \text{ms}$: TPS &gt; 30 (정상)</li>
+<li>$\text{ms/token} &gt; 100\ \text{ms}$: TPS &lt; 10 (심각한 병목)</li>
+</ul>
+
+<hr />
+
+<h3 id="54-gpu-vram-포화-예측-선형-회귀-기반">5.4 GPU VRAM 포화 예측 (선형 회귀 기반)</h3>
+
+<p>$$<br />
+T<em>{OOM} = \frac{V</em>{total} - V<em>{used}(t)}{\dot{V}</em>{used}}<br />
+$$</p>
+
+<p>여기서 $\dot{V}_{used}$는 VRAM 증가 속도 (bytes/s):</p>
+
+<p>$$<br />
+\dot{V}<em>{used} = \frac{V</em>{used}(t) - V_{used}(t - \Delta t)}{\Delta t}<br />
+$$</p>
+
+<p><strong>경보 조건:</strong> $T_{OOM} &lt; 300\ \text{s}$ (5분 이내 OOM 예상) → <code>CRITICAL</code> 알람</p>
+
+<hr />
+
+<h3 id="55-가드레일-레이턴시-기여도">5.5 가드레일 레이턴시 기여도</h3>
+
+<p>$$<br />
+\text{Guardrail Contribution} = \frac{\overline{T<em>{guardrail}}}{\overline{T</em>{e2e}}} \times 100\%<br />
+$$</p>
+
+<p><strong>목표:</strong> 가드레일이 전체 레이턴시의 20% 이하를 차지해야 함.</p>
+
+<hr />
+
+<h3 id="56-벡터-검색-품질-지표-recallk">5.6 벡터 검색 품질 지표 (Recall@K)</h3>
+
+<p>$$<br />
+\text{Recall@K} = \frac{|R<em>{relevant} \cap R</em>{retrieved}|}{|R_{relevant}|}<br />
+$$</p>
+
+<p>OTel에서는 최고 스코어 / 최저 스코어 분포로 간접 추적:</p>
+
+<p>$$<br />
+\text{Score Spread} = \text{score}<em>{rank=1} - \text{score}</em>{rank=K}<br />
+$$</p>
+
+<p>높은 Score Spread → 검색 품질 양호 (상위 결과와 하위 결과 명확히 구분됨)</p>
+
+<hr />
+
+<h2 id="6-병목-구간별-시각화-전략">6. 병목 구간별 시각화 전략</h2>
+
+<h3 id="61-전체-요청-흐름-워터폴-trace-뷰">6.1 전체 요청 흐름 워터폴 (Trace 뷰)</h3>
+
+<pre><code>사용자 요청 E2E 트레이스 (Jaeger/Grafana Tempo)
+
+[0ms]     ├── api.http.request (FastAPI)
+[10ms]    │   ├── guardrail.validate.input (NeMo)          ← 20ms (정상)
+[30ms]    │   │   └── guardrail.llm_call (내부 LLM 호출)  ← 경우에 따라 느림!
+[50ms]    │   ├── agent.chain.main
+[55ms]    │   │   ├── agent.tool.search (Serper API)       ← 외부 API (변동 큼)
+[200ms]   │   │   │   └── external_api.serper.request      ← 150ms (네트워크)
+[210ms]   │   │   ├── vectordb.pinecone.search             ← 30ms (정상)
+[240ms]   │   │   └── llm.vllm.generate                   ← 병목 구간
+[240ms]   │   │       ├── llm.queue_wait                   ← 큐 대기 (GPU 부하 반영)
+[500ms]   │   │       ├── llm.prefill                      ← 프롬프트 처리
+[502ms]   │   │       └── ★ first_token_event (TTFT=262ms)
+[3000ms]  │   │           └── streaming.generate...
+[3010ms]  └── api.http.response
+</code></pre>
+
+<h3 id="62-grafana-대시보드-구성-권고">6.2 Grafana 대시보드 구성 권고</h3>
+
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│ AI Service Performance Dashboard                                 │
+├────────────────────┬────────────────────┬───────────────────────┤
+│ [1] E2E P95 레이턴시│ [2] TTFT 분포      │ [3] TPS 히트맵         │
+│ 목표선: 5000ms     │ P95 목표: 2000ms   │ 모델별 × 시간대별      │
+├────────────────────┼────────────────────┼───────────────────────┤
+│ [4] 가드레일 차단율 │ [5] 외부 API 레이턴시│ [6] GPU VRAM vs 큐대기│
+│ Alert: &gt;5%/5min    │ 서비스별 P99       │ 상관관계 이중축 차트   │
+├────────────────────┼────────────────────┼───────────────────────┤
+│ [7] 벡터DB 검색시간 │ [8] 캐시 히트율    │ [9] 에러율 by 레이어   │
+│ Index별 분포       │ Semantic Cache %   │ 스택 차트 (레이어별)   │
+└────────────────────┴────────────────────┴───────────────────────┘
+</code></pre>
+
+<hr />
+
+<h2 id="7-장애-예방-alert-임계치-정의">7. 장애 예방 Alert 임계치 정의</h2>
+
+<table>
+<thead>
+<tr>
+  <th>Alert 이름</th>
+  <th>조건</th>
+  <th>심각도</th>
+  <th>액션</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>LLM_TTFT_HIGH</code></td>
+  <td>P95 TTFT &gt; 3,000ms (5분 지속)</td>
+  <td><code>CRITICAL</code></td>
+  <td>vLLM 재시작 / GPU 증설 트리거</td>
+</tr>
+<tr>
+  <td><code>LLM_TPS_LOW</code></td>
+  <td>P50 TPS &lt; 15 tok/s (5분 지속)</td>
+  <td><code>WARNING</code></td>
+  <td>GPU 스로틀링 / 메모리 단편화 조사</td>
+</tr>
+<tr>
+  <td><code>GPU_VRAM_CRITICAL</code></td>
+  <td>VRAM 사용률 &gt; 92%</td>
+  <td><code>CRITICAL</code></td>
+  <td>신규 요청 큐잉 / Scale-out</td>
+</tr>
+<tr>
+  <td><code>GPU_OOM_PREDICTED</code></td>
+  <td>$T_{OOM}$ &lt; 5분 예측</td>
+  <td><code>CRITICAL</code></td>
+  <td>즉시 로드 쉐딩</td>
+</tr>
+<tr>
+  <td><code>GUARDRAIL_BLOCK_SPIKE</code></td>
+  <td>차단율 &gt; 10%/min (3분 지속)</td>
+  <td><code>WARNING</code></td>
+  <td>보안팀 알림 / 트래픽 패턴 조사</td>
+</tr>
+<tr>
+  <td><code>GUARDRAIL_LATENCY_HIGH</code></td>
+  <td>P99 &gt; 1,500ms (3분 지속)</td>
+  <td><code>WARNING</code></td>
+  <td>가드레일 정책 최적화 검토</td>
+</tr>
+<tr>
+  <td><code>EXTERNAL_API_TIMEOUT</code></td>
+  <td>타임아웃률 &gt; 5%/5min</td>
+  <td><code>WARNING</code></td>
+  <td>Circuit Breaker 동작 / Fallback</td>
+</tr>
+<tr>
+  <td><code>VECTOR_SEARCH_SLOW</code></td>
+  <td>P99 &gt; 800ms (5분 지속)</td>
+  <td><code>WARNING</code></td>
+  <td>인덱스 재구성 / 샤드 리밸런싱</td>
+</tr>
+<tr>
+  <td><code>CACHE_HIT_RATE_LOW</code></td>
+  <td>Semantic Cache &lt; 20% (30분)</td>
+  <td><code>INFO</code></td>
+  <td>TTL 조정 / 캐시 전략 재검토</td>
+</tr>
+<tr>
+  <td><code>AGENT_RECURSION_DEEP</code></td>
+  <td>재귀 깊이 &gt; 20</td>
+  <td><code>WARNING</code></td>
+  <td>Agent 루프 탐지 / 강제 종료</td>
+</tr>
+<tr>
+  <td><code>LLM_QUEUE_BACKLOG</code></td>
+  <td>큐 대기 P95 &gt; 5,000ms</td>
+  <td><code>CRITICAL</code></td>
+  <td>추가 vLLM 인스턴스 기동</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2 id="8-context-propagation-설계">8. Context Propagation 설계</h2>
+
+<h3 id="81-w3c-tracecontext-전파-경로">8.1 W3C TraceContext 전파 경로</h3>
+
+<pre><code>클라이언트 (Next.js)
+  │  traceparent: 00-{trace_id}-{parent_span_id}-01
+  ▼
+FastAPI (Python)                    ← OTel SDK: 헤더 자동 파싱
+  │  [guardrail.validate span]
+  │  traceparent 유지
+  ▼
+NeMo Guardrails (Python)            ← 동일 Trace ID 유지
+  │
+  ▼
+LangChain Agent (Python)
+  │  [agent.tool span 생성]
+  │  traceparent 업데이트 (새 span_id)
+  │
+  ├──► Serper API (HTTP)           ← httpx: traceparent 자동 주입
+  │      외부 서비스에서도 Trace ID 연속
+  │
+  ├──► Pinecone (HTTP/gRPC)        ← grpc metadata에 traceparent 주입
+  │
+  └──► vLLM (HTTP)                 ← traceparent 헤더로 전파
+         │
+         └── GPU 추론 (내부 span)
+</code></pre>
+
+<h3 id="82-언어-간-컨텍스트-전파-구현">8.2 언어 간 컨텍스트 전파 구현</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Python → 외부 서비스 전파 (자동)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.propagate</span><span class="w"> </span><span class="kn">import</span> <span class="n">inject</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">inject</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>  <span class="c1"># traceparent, tracestate 자동 삽입</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">httpx</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span>
+
+<span class="c1"># Python → Go 서비스 (gRPC) 전파</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.instrumentation.grpc</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrpcInstrumentorClient</span>
+<span class="n">GrpcInstrumentorClient</span><span class="p">()</span><span class="o">.</span><span class="n">instrument</span><span class="p">()</span>  <span class="c1"># 자동 메타데이터 주입</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Node.js (Next.js) → Python 백엔드 전파</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">propagation</span><span class="p">,</span><span class="w"> </span><span class="nx">context</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@opentelemetry/api&#39;</span><span class="p">;</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{};</span>
+<span class="nx">propagation</span><span class="p">.</span><span class="nx">inject</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">active</span><span class="p">(),</span><span class="w"> </span><span class="nx">headers</span><span class="p">);</span>
+<span class="c1">// headers에 자동으로 traceparent 추가됨</span>
+<span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;/api/chat&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">headers</span><span class="w"> </span><span class="p">});</span>
+</code></pre>
+</div>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Go 서비스에서 컨텍스트 추출 및 전파</span>
+<span class="kn">import</span><span class="w"> </span><span class="s">&quot;go.opentelemetry.io/otel/propagation&quot;</span>
+
+<span class="c1">// 수신 측: 헤더에서 컨텍스트 추출</span>
+<span class="nx">prop</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">propagation</span><span class="p">.</span><span class="nx">NewCompositeTextMapPropagator</span><span class="p">(</span>
+<span class="w">    </span><span class="nx">propagation</span><span class="p">.</span><span class="nx">TraceContext</span><span class="p">{},</span>
+<span class="w">    </span><span class="nx">propagation</span><span class="p">.</span><span class="nx">Baggage</span><span class="p">{},</span>
+<span class="p">)</span>
+<span class="nx">ctx</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">prop</span><span class="p">.</span><span class="nx">Extract</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Context</span><span class="p">(),</span><span class="w"> </span><span class="nx">propagation</span><span class="p">.</span><span class="nx">HeaderCarrier</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Header</span><span class="p">))</span>
+
+<span class="c1">// 발신 측: 다음 서비스로 전파</span>
+<span class="nx">prop</span><span class="p">.</span><span class="nx">Inject</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">propagation</span><span class="p">.</span><span class="nx">HeaderCarrier</span><span class="p">(</span><span class="nx">outgoingHeaders</span><span class="p">))</span>
+</code></pre>
+</div>
+
+<h3 id="83-trace-id-연속성-검증-방법">8.3 Trace ID 연속성 검증 방법</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Trace 단절 탐지: root span은 있는데 child span이 없는 트레이스</span>
+<span class="c1"># (Jaeger 쿼리 / Tempo에서 직접 확인)</span>
+
+<span class="c1"># Prometheus에서 간접 탐지:</span>
+<span class="c1"># 각 레이어의 요청 수가 일치해야 함</span>
+<span class="c1"># (가드레일 요청 수 ≈ LLM 요청 수, 큰 차이 → 전파 단절 가능성)</span>
+<span class="kr">abs</span><span class="o">(</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">guardrail_validation_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">-</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">llm_vllm_generate_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span>
+<span class="o">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">guardrail_validation_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span>
+</code></pre>
+</div>
+
+<hr />
+
+<p><em>문서 끝 — 다음 단계: <a href="./ARCHITECTURE.md">ARCHITECTURE.md</a> — OTel Collector 파이프라인 및 배포 아키텍처 설계</em></p>
+
+
+    <div class="doc-footer">
+      Generated from <code>METRICS_DESIGN.md</code> &nbsp;|&nbsp;
+      aiservice-monitoring project &nbsp;|&nbsp;
+      Aura Kim &lt;aura.kimjh@gmail.com&gt;
+    </div>
+  </div>
+</body>
+</html>
