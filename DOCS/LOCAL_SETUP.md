@@ -2,8 +2,13 @@
 
 > **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-02
+> **최종 업데이트**: 2026-03-05
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
+>
+> **관련 문서**:
+> - [TEST_GUIDE.md](./TEST_GUIDE.md) — 환경 설정 후 테스트 검증 가이드 (이 문서 다음에 참고)
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel 아키텍처 설계
+> - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 지표 정의 및 수집 방안
 
 이 문서를 순서대로 따라 하면, **환경 설정에 소요되는 시간 없이** 첫날부터 코드를 작성하고 로컬에서 메트릭·트레이스를 확인할 수 있습니다.
 
@@ -1156,6 +1161,21 @@ bash scripts/test-alerts.sh
 # Context Propagation 단절 탐지
 python scripts/validate-traces.py --fail-on-broken
 ```
+
+---
+
+---
+
+## 다음 단계
+
+로컬 환경 설정이 완료되었으면, **[TEST_GUIDE.md](./TEST_GUIDE.md)** 를 참고하여 전체 모니터링 파이프라인을 검증하세요.
+
+| 순서 | 문서 | 설명 |
+|------|------|------|
+| 1 | 이 문서 (LOCAL_SETUP.md) | 개발 환경 설치 및 구성 |
+| 2 | **[TEST_GUIDE.md](./TEST_GUIDE.md)** | 9단계 테스트 검증 (Level 1~9) |
+| 3 | [METRICS_DESIGN.md](./METRICS_DESIGN.md) | 지표 정의 이해 후 계측 코드 수정 |
+| 4 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 전체 아키텍처 이해 |
 
 ---
 

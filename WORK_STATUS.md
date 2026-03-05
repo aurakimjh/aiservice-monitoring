@@ -18,6 +18,7 @@
 | ⚠️ | 검토 필요 (Needs Review) |
 | 🔴 | 블로킹 이슈 (Blocked) |
 | 💡 | 아이디어 / 옵션 |
+| 🔧 | 수작업 필요 (Manual — AI 자동 생성 대상 아님) |
 
 ---
 
@@ -30,6 +31,9 @@ Phase 3: SDK 계측 코드      [██████████] 100%  ✅
 Phase 4: Grafana 대시보드   [██████████] 100%  ✅
 Phase 5: 통합 테스트 & 검증  [██████████] 100%  ✅  (load-test.py 포함 전체 완성)
 Phase 6: 운영 자동화        [██████████] 100%  ✅  (Helm Chart + GitHub Actions 완성)
+Phase 7: E2E 통합 검증      [░░░░░░░░░░]   0%  📋  🔧 수작업 (로컬 Docker + 부하 + Trace 검증)
+Phase 8: Kubernetes 배포    [░░░░░░░░░░]   0%  📋  🔧 수작업 (Helm 배포 + 스테이징 + 프로덕션)
+Phase 9: SLO 튜닝/운영 안정화 [░░░░░░░░░░]   0%  📋  🔧 수작업 (임계치 + 샘플링 + 대시보드)
 ```
 
 ---
@@ -293,6 +297,27 @@ Phase 6: 운영 자동화        [██████████] 100%  ✅  (He
 - [x] **`collector/pipelines/traces-pipeline.md`** — 트레이스 전체 흐름 ASCII 다이어그램 + 단계별 상세 + 단절 탐지
 - [x] **`collector/pipelines/metrics-pipeline.md`** — 지표 파이프라인 (5개 레이어 지표 분류 + 수집 경로 + 비용 추정)
 
+#### 테스트 가이드 및 문서 기술 검토
+- [x] **`DOCS/TEST_GUIDE.md`** (신규 작성, ~500줄) — 초보자용 9단계 테스트/운영 가이드
+  - Level 1~9: 인프라 기동 → 텔레메트리 확인 → 대시보드 → 알람 → 부하 → 트레이스 → 샘플링 → Helm → CI
+  - 단계별 명령어, 검증 기준, FAQ 포함
+- [x] **`DOCS/ARCHITECTURE.md`** 기술 검토 및 수정 (v1.0.0 → v1.1.0)
+  - OTel Collector 버전 수정: 0.104.0 → 0.91.0 (실제 config와 일치)
+  - 설정 파일명 수정: `otelcol-config.yaml` → `otelcol-agent.yaml`/`otelcol-gateway.yaml`
+  - Go 코드 수정: deprecated `grpc.DialContext` → `grpc.NewClient`
+  - Section 10 추가: 버전 호환성 매트릭스
+  - 관련 문서 상호 링크 추가
+- [x] **`DOCS/METRICS_DESIGN.md`** 기술 검토 및 수정 (v1.0.0 → v1.1.0)
+  - Prometheus 쿼리 지표명 수정: `aiservice_` 접두사 누락 → 실제 Alert Rule과 일치
+  - Section 9 추가: 지표명 네이밍 컨벤션 (OTel SDK → Prometheus 매핑)
+  - Section 10 추가: 실제 구현 파일 매핑 테이블
+  - 관련 문서 상호 링크 추가
+- [x] **`DOCS/LOCAL_SETUP.md`** 기술 검토 및 수정
+  - 관련 문서 상호 링크 추가
+  - "다음 단계" 섹션 추가 (문서 열람 순서 안내)
+- [x] **`README.md`** 문서 상태 테이블 업데이트
+  - ARCHITECTURE.md: 🔄 → ✅, LOCAL_SETUP.md/TEST_GUIDE.md 행 추가
+
 ---
 
 ## 미완료 항목 — Phase 5: 통합 테스트
@@ -340,9 +365,11 @@ Phase 6: 운영 자동화        [██████████] 100%  ✅  (He
 
 | 파일 경로 | 상태 | 라인 수 | 비고 |
 |-----------|------|---------|------|
-| `DOCS/METRICS_DESIGN.md` | ✅ | 1,369 | 지표 정의 전체 완성 |
-| `DOCS/ARCHITECTURE.md` | ✅ | 1,429 | 아키텍처 설계 전체 완성 |
-| `README.md` | ✅ | 218 | 프로젝트 진입점 |
+| `DOCS/METRICS_DESIGN.md` | ✅ | 1,369+ | 지표 정의 (v1.1.0 — 네이밍 컨벤션, 파일 매핑 추가) |
+| `DOCS/ARCHITECTURE.md` | ✅ | 1,429+ | 아키텍처 설계 (v1.1.0 — 버전 수정, 호환성 매트릭스 추가) |
+| `DOCS/LOCAL_SETUP.md` | ✅ | — | 로컬 환경 가이드 (문서 링크, 다음 단계 추가) |
+| `DOCS/TEST_GUIDE.md` | ✅ | ~500 | 9단계 테스트/운영 가이드 (초보자용) |
+| `README.md` | ✅ | 221 | 프로젝트 진입점 (문서 상태 업데이트) |
 | `WORK_STATUS.md` | ✅ | 현재 | 이 파일 |
 | `collector/config/otelcol-agent.yaml` | ✅ | 152 | 프로덕션 적용 가능 |
 | `collector/config/otelcol-gateway.yaml` | ✅ | 269 | 프로덕션 적용 가능 |
@@ -399,15 +426,255 @@ Phase 6: 운영 자동화        [██████████] 100%  ✅  (He
 
 ---
 
-## 권장 작업 순서 (Next Session 기준)
+## Phase 7: E2E 통합 검증 📋 🔧 수작업
+
+> **⚠️ 이 단계부터는 실제 인프라 환경에서 수작업으로 진행해야 합니다.**
+> **AI 자동 생성 대상이 아닙니다. 운영자가 직접 실행하고 결과를 검증하세요.**
+
+### 7-1. 로컬 Docker 환경 통합 테스트 🔧 수작업
+
+**목적**: 모든 컴포넌트가 연동되어 텔레메트리가 정상 수집되는지 확인
+
+```bash
+# Step 1: 전체 스택 기동
+docker compose -f infra/docker/docker-compose.yaml up -d
+
+# Step 2: 헬스체크 확인
+curl -s http://localhost:13133/  # OTel Collector
+curl -s http://localhost:9090/-/ready  # Prometheus
+curl -s http://localhost:3200/ready  # Tempo
+curl -s http://localhost:3100/ready  # Loki
+
+# Step 3: 테스트 트레이스/메트릭 전송
+# → TEST_GUIDE.md Level 2 참조
+
+# Step 4: Grafana 대시보드 확인 (http://localhost:3000)
+# → TEST_GUIDE.md Level 3 참조
+
+# Step 5: Alert Rule 발화 테스트
+# → TEST_GUIDE.md Level 4 참조
+```
+
+**완료 기준**:
+- [ ] 6개 컨테이너 모두 healthy 상태
+- [ ] Jaeger에서 테스트 트레이스 확인 (http://localhost:16686)
+- [ ] Prometheus에서 `aiservice_` 접두사 지표 쿼리 가능
+- [ ] Grafana 5개 대시보드 모두 데이터 표시
+- [ ] 최소 1개 Alert Rule FIRING 확인 후 해소
+
+### 7-2. 부하 테스트 및 샘플링 검증 🔧 수작업
+
+**목적**: 실제 부하 상황에서 Tail Sampling 동작 및 비용 절감 효과 확인
+
+```bash
+# Step 1: Locust 부하 테스트 실행 (실제 AI 서비스 엔드포인트 필요)
+pip install locust
+locust -f scripts/load-test.py --headless -u 50 -r 5 -t 5m \
+  --host http://localhost:8000 --html reports/load-test.html
+
+# Step 2: 샘플링 비용 시뮬레이션
+python scripts/benchmark-sampling.py --rps 500 --export-csv reports/sampling.csv
+
+# Step 3: Context Propagation 단절 탐지
+python scripts/validate-traces.py --tempo-url http://localhost:3200 --fail-on-broken
+```
+
+**완료 기준**:
+- [ ] 4개 시나리오(Normal/Guardrail/LLM Overload/External API) 모두 실행
+- [ ] Prometheus 전후 지표 비교 리포트 생성
+- [ ] Tail Sampling 정책별 보존율 확인 (목표: ~19% 보존, 81% 절감)
+- [ ] Context Propagation 단절 0건
+
+### 7-3. Trace 연속성 종합 검증 🔧 수작업
+
+**목적**: 전체 레이어(UI → Agent → LLM → VectorDB)를 관통하는 Trace ID 연속성 확인
+
+```bash
+# Tempo TraceQL로 단절 패턴 탐지
+# 1) 부모 Span 없는 고아 Span 탐지
+{ status = error } && { rootSpan = false } && { parent = "" }
+
+# 2) Layer 전환 시 Trace ID 불연속 탐지
+{ resource.service.name = "fastapi-gateway" } >> { resource.service.name = "langchain-agent" }
+
+# 3) 가드레일 → LLM 구간 전파 확인
+{ span.guardrail.action = "PASS" } >> { resource.service.name = "vllm-inference" }
+```
+
+**완료 기준**:
+- [ ] 5개 레이어 간 Trace ID 연속성 확인
+- [ ] Baggage(`user.tier`, `request.id`) 하위 서비스까지 전달 확인
+- [ ] Grafana Trace↔Metric↔Log 3방향 상관관계 링크 동작 확인
+
+---
+
+## Phase 8: Kubernetes 배포 📋 🔧 수작업
+
+> **⚠️ 실제 K8s 클러스터에서 수작업으로 진행합니다.**
+> **스테이징 환경에서 충분히 검증한 후 프로덕션에 적용하세요.**
+
+### 8-1. Helm Chart Dry-Run 검증 🔧 수작업
+
+```bash
+# Step 1: Helm 의존성 다운로드
+cd helm/aiservice-monitoring
+helm dependency update
+
+# Step 2: 개발 환경 dry-run
+helm install aimon . \
+  -f values-dev.yaml \
+  --namespace monitoring \
+  --dry-run --debug 2>&1 | tee reports/helm-dryrun-dev.txt
+
+# Step 3: 프로덕션 환경 dry-run
+helm install aimon . \
+  -f values-prod.yaml \
+  --namespace monitoring \
+  --dry-run --debug 2>&1 | tee reports/helm-dryrun-prod.txt
+
+# Step 4: 템플릿 렌더링 결과 검토
+helm template aimon . -f values-dev.yaml > reports/rendered-dev.yaml
+helm template aimon . -f values-prod.yaml > reports/rendered-prod.yaml
+```
+
+**완료 기준**:
+- [ ] dry-run 에러 0건
+- [ ] 렌더링된 YAML의 리소스 이름/레이블/셀렉터 일관성 확인
+- [ ] NOTES.txt 출력 내용 확인
+
+### 8-2. 스테이징 환경 배포 🔧 수작업
+
+```bash
+# Step 1: 네임스페이스 + RBAC 생성 (Helm이 자동 생성하지만 수동 확인)
+kubectl get ns monitoring ai-inference
+
+# Step 2: 개발 환경 설치
+helm install aimon helm/aiservice-monitoring \
+  -f helm/aiservice-monitoring/values-dev.yaml \
+  --namespace monitoring --create-namespace
+
+# Step 3: Pod 상태 확인
+kubectl get pods -n monitoring -w
+kubectl get pods -n ai-inference -w
+
+# Step 4: OTel Collector 로그 확인
+kubectl logs -n monitoring -l app.kubernetes.io/component=otel-agent --tail=100
+kubectl logs -n monitoring -l app.kubernetes.io/component=otel-gateway --tail=100
+
+# Step 5: ServiceMonitor 동작 확인
+kubectl get servicemonitor -n monitoring
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+# → http://localhost:9090/targets 에서 모든 target UP 확인
+```
+
+**완료 기준**:
+- [ ] 모든 Pod Running 상태 (CrashLoopBackOff 없음)
+- [ ] OTel Agent DaemonSet 전 노드 배포 확인
+- [ ] OTel Gateway 3 replicas + HPA 활성 확인
+- [ ] Prometheus targets 전체 UP
+- [ ] Grafana 대시보드 데이터 표시 확인
+
+### 8-3. 프로덕션 배포 🔧 수작업
+
+```bash
+# Step 1: 프로덕션 시크릿 사전 생성
+kubectl create secret generic thanos-s3 \
+  --from-file=thanos.yaml=thanos-s3-config.yaml -n monitoring
+kubectl create secret generic slack-webhook \
+  --from-literal=url=https://hooks.slack.com/services/... -n monitoring
+kubectl create secret generic pagerduty-key \
+  --from-literal=key=... -n monitoring
+
+# Step 2: 프로덕션 설치
+helm install aimon helm/aiservice-monitoring \
+  -f helm/aiservice-monitoring/values-prod.yaml \
+  --namespace monitoring
+
+# Step 3: Thanos Sidecar + S3 연동 확인
+kubectl logs -n monitoring -l app=thanos-sidecar --tail=50
+
+# Step 4: Alertmanager → Slack/PagerDuty 알림 도달 확인
+# → 테스트 Alert 발화 후 Slack 채널 확인
+```
+
+**완료 기준**:
+- [ ] Thanos Sidecar S3 업로드 정상
+- [ ] Alertmanager → Slack 알림 도달 확인
+- [ ] Alertmanager → PagerDuty 연동 확인 (선택)
+- [ ] Grafana Ingress + TLS 접근 가능
+- [ ] Tempo/Loki S3 백엔드 정상 동작
+
+---
+
+## Phase 9: SLO 튜닝 및 운영 안정화 📋 🔧 수작업
+
+> **⚠️ 프로덕션 배포 후 1~2주간 운영 데이터를 기반으로 수작업 튜닝합니다.**
+
+### 9-1. SLO 임계치 튜닝 🔧 수작업
+
+**목적**: 실제 트래픽 패턴에 맞게 Alert 임계치 조정
+
+| SLO 지표 | 초기 임계치 | 튜닝 방법 |
+|----------|------------|-----------|
+| TTFT P95 | < 2,000ms | Grafana LLM Performance 대시보드에서 실제 P95 확인 후 ±20% 조정 |
+| TPS P50 | > 30 tok/s | 모델/하드웨어별 실측 후 모델별 차등 적용 |
+| 가드레일 P99 | < 800ms | 정책 수/복잡도에 따라 개별 조정 |
+| GPU VRAM | < 90% | 배치 사이즈·동시 요청 수와 상관 분석 후 조정 |
+| 에러율 | < 0.5% | 서비스별 분리 (inference vs API vs DB) |
+
+**작업 절차**:
+1. 1주일 운영 후 Grafana에서 각 지표의 실제 분포 확인
+2. P50/P95/P99 값을 기준으로 Alert 임계치 재설정
+3. `infra/docker/prometheus-rules.yaml` 및 `helm/.../templates/prometheus-rules.yaml` 동시 수정
+4. `for` 절 (지속 시간) 조정 — 잦은 flapping 방지
+
+### 9-2. Tail Sampling 정책 최적화 🔧 수작업
+
+**목적**: 실제 트레이스 패턴에 맞게 샘플링 비율 조정
+
+```bash
+# 현재 정책별 보존율 확인
+python scripts/benchmark-sampling.py --rps $(실제RPS) --export-csv reports/sampling-prod.csv
+
+# 조정 대상 파일
+# - collector/config/otelcol-gateway.yaml → tail_sampling processor
+# - helm/aiservice-monitoring/values.yaml → otelGateway.config
+```
+
+**튜닝 기준**:
+- 에러 트레이스: 100% 보존 (변경 불가)
+- 고레이턴시: P99 기준 동적 조정 (초기 5000ms → 실측 P99 × 1.5)
+- 정상 트레이스: 비용 목표에 맞춰 1~5% 범위 조정
+- 월 저장 비용 목표: ~$200/월 (1,000 RPS 기준)
+
+### 9-3. 대시보드 커스터마이징 🔧 수작업
+
+**목적**: 팀 운영 패턴에 맞게 Grafana 대시보드 커스터마이징
+
+- [ ] 팀별 필터 변수 추가 (service.name, team, environment)
+- [ ] 비즈니스 KPI 패널 추가 (일일 요청 수, 사용자 수, 토큰 사용량)
+- [ ] On-Call 알림 채널 대시보드 링크 연결
+- [ ] 대시보드 JSON 변경 시 `dashboards/grafana/*.json` 및 Helm ConfigMap 동기화
+
+---
+
+## 권장 작업 순서 (후속 수작업)
 
 ```
-Session 5 — 완료됨 ✅
+Phase 7: E2E 통합 검증         📋 🔧 수작업
+  7-1. 로컬 Docker 통합 테스트    → TEST_GUIDE.md Level 1~5 참조
+  7-2. 부하 테스트 및 샘플링 검증  → TEST_GUIDE.md Level 5~7 참조
+  7-3. Trace 연속성 종합 검증     → TEST_GUIDE.md Level 6 참조
 
-모든 Phase 완료. 선택적 후속 작업:
-  1. 실제 환경 배포 테스트 (helm install --dry-run)
-  2. dashboards/grafana/*.json → helm chart dashboards/ 디렉토리 복사 자동화
-  3. E2E 통합 테스트 (docker-compose up → load-test.py → validate-traces.py)
+Phase 8: Kubernetes 배포       📋 🔧 수작업
+  8-1. Helm Chart Dry-Run 검증   → TEST_GUIDE.md Level 8 참조
+  8-2. 스테이징 환경 배포         → 실제 K8s 클러스터 필요
+  8-3. 프로덕션 배포             → 시크릿 사전 생성 필요
+
+Phase 9: SLO 튜닝 및 운영 안정화  📋 🔧 수작업
+  9-1. SLO 임계치 튜닝           → 1~2주 운영 데이터 필요
+  9-2. Tail Sampling 정책 최적화  → 실제 RPS 측정 필요
+  9-3. 대시보드 커스터마이징       → 팀 요구사항 반영
 ```
 
 ---

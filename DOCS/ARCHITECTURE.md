@@ -1,8 +1,14 @@
 # OpenTelemetry 아키텍처 설계
 
-> **문서 버전**: v1.0.0
-> **기반 스펙**: OTel Collector v0.104 | OpenTelemetry Specification v1.31
+> **문서 버전**: v1.1.0
+> **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
+> **최종 업데이트**: 2026-03-05
+>
+> **관련 문서**:
+> - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
+> - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 가이드
+> - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 
 ---
 
@@ -346,11 +352,11 @@ func Setup(ctx context.Context, cfg OtelConfig) (shutdown func(context.Context) 
 		}
 	}
 
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
+	// 참고: grpc.DialContext는 gRPC-Go v1.63+에서 deprecated.
+	// grpc.NewClient는 non-blocking이며 lazy connection을 사용합니다.
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to OTel Collector: %w", err)
 	}
@@ -455,7 +461,7 @@ vLLM (Python/C++)                                               │
 ### 3.1 Receivers
 
 ```yaml
-# collector/config/otelcol-config.yaml (receivers 섹션)
+# collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (receivers 섹션)
 receivers:
 
   # ── OTLP: 모든 SDK에서 텔레메트리 수신 ─────────────────────────
@@ -555,7 +561,7 @@ receivers:
 ### 3.2 Processors
 
 ```yaml
-# collector/config/otelcol-config.yaml (processors 섹션)
+# collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (processors 섹션)
 processors:
 
   # ── 메모리 안전장치 — 가장 먼저 적용 ────────────────────────────
@@ -714,7 +720,7 @@ processors:
 ### 3.3 Exporters
 
 ```yaml
-# collector/config/otelcol-config.yaml (exporters 섹션)
+# collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (exporters 섹션)
 exporters:
 
   # ── Prometheus — 메트릭 저장소 ───────────────────────────────────
@@ -797,7 +803,7 @@ exporters:
 ### 3.4 Pipeline 조합 (Service 섹션)
 
 ```yaml
-# collector/config/otelcol-config.yaml (service 섹션)
+# collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (service 섹션)
 service:
   telemetry:
     logs:
@@ -1093,10 +1099,10 @@ services:
 
   # ── OTel Collector ───────────────────────────────────────────────
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.104.0
+    image: otel/opentelemetry-collector-contrib:0.91.0
     command: ["--config=/etc/otelcol/otelcol-config.yaml"]
     volumes:
-      - ../../collector/config/otelcol-config.yaml:/etc/otelcol/otelcol-config.yaml:ro
+      - ../../collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml):/etc/otelcol/otelcol-config.yaml:ro
       - otelcol_storage:/var/otelcol/storage
     ports:
       - "4317:4317"    # OTLP gRPC
@@ -1256,7 +1262,7 @@ spec:
           operator: Exists
       containers:
         - name: otel-collector
-          image: otel/opentelemetry-collector-contrib:0.104.0
+          image: otel/opentelemetry-collector-contrib:0.91.0
           args: ["--config=/conf/otelcol-agent.yaml"]
           env:
             - name: KUBE_NODE_NAME
@@ -1347,7 +1353,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: otel-collector
-          image: otel/opentelemetry-collector-contrib:0.104.0
+          image: otel/opentelemetry-collector-contrib:0.91.0
           args: ["--config=/conf/otelcol-gateway.yaml"]
           resources:
             requests:
@@ -1426,4 +1432,27 @@ $$
 
 ---
 
-*문서 끝 — 다음 단계: Grafana 대시보드 JSON 프로비저닝 및 Alert Rules 설정*
+---
+
+## 10. 주요 버전 호환성 참고
+
+| 컴포넌트 | 이 프로젝트 사용 버전 | 비고 |
+|---------|---------------------|------|
+| OTel Collector Contrib | v0.91.0 | Helm values.yaml, Docker Compose |
+| OTel Specification | v1.31 | Semantic Conventions v1.26 |
+| Prometheus | v2.53.0 | docker-compose.yaml |
+| Grafana | v11.1.0 | docker-compose.yaml |
+| Grafana Tempo | v2.5.0 | docker-compose.yaml |
+| Grafana Loki | v3.1.0 | docker-compose.yaml |
+| DCGM Exporter | v3.3.5-3.4.0 | K8s DaemonSet |
+| Python OTel SDK | >=1.24.0 | opentelemetry-sdk |
+| Node.js OTel SDK | >=1.22.0 | @opentelemetry/sdk-node |
+| Go OTel SDK | >=1.26.0 | go.opentelemetry.io/otel |
+
+> **참고**: OTel Collector 버전은 v0.91.0을 기준으로 하지만, 설정 파일은 v0.104+ Collector에서도 호환됩니다.
+> Collector 업그레이드 시 `otelcol validate --config` 명령으로 설정 호환성을 확인하세요.
+
+---
+
+*이 문서는 프로젝트 아키텍처 변경 시 업데이트합니다.*
+*관련 문서: [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [LOCAL_SETUP.md](./LOCAL_SETUP.md)*

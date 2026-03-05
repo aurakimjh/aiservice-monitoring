@@ -1,8 +1,14 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v1.0.0
+> **문서 버전**: v1.1.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
+> **최종 업데이트**: 2026-03-05
+>
+> **관련 문서**:
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처
+> - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
+> - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성
 
 ---
 
@@ -1117,16 +1123,18 @@ spec:
 # GPU VRAM 사용률과 LLM 큐 대기 시간 상관관계
 # 두 지표를 시계열로 오버레이하여 VRAM 포화 → 큐 증가 패턴 탐지
 
-# VRAM 사용률 (%)
-(gpu_vram_used_bytes / gpu_vram_total_bytes) * 100
+# VRAM 사용률 (%) — DCGM 지표 사용
+(aiservice_gpu_memory_used / (aiservice_gpu_memory_used + aiservice_gpu_memory_free)) * 100
 
 # LLM 큐 대기 시간 P95 (ms) — 같은 시간축에 오버레이
 histogram_quantile(0.95,
-  rate(llm_queue_wait_time_bucket[5m])
+  rate(aiservice_llm_queue_wait_time_bucket[5m])
 )
 
-# 상관관계 경보: VRAM > 85% AND 큐 대기 > 2000ms
-(gpu_vram_utilization_pct > 85) and (llm_queue_p95_ms > 2000)
+# 상관관계 경보: VRAM > 85% AND 큐 대기 > 2000ms 동시 발생
+(job:gpu_vram_utilization:avg > 85)
+  and
+(histogram_quantile(0.95, rate(aiservice_llm_queue_wait_time_bucket[5m])) > 2000)
 ```
 
 ---
@@ -1359,11 +1367,55 @@ prop.Inject(ctx, propagation.HeaderCarrier(outgoingHeaders))
 # 각 레이어의 요청 수가 일치해야 함
 # (가드레일 요청 수 ≈ LLM 요청 수, 큰 차이 → 전파 단절 가능성)
 abs(
-  rate(guardrail_validation_total[5m]) -
-  rate(llm_vllm_generate_total[5m])
-) > 0.1 * rate(guardrail_validation_total[5m])
+  rate(aiservice_guardrail_request_total[5m]) -
+  rate(aiservice_llm_concurrent_requests[5m])
+) > 0.1 * rate(aiservice_guardrail_request_total[5m])
 ```
 
 ---
 
-*문서 끝 — 다음 단계: [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처 설계*
+---
+
+## 9. 지표명 네이밍 컨벤션
+
+이 프로젝트의 모든 커스텀 메트릭은 `aiservice_` 접두사를 사용합니다. Prometheus exporter를 통해 내보낼 때 OTel SDK 메트릭명이 자동 변환됩니다.
+
+| OTel SDK 메트릭명 | Prometheus 노출명 | 비고 |
+|-------------------|-------------------|------|
+| `llm.time_to_first_token` | `aiservice_llm_time_to_first_token` | Histogram |
+| `llm.tokens_per_second` | `aiservice_llm_tokens_per_second` | Histogram |
+| `llm.queue_wait_time` | `aiservice_llm_queue_wait_time` | Histogram |
+| `guardrail.validation.duration` | `aiservice_guardrail_validation_duration` | Histogram |
+| `guardrail.block.total` | `aiservice_guardrail_block_total` | Counter |
+| `external_api.request.duration` | `aiservice_external_api_request_duration` | Histogram |
+| `vectordb.search.duration` | `aiservice_vectordb_search_duration` | Histogram |
+| `embedding.request.duration` | `aiservice_embedding_duration` | Histogram |
+
+> **참고**: Prometheus exporter의 `namespace: "aiservice"` 설정에 의해 접두사가 자동 추가됩니다.
+> Alert Rule과 Recording Rule에서는 `aiservice_` 접두사가 포함된 이름을 사용합니다.
+
+---
+
+## 10. 실제 구현 파일 매핑
+
+이 문서에서 정의한 지표가 실제로 구현된 파일 위치:
+
+| 섹션 | 구현 파일 | 줄 수 |
+|------|----------|------|
+| Layer 1: FastAPI 스트리밍 | `sdk-instrumentation/python/agents/fastapi_streaming.py` | 145줄 |
+| Layer 1: Frontend SSE | `sdk-instrumentation/nodejs/frontend-streaming.js` | 160줄 |
+| Layer 1: 가드레일 | `sdk-instrumentation/python/guardrails/nemo_instrumentation.py` | 129줄 |
+| Layer 2: LangChain Agent | `sdk-instrumentation/python/agents/langchain_tracer.py` | 295줄 |
+| Layer 2: 외부 API | `sdk-instrumentation/python/agents/external_api_tracer.py` | 220줄 |
+| Layer 3: vLLM TTFT/TPS | `sdk-instrumentation/python/llm/vllm_instrumentation.py` | 152줄 |
+| Layer 3: Embedding | `sdk-instrumentation/python/llm/embedding_instrumentation.py` | 210줄 |
+| Layer 4: 벡터 DB | `sdk-instrumentation/python/vector_db/vectordb_instrumentation.py` | 280줄 |
+| Layer 5: GPU (DCGM) | `infra/kubernetes/dcgm-exporter.yaml` | 120줄 |
+| Alert Rules | `infra/docker/prometheus-rules.yaml` | 152줄 |
+| Recording Rules | `infra/kubernetes/prometheus-servicemonitor.yaml` | 150줄 |
+| Grafana 대시보드 | `dashboards/grafana/*.json` | 5개 |
+
+---
+
+*이 문서는 지표 정의가 변경될 때 업데이트합니다.*
+*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [LOCAL_SETUP.md](./LOCAL_SETUP.md)*
