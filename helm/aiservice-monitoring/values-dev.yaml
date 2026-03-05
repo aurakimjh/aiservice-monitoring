@@ -1,0 +1,143 @@
+# =============================================================================
+# values-dev.yaml — 개발 환경 오버라이드
+#
+# 사용법:
+#   helm install aiservice-monitoring ./helm/aiservice-monitoring \
+#     -f helm/aiservice-monitoring/values-dev.yaml \
+#     -n monitoring --create-namespace
+#
+# 원칙:
+#   - 단일 레플리카 (리소스 절약)
+#   - 짧은 데이터 보존 (3일)
+#   - 전량 수집 (Tail Sampling 비활성화)
+#   - debug exporter 활성화
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# OTel Collector Agent — 최소 리소스
+# -----------------------------------------------------------------------------
+otelAgent:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # 개발 환경은 GPU 노드 없음
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# OTel Collector Gateway — 단일 레플리카, Tail Sampling 비활성화
+# -----------------------------------------------------------------------------
+otelGateway:
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+  # 개발 환경: 전량 수집 (디버깅 용이)
+  tailSampling:
+    decisionWait: 5s
+    numTraces: 10000
+    policies:
+      errorRate: true
+      highLatencyThresholdMs: 5000
+      highTTFTThresholdMs: 5000
+      guardrailBlock: true
+      externalTimeout: true
+      baselineSamplingPercentage: 100  # 전량 수집
+
+# -----------------------------------------------------------------------------
+# Prometheus — 소용량
+# -----------------------------------------------------------------------------
+prometheus:
+  prometheus:
+    prometheusSpec:
+      retention: 3d
+      retentionSize: "5GB"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 10Gi
+
+  alertmanager:
+    alertmanagerSpec:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+
+  grafana:
+    adminPassword: "admin"  # 개발 환경 기본 비밀번호
+    persistence:
+      size: 1Gi
+
+# -----------------------------------------------------------------------------
+# Tempo — 최소 보존
+# -----------------------------------------------------------------------------
+tempo:
+  tempo:
+    retention: 72h  # 3일
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  persistence:
+    size: 5Gi
+
+# -----------------------------------------------------------------------------
+# Loki — 최소 보존
+# -----------------------------------------------------------------------------
+loki:
+  loki:
+    limits_config:
+      retention_period: 72h  # 3일
+
+  singleBinary:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      size: 5Gi
+
+# -----------------------------------------------------------------------------
+# 커스텀 리소스
+# -----------------------------------------------------------------------------
+serviceMonitor:
+  interval: 30s  # 개발 환경은 느린 수집 주기
+
+prometheusRules:
+  enabled: true
+
+grafanaDashboards:
+  enabled: true

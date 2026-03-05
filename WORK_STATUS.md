@@ -3,7 +3,7 @@
 > **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-02 (Session 3 완료 기준)
+> **최종 업데이트**: 2026-03-05 (Session 5 완료 기준)
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
 ---
@@ -29,7 +29,7 @@ Phase 2: 인프라 설정 파일   [██████████] 100%  ✅
 Phase 3: SDK 계측 코드      [██████████] 100%  ✅
 Phase 4: Grafana 대시보드   [██████████] 100%  ✅
 Phase 5: 통합 테스트 & 검증  [██████████] 100%  ✅  (load-test.py 포함 전체 완성)
-Phase 6: 운영 자동화        [███░░░░░░░]  30%  🔄  (Chart.yaml, values.yaml 완료)
+Phase 6: 운영 자동화        [██████████] 100%  ✅  (Helm Chart + GitHub Actions 완성)
 ```
 
 ---
@@ -252,14 +252,46 @@ Phase 6: 운영 자동화        [███░░░░░░░]  30%  🔄  (C
   - Tempo (7일 retention, metrics-generator 활성화), Loki (7일 retention)
   - RBAC, ServiceMonitor, PrometheusRule, Grafana Dashboard ConfigMap 플래그
 
-### 미완료 항목 (다음 세션으로 이월)
+### 미완료 항목 → Session 5에서 완료
 
-- [ ] **`helm/aiservice-monitoring/values-dev.yaml`** — 개발 환경 오버라이드
-- [ ] **`helm/aiservice-monitoring/values-prod.yaml`** — 프로덕션 환경 오버라이드
-- [ ] **`helm/aiservice-monitoring/templates/`** — ServiceMonitor, PrometheusRule, Grafana Dashboard ConfigMap 템플릿
-- [ ] **`.github/workflows/lint.yaml`** — YAML 검증 + Python/JS 린트
-- [ ] **`.github/workflows/validate-collector.yaml`** — otelcol validate 실행
-- [ ] **`.github/workflows/test-alerts.yaml`** — promtool check rules 실행
+- [x] **`helm/aiservice-monitoring/values-dev.yaml`** — 개발 환경 오버라이드 ✅ (Session 5)
+- [x] **`helm/aiservice-monitoring/values-prod.yaml`** — 프로덕션 환경 오버라이드 ✅ (Session 5)
+- [x] **`helm/aiservice-monitoring/templates/`** — 전체 템플릿 완성 ✅ (Session 5)
+- [x] **`.github/workflows/lint.yaml`** — YAML 검증 + Python/JS 린트 ✅ (Session 5)
+- [x] **`.github/workflows/validate-collector.yaml`** — otelcol validate 실행 ✅ (Session 5)
+- [x] **`.github/workflows/test-alerts.yaml`** — promtool check rules 실행 ✅ (Session 5)
+
+---
+
+## Session 5 완료 내역 ✅
+
+> **날짜**: 2026-03-05 (5회차)
+> **커밋**: (아래 참조) — Phase 6 전체 완성
+
+### 완료된 작업
+
+#### Helm Chart 템플릿 완성
+- [x] **`helm/aiservice-monitoring/templates/_helpers.tpl`** — 공통 헬퍼 (차트명, 레이블, 셀렉터, SA명)
+- [x] **`helm/aiservice-monitoring/values-dev.yaml`** — 개발 환경 오버라이드
+  - 단일 레플리카, 3일 보존, Tail Sampling 전량 수집(100%), 최소 리소스
+- [x] **`helm/aiservice-monitoring/values-prod.yaml`** — 프로덕션 환경 오버라이드
+  - Thanos Sidecar S3 연동, Slack+PagerDuty 알람, Grafana Ingress+TLS
+  - Tempo/Loki S3 백엔드, 14일 보존, HA 구성(Gateway max:15)
+- [x] **`helm/aiservice-monitoring/templates/rbac.yaml`** — Namespace + SA + ClusterRole + Binding
+- [x] **`helm/aiservice-monitoring/templates/configmap-dashboards.yaml`** — 5개 Grafana 대시보드 ConfigMap
+- [x] **`helm/aiservice-monitoring/templates/prometheus-rules.yaml`** — 9개 Alert Rule + 6개 Recording Rule CRD
+- [x] **`helm/aiservice-monitoring/templates/servicemonitor.yaml`** — 3개 ServiceMonitor + 1개 PodMonitor
+- [x] **`helm/aiservice-monitoring/templates/NOTES.txt`** — 설치 후 안내 메시지
+
+#### GitHub Actions CI/CD 파이프라인
+- [x] **`.github/workflows/lint.yaml`** — yamllint + ruff + eslint + helm lint (4 jobs 병렬)
+- [x] **`.github/workflows/validate-collector.yaml`** — otelcol-contrib validate (Agent/Gateway/Local 3개 config)
+- [x] **`.github/workflows/test-alerts.yaml`** — promtool check rules + 9개 Alert 존재 확인 + severity 검증
+- [x] **`.github/workflows/validate-traces.yaml`** — staging Tempo Context Propagation 단절 탐지 (수동/스케줄 트리거)
+
+#### Collector Pipeline 문서화
+- [x] **`collector/pipelines/traces-pipeline.md`** — 트레이스 전체 흐름 ASCII 다이어그램 + 단계별 상세 + 단절 탐지
+- [x] **`collector/pipelines/metrics-pipeline.md`** — 지표 파이프라인 (5개 레이어 지표 분류 + 수집 경로 + 비용 추정)
 
 ---
 
@@ -269,36 +301,38 @@ Phase 6: 운영 자동화        [███░░░░░░░]  30%  🔄  (C
 
 ---
 
-## 미완료 항목 — Phase 6: 운영 자동화 📋
+## 완료 — Phase 6: 운영 자동화 ✅
 
-### 6-1. Helm Chart 패키징 🔄 (부분 완료)
+### 6-1. Helm Chart 패키징 ✅ (완료)
 ```
 파일 위치: helm/aiservice-monitoring/
 ```
 - [x] `Chart.yaml` — 차트 메타데이터 및 5개 서브차트 의존성 선언 ✅
 - [x] `values.yaml` — 기본값 전체 (OTel Agent/Gateway, Prometheus, Tempo, Loki) ✅
-- [ ] `values-dev.yaml` — 개발 환경 오버라이드 (단일 레플리카, 소용량 retention)
-- [ ] `values-prod.yaml` — 프로덕션 오버라이드 (Thanos 연동, Slack 시크릿 참조)
-- [ ] `templates/configmap-dashboards.yaml` — Grafana 대시보드 JSON ConfigMap
-- [ ] `templates/prometheus-rules.yaml` — Alert Rule + Recording Rule CRD 렌더링
-- [ ] `templates/servicemonitor.yaml` — ServiceMonitor 렌더링
-- [ ] `templates/rbac.yaml` — ServiceAccount + ClusterRole + ClusterRoleBinding
+- [x] `values-dev.yaml` — 개발 환경 오버라이드 ✅ (Session 5)
+- [x] `values-prod.yaml` — 프로덕션 오버라이드 (Thanos, Slack, PagerDuty) ✅ (Session 5)
+- [x] `templates/_helpers.tpl` — 공통 헬퍼 템플릿 ✅ (Session 5)
+- [x] `templates/rbac.yaml` — Namespace + SA + ClusterRole + Binding ✅ (Session 5)
+- [x] `templates/configmap-dashboards.yaml` — Grafana 대시보드 ConfigMap ✅ (Session 5)
+- [x] `templates/prometheus-rules.yaml` — Alert + Recording Rule CRD ✅ (Session 5)
+- [x] `templates/servicemonitor.yaml` — ServiceMonitor + PodMonitor ✅ (Session 5)
+- [x] `templates/NOTES.txt` — 설치 후 안내 메시지 ✅ (Session 5)
 
-### 6-2. GitHub Actions CI/CD 파이프라인 💡
+### 6-2. GitHub Actions CI/CD 파이프라인 ✅ (완료)
 ```
 파일 위치: .github/workflows/
 ```
-- [ ] `lint.yaml` — PR 시 자동 실행 (yamllint, ruff, eslint)
-- [ ] `validate-collector.yaml` — otelcol validate --config 실행
-- [ ] `test-alerts.yaml` — promtool check rules 실행 + 필수 Alert 9개 존재 확인
-- [ ] `validate-traces.yaml` — staging Tempo Context Propagation 단절 탐지
+- [x] `lint.yaml` — yamllint + ruff + eslint + helm lint ✅ (Session 5)
+- [x] `validate-collector.yaml` — otelcol validate --config 실행 ✅ (Session 5)
+- [x] `test-alerts.yaml` — promtool check rules + Alert 존재 + severity 검증 ✅ (Session 5)
+- [x] `validate-traces.yaml` — staging Tempo Context Propagation 단절 탐지 ✅ (Session 5)
 
-### 6-3. Collector Pipelines 문서화 (선택) 💡
+### 6-3. Collector Pipelines 문서화 ✅ (완료)
 ```
 파일 위치: collector/pipelines/
 ```
-- [ ] `traces-pipeline.md` — 트레이스 데이터 흐름 ASCII 다이어그램
-- [ ] `metrics-pipeline.md` — 지표 파이프라인 (DCGM → Prometheus → Thanos)
+- [x] `traces-pipeline.md` — 트레이스 데이터 흐름 ASCII 다이어그램 ✅ (Session 5)
+- [x] `metrics-pipeline.md` — 지표 파이프라인 (DCGM → Prometheus → Thanos) ✅ (Session 5)
 
 ---
 
@@ -348,26 +382,32 @@ Phase 6: 운영 자동화        [███░░░░░░░]  30%  🔄  (C
 | `scripts/test-alerts.sh` | ✅ | 130 | Alert Rule 검증 |
 | `helm/aiservice-monitoring/Chart.yaml` | ✅ | — | 5개 서브차트 의존성 |
 | `helm/aiservice-monitoring/values.yaml` | ✅ | — | 전체 기본값 (Agent/GW/Prom/Tempo/Loki) |
-| `helm/aiservice-monitoring/values-dev.yaml` | 📋 | — | **미작성** |
-| `helm/aiservice-monitoring/values-prod.yaml` | 📋 | — | **미작성** |
-| `helm/aiservice-monitoring/templates/` | 📋 | — | **미작성** (ConfigMap, Rules, RBAC) |
-| `.github/workflows/` | 📋 | — | **미작성** (Phase 6) |
+| `helm/aiservice-monitoring/values-dev.yaml` | ✅ | — | 개발 환경 오버라이드 |
+| `helm/aiservice-monitoring/values-prod.yaml` | ✅ | — | 프로덕션 (Thanos + Slack + PagerDuty) |
+| `helm/aiservice-monitoring/templates/_helpers.tpl` | ✅ | — | 공통 헬퍼 |
+| `helm/aiservice-monitoring/templates/rbac.yaml` | ✅ | — | NS + SA + ClusterRole |
+| `helm/aiservice-monitoring/templates/configmap-dashboards.yaml` | ✅ | — | 5개 대시보드 ConfigMap |
+| `helm/aiservice-monitoring/templates/prometheus-rules.yaml` | ✅ | — | 9개 Alert + 6개 Recording |
+| `helm/aiservice-monitoring/templates/servicemonitor.yaml` | ✅ | — | 3 ServiceMonitor + 1 PodMonitor |
+| `helm/aiservice-monitoring/templates/NOTES.txt` | ✅ | — | 설치 후 안내 |
+| `.github/workflows/lint.yaml` | ✅ | — | yamllint + ruff + eslint + helm |
+| `.github/workflows/validate-collector.yaml` | ✅ | — | otelcol validate |
+| `.github/workflows/test-alerts.yaml` | ✅ | — | promtool check rules |
+| `.github/workflows/validate-traces.yaml` | ✅ | — | staging Tempo 단절 탐지 |
+| `collector/pipelines/traces-pipeline.md` | ✅ | — | 트레이스 흐름 다이어그램 |
+| `collector/pipelines/metrics-pipeline.md` | ✅ | — | 지표 파이프라인 문서 |
 
 ---
 
 ## 권장 작업 순서 (Next Session 기준)
 
 ```
-Session 5 권장 작업 (Helm Chart 완성 + GitHub Actions):
-  1. helm/aiservice-monitoring/values-dev.yaml          ← 개발 환경 오버라이드
-  2. helm/aiservice-monitoring/values-prod.yaml         ← 프로덕션 오버라이드
-  3. helm/aiservice-monitoring/templates/rbac.yaml      ← ServiceAccount + ClusterRole
-  4. helm/aiservice-monitoring/templates/configmap-dashboards.yaml  ← Grafana 대시보드
-  5. helm/aiservice-monitoring/templates/prometheus-rules.yaml      ← Alert Rules CRD
-  6. helm/aiservice-monitoring/templates/servicemonitor.yaml
-  7. .github/workflows/lint.yaml                        ← yamllint + ruff + eslint
-  8. .github/workflows/validate-collector.yaml          ← otelcol validate
-  9. .github/workflows/test-alerts.yaml                 ← promtool check rules
+Session 5 — 완료됨 ✅
+
+모든 Phase 완료. 선택적 후속 작업:
+  1. 실제 환경 배포 테스트 (helm install --dry-run)
+  2. dashboards/grafana/*.json → helm chart dashboards/ 디렉토리 복사 자동화
+  3. E2E 통합 테스트 (docker-compose up → load-test.py → validate-traces.py)
 ```
 
 ---

@@ -1,0 +1,197 @@
+{{- if .Values.prometheusRules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-alert-rules
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+    role: alert-rules
+spec:
+  groups:
+    # ── LLM 성능 알람 ──────────────────────────────────────────────
+    - name: llm.performance
+      interval: 30s
+      rules:
+        - alert: LLM_TTFT_High
+          expr: |
+            histogram_quantile(0.95,
+              rate(aiservice_llm_time_to_first_token_bucket[5m])
+            ) > 3000
+          for: 5m
+          labels:
+            severity: critical
+            layer: model
+          annotations:
+            summary: "LLM TTFT P95가 3초를 초과했습니다"
+            description: |
+              모델 {{`{{ $labels.llm_model }}`}}의 TTFT P95: {{`{{ $value | humanizeDuration }}`}}
+              vLLM 큐 적체 또는 GPU 스로틀링 가능성. VRAM 사용률을 확인하세요.
+            runbook: "https://wiki.internal/runbooks/llm-ttft-high"
+
+        - alert: LLM_TPS_Low
+          expr: |
+            histogram_quantile(0.50,
+              rate(aiservice_llm_tokens_per_second_bucket[5m])
+            ) < 15
+          for: 5m
+          labels:
+            severity: warning
+            layer: model
+          annotations:
+            summary: "LLM TPS P50이 15 tok/s 미만으로 하락했습니다"
+            description: |
+              모델 {{`{{ $labels.llm_model }}`}}의 TPS P50: {{`{{ $value | humanize }}`}} tok/s
+
+        - alert: LLM_Queue_Backlog
+          expr: |
+            histogram_quantile(0.95,
+              rate(aiservice_llm_queue_wait_time_bucket[5m])
+            ) > 5000
+          for: 3m
+          labels:
+            severity: critical
+            layer: model
+          annotations:
+            summary: "LLM 요청 큐 대기 시간이 5초를 초과했습니다"
+            description: "추가 vLLM 인스턴스 기동을 고려하세요."
+
+    # ── GPU 알람 ────────────────────────────────────────────────────
+    - name: gpu.resources
+      interval: 30s
+      rules:
+        - alert: GPU_VRAM_Critical
+          expr: |
+            (aiservice_gpu_memory_used / (aiservice_gpu_memory_used + aiservice_gpu_memory_free)) * 100 > 90
+          for: 2m
+          labels:
+            severity: critical
+            layer: infra
+          annotations:
+            summary: "GPU VRAM 사용률이 90%를 초과했습니다"
+            description: |
+              GPU {{`{{ $labels.gpu }}`}}: VRAM 사용률 {{`{{ $value | humanize }}`}}%
+
+        - alert: GPU_Temperature_High
+          expr: aiservice_gpu_temperature > 85
+          for: 5m
+          labels:
+            severity: warning
+            layer: infra
+          annotations:
+            summary: "GPU 온도가 85°C를 초과했습니다"
+            description: |
+              GPU {{`{{ $labels.gpu }}`}}: 온도 {{`{{ $value }}`}}°C
+
+    # ── 가드레일 알람 ──────────────────────────────────────────────
+    - name: guardrail.security
+      interval: 30s
+      rules:
+        - alert: Guardrail_Block_Rate_High
+          expr: |
+            rate(aiservice_guardrail_block_total[5m]) /
+            rate(aiservice_guardrail_validation_duration_count[5m]) * 100 > 10
+          for: 3m
+          labels:
+            severity: warning
+            layer: app
+          annotations:
+            summary: "가드레일 차단율이 10%를 초과했습니다"
+            description: |
+              정책 {{`{{ $labels.policy }}`}}: 차단율 {{`{{ $value | humanize }}`}}%
+
+        - alert: Guardrail_Latency_High
+          expr: |
+            histogram_quantile(0.99,
+              rate(aiservice_guardrail_validation_duration_bucket[5m])
+            ) > 1500
+          for: 3m
+          labels:
+            severity: warning
+            layer: app
+          annotations:
+            summary: "가드레일 P99 레이턴시가 1.5초를 초과했습니다"
+            description: "가드레일이 전체 E2E 레이턴시를 지배하고 있습니다."
+
+    # ── 외부 API 알람 ──────────────────────────────────────────────
+    - name: external.api
+      interval: 30s
+      rules:
+        - alert: ExternalAPI_Timeout_Rate_High
+          expr: |
+            rate(aiservice_external_api_timeout_total[5m]) /
+            rate(aiservice_external_api_request_duration_count[5m]) * 100 > 5
+          for: 5m
+          labels:
+            severity: warning
+            layer: agent
+          annotations:
+            summary: "외부 API 타임아웃 비율이 5%를 초과했습니다"
+            description: |
+              서비스 {{`{{ $labels.service }}`}}: 타임아웃률 {{`{{ $value | humanize }}`}}%
+
+    # ── 벡터 DB 알람 ───────────────────────────────────────────────
+    - name: vectordb.performance
+      interval: 30s
+      rules:
+        - alert: VectorDB_Search_Slow
+          expr: |
+            histogram_quantile(0.99,
+              rate(aiservice_vectordb_search_duration_bucket[5m])
+            ) > 800
+          for: 5m
+          labels:
+            severity: warning
+            layer: data
+          annotations:
+            summary: "벡터 DB 검색 P99 레이턴시가 800ms를 초과했습니다"
+            description: |
+              DB: {{`{{ $labels.db }}`}}, Index: {{`{{ $labels.index }}`}}
+
+---
+# ── Recording Rules ────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-recording-rules
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+    role: recording-rules
+spec:
+  groups:
+    - name: llm.recording
+      interval: 30s
+      rules:
+        - record: job:llm_ttft_p95:rate5m
+          expr: |
+            histogram_quantile(0.95,
+              rate(aiservice_llm_time_to_first_token_bucket[5m])
+            )
+        - record: job:llm_tps_p50:rate5m
+          expr: |
+            histogram_quantile(0.50,
+              rate(aiservice_llm_tokens_per_second_bucket[5m])
+            )
+        - record: job:guardrail_block_rate:rate5m
+          expr: |
+            rate(aiservice_guardrail_block_total[5m]) /
+            rate(aiservice_guardrail_request_total[5m])
+        - record: job:gpu_vram_utilization:avg
+          expr: |
+            avg by (gpu, node) (
+              aiservice_gpu_memory_used /
+              (aiservice_gpu_memory_used + aiservice_gpu_memory_free)
+            ) * 100
+        - record: job:external_api_error_rate:rate5m
+          expr: |
+            rate(aiservice_external_api_error_total[5m]) /
+            rate(aiservice_external_api_request_total[5m])
+        - record: job:semantic_cache_hit_rate:rate5m
+          expr: |
+            rate(aiservice_vectordb_cache_hit_total[5m]) /
+            (rate(aiservice_vectordb_cache_hit_total[5m]) +
+             rate(aiservice_vectordb_cache_miss_total[5m]))
+{{- end }}

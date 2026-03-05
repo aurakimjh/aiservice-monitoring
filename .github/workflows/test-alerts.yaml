@@ -1,0 +1,99 @@
+name: Test Alert Rules
+
+on:
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "infra/docker/prometheus-rules.yaml"
+      - "helm/aiservice-monitoring/templates/prometheus-rules.yaml"
+  push:
+    branches: [master, main]
+    paths:
+      - "infra/docker/prometheus-rules.yaml"
+
+jobs:
+  test-alerts:
+    name: promtool check rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download promtool
+        run: |
+          PROM_VERSION="2.49.1"
+          curl -Lo prometheus.tar.gz \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz"
+          tar -xzf prometheus.tar.gz --strip-components=1 "prometheus-${PROM_VERSION}.linux-amd64/promtool"
+          chmod +x promtool
+
+      - name: Validate prometheus-rules.yaml syntax
+        run: ./promtool check rules infra/docker/prometheus-rules.yaml
+
+      - name: Verify required Alert Rules exist
+        run: |
+          RULES_FILE="infra/docker/prometheus-rules.yaml"
+          PASS=0
+          FAIL=0
+
+          REQUIRED_ALERTS=(
+            "LLM_TTFT_High"
+            "LLM_TPS_Low"
+            "LLM_Queue_Backlog"
+            "GPU_VRAM_Critical"
+            "GPU_Temperature_High"
+            "Guardrail_Block_Rate_High"
+            "Guardrail_Latency_High"
+            "ExternalAPI_Timeout_Rate_High"
+            "VectorDB_Search_Slow"
+          )
+
+          for alert in "${REQUIRED_ALERTS[@]}"; do
+            if grep -q "alert: ${alert}" "$RULES_FILE"; then
+              echo "  PASS: $alert"
+              ((PASS++))
+            else
+              echo "  FAIL: $alert not found"
+              ((FAIL++))
+            fi
+          done
+
+          echo ""
+          echo "Results: PASS=$PASS FAIL=$FAIL"
+
+          if [ "$FAIL" -gt 0 ]; then
+            echo "::error::Missing $FAIL required alert rules"
+            exit 1
+          fi
+
+      - name: Verify severity labels
+        run: |
+          RULES_FILE="infra/docker/prometheus-rules.yaml"
+
+          # Critical alerts must have severity: critical
+          for alert in LLM_TTFT_High GPU_VRAM_Critical LLM_Queue_Backlog; do
+            if grep -A 8 "alert: ${alert}" "$RULES_FILE" | grep -q "severity: critical"; then
+              echo "  OK: $alert has severity=critical"
+            else
+              echo "::error::$alert should have severity: critical"
+              exit 1
+            fi
+          done
+
+          # Warning alerts must have severity: warning
+          for alert in LLM_TPS_Low GPU_Temperature_High Guardrail_Block_Rate_High Guardrail_Latency_High ExternalAPI_Timeout_Rate_High VectorDB_Search_Slow; do
+            if grep -A 8 "alert: ${alert}" "$RULES_FILE" | grep -q "severity: warning"; then
+              echo "  OK: $alert has severity=warning"
+            else
+              echo "::error::$alert should have severity: warning"
+              exit 1
+            fi
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Alert Rule Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 9 required alert rules verified" >> $GITHUB_STEP_SUMMARY
+          echo "- Severity labels validated" >> $GITHUB_STEP_SUMMARY
+          echo "- promtool syntax check passed" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,76 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+jobs:
+  yamllint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint Collector configs
+        run: yamllint -d relaxed collector/config/
+
+      - name: Lint K8s manifests
+        run: yamllint -d relaxed infra/kubernetes/
+
+      - name: Lint Docker infra configs
+        run: yamllint -d relaxed infra/docker/
+
+      - name: Lint Helm values
+        run: |
+          yamllint -d relaxed helm/aiservice-monitoring/values.yaml
+          yamllint -d relaxed helm/aiservice-monitoring/values-dev.yaml
+          yamllint -d relaxed helm/aiservice-monitoring/values-prod.yaml
+
+  python-lint:
+    name: Python Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint SDK instrumentation (Python)
+        run: ruff check sdk-instrumentation/python/
+
+      - name: Lint scripts
+        run: ruff check scripts/*.py
+
+  js-lint:
+    name: JavaScript Lint (eslint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install eslint
+        run: npm install -g eslint
+
+      - name: Lint SDK instrumentation (Node.js)
+        run: eslint sdk-instrumentation/nodejs/ --no-eslintrc --env node --env es2021
+        continue-on-error: true  # eslintrc 미설정 시 경고만
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint Helm chart
+        run: helm lint helm/aiservice-monitoring/

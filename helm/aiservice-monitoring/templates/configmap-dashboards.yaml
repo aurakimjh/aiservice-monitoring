@@ -1,0 +1,21 @@
+{{- if .Values.grafanaDashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiservice-grafana-dashboards
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  ai-service-overview.json: |-
+    {{- .Files.Get "dashboards/ai-service-overview.json" | nindent 4 }}
+  llm-performance.json: |-
+    {{- .Files.Get "dashboards/llm-performance.json" | nindent 4 }}
+  gpu-correlation.json: |-
+    {{- .Files.Get "dashboards/gpu-correlation.json" | nindent 4 }}
+  guardrail-analysis.json: |-
+    {{- .Files.Get "dashboards/guardrail-analysis.json" | nindent 4 }}
+  agent-external-api.json: |-
+    {{- .Files.Get "dashboards/agent-external-api.json" | nindent 4 }}
+{{- end }}

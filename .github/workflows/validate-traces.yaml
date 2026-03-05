@@ -1,0 +1,83 @@
+name: Validate Trace Propagation
+
+on:
+  # staging 배포 후 수동 트리거 또는 스케줄
+  workflow_dispatch:
+    inputs:
+      tempo_url:
+        description: "Tempo API URL"
+        required: true
+        default: "http://tempo.staging.internal:3200"
+      lookback:
+        description: "탐색 기간 (예: 1h, 30m)"
+        required: false
+        default: "1h"
+  schedule:
+    # 매일 09:00 KST (00:00 UTC) 자동 실행
+    - cron: "0 0 * * *"
+
+env:
+  TEMPO_URL: ${{ github.event.inputs.tempo_url || 'http://tempo.staging.internal:3200' }}
+  LOOKBACK: ${{ github.event.inputs.lookback || '1h' }}
+
+jobs:
+  validate-traces:
+    name: Context Propagation 단절 탐지
+    runs-on: ubuntu-latest
+    # staging 클러스터 접근이 필요하므로 self-hosted runner 권장
+    # runs-on: [self-hosted, staging]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install httpx tabulate
+
+      - name: Run trace validation
+        id: validate
+        run: |
+          python scripts/validate-traces.py \
+            --tempo-url "$TEMPO_URL" \
+            --lookback "$LOOKBACK" \
+            --fail-on-broken
+        env:
+          TEMPO_URL: ${{ env.TEMPO_URL }}
+        continue-on-error: true
+
+      - name: Check results
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "::warning::Context Propagation 단절이 감지되었습니다."
+          echo "Tempo URL: $TEMPO_URL"
+          echo "상세 내용은 위 로그를 확인하세요."
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Trace Propagation Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tempo**: \`$TEMPO_URL\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lookback**: \`$LOOKBACK\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.validate.outcome }}" = "success" ]; then
+            echo "### Result: PASS" >> $GITHUB_STEP_SUMMARY
+            echo "Context propagation 단절 없음." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Result: FAIL" >> $GITHUB_STEP_SUMMARY
+            echo "단절된 트레이스가 감지되었습니다. validate-traces.py 출력을 확인하세요." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify on failure (Slack)
+        if: steps.validate.outcome == 'failure' && github.event_name == 'schedule'
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": ":warning: [Staging] Context Propagation 단절 감지\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

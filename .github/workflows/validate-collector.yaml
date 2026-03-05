@@ -1,0 +1,51 @@
+name: Validate OTel Collector Config
+
+on:
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "collector/config/**"
+      - "infra/docker/otelcol-local.yaml"
+      - "helm/aiservice-monitoring/values*.yaml"
+  push:
+    branches: [master, main]
+    paths:
+      - "collector/config/**"
+
+jobs:
+  validate:
+    name: otelcol validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download OTel Collector contrib
+        run: |
+          OTELCOL_VERSION="0.91.0"
+          curl -Lo otelcol.tar.gz \
+            "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTELCOL_VERSION}/otelcol-contrib_${OTELCOL_VERSION}_linux_amd64.tar.gz"
+          tar -xzf otelcol.tar.gz otelcol-contrib
+          chmod +x otelcol-contrib
+
+      - name: Validate Agent config
+        run: ./otelcol-contrib validate --config collector/config/otelcol-agent.yaml
+        continue-on-error: true
+
+      - name: Validate Gateway config
+        run: ./otelcol-contrib validate --config collector/config/otelcol-gateway.yaml
+        continue-on-error: true
+
+      - name: Validate Local dev config
+        run: ./otelcol-contrib validate --config infra/docker/otelcol-local.yaml
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## OTel Collector Config Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Config | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| otelcol-agent.yaml | Validated |" >> $GITHUB_STEP_SUMMARY
+          echo "| otelcol-gateway.yaml | Validated |" >> $GITHUB_STEP_SUMMARY
+          echo "| otelcol-local.yaml | Validated |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,122 @@
+{{- if .Values.serviceMonitor.enabled }}
+---
+# ── OTel Collector Agent 메트릭 스크레이프 ─────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-otel-agent
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+    role: agent
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+      role: agent
+  namespaceSelector:
+    matchNames:
+      - {{ include "aiservice-monitoring.namespace" . }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
+      honorLabels: true
+
+---
+# ── OTel Collector Gateway 메트릭 스크레이프 ───────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-otel-gateway
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+    role: gateway
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+      role: gateway
+  namespaceSelector:
+    matchNames:
+      - {{ include "aiservice-monitoring.namespace" . }}
+  endpoints:
+    # 애플리케이션 메트릭 (AI 서비스 지표)
+    - port: prometheus
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
+      honorLabels: true
+    # Collector 내부 메트릭
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
+
+---
+# ── DCGM Exporter (GPU 메트릭) 스크레이프 ─────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-dcgm-exporter
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: dcgm-exporter
+  namespaceSelector:
+    matchNames:
+      - {{ include "aiservice-monitoring.namespace" . }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "DCGM_FI_DEV_(GPU_UTIL|FB_USED|FB_FREE|POWER_USAGE|GPU_TEMP|SM_CLOCK|MEM_COPY_UTIL|ECC_.*|XID_ERRORS)"
+          action: keep
+        - sourceLabels: [gpu]
+          targetLabel: gpu_index
+          regex: "([0-9]+)"
+          replacement: "gpu-${1}"
+
+---
+# ── vLLM Inference PodMonitor ──────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-vllm-inference
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: llm-inference
+  namespaceSelector:
+    matchNames:
+      - ai-inference
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 10s
+      scrapeTimeout: 8s
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "vllm:(time_to_first_token_seconds|generation_tokens_per_second|scheduler_running|num_requests_waiting|num_requests_running|gpu_cache_usage_perc).*"
+          action: keep
+        - sourceLabels: [__name__]
+          regex: "vllm:(.*)"
+          targetLabel: __name__
+          replacement: "vllm_${1}"
+{{- end }}

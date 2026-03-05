@@ -1,0 +1,256 @@
+# =============================================================================
+# values-prod.yaml — 프로덕션 환경 오버라이드
+#
+# 사용법:
+#   helm install aiservice-monitoring ./helm/aiservice-monitoring \
+#     -f helm/aiservice-monitoring/values-prod.yaml \
+#     -n monitoring --create-namespace
+#
+# 원칙:
+#   - 고가용성 (다중 레플리카, PDB, Anti-Affinity)
+#   - Thanos Sidecar 연동 (장기 보존)
+#   - Slack 알람 시크릿 참조
+#   - 프로덕션 수준 리소스 할당
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 전역 설정
+# -----------------------------------------------------------------------------
+global:
+  storageClass: "gp3"  # AWS EBS gp3 (또는 환경에 맞게 변경)
+
+# -----------------------------------------------------------------------------
+# OTel Collector Agent — 프로덕션 리소스
+# -----------------------------------------------------------------------------
+otelAgent:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+# -----------------------------------------------------------------------------
+# OTel Collector Gateway — HA 구성
+# -----------------------------------------------------------------------------
+otelGateway:
+  replicaCount: 3
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 65
+    targetMemoryUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  tailSampling:
+    decisionWait: 15s
+    numTraces: 100000
+    policies:
+      errorRate: true
+      highLatencyThresholdMs: 3000
+      highTTFTThresholdMs: 2000
+      guardrailBlock: true
+      externalTimeout: true
+      baselineSamplingPercentage: 5
+
+# -----------------------------------------------------------------------------
+# Prometheus — Thanos Sidecar 연동, 장기 보존
+# -----------------------------------------------------------------------------
+prometheus:
+  prometheus:
+    prometheusSpec:
+      retention: 30d
+      retentionSize: "100GB"
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 8Gi
+        limits:
+          cpu: 4000m
+          memory: 16Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 200Gi
+
+      # Thanos Sidecar — S3 장기 보존
+      thanos:
+        objectStorageConfig:
+          existingSecret:
+            name: thanos-objstore-config
+            key: objstore.yml
+
+    thanosService:
+      enabled: true
+    thanosSidecar:
+      enabled: true
+
+  # Alertmanager — Slack 시크릿 참조
+  alertmanager:
+    alertmanagerSpec:
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+    config:
+      global:
+        resolve_timeout: 5m
+        slack_api_url_file: /etc/alertmanager/secrets/slack-webhook-url
+      route:
+        group_by: ["alertname", "severity", "layer"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        receiver: slack-warning
+        routes:
+          - receiver: slack-critical
+            matchers:
+              - severity = critical
+            continue: true
+          - receiver: pagerduty
+            matchers:
+              - severity = critical
+          - receiver: slack-warning
+            matchers:
+              - severity = warning
+      receivers:
+        - name: slack-critical
+          slack_configs:
+            - channel: "#ai-alerts-critical"
+              send_resolved: true
+              title: "[CRITICAL] {{ .GroupLabels.alertname }}"
+              text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+              actions:
+                - type: button
+                  text: "Runbook"
+                  url: "{{ (index .Alerts 0).Annotations.runbook }}"
+                - type: button
+                  text: "Grafana"
+                  url: "https://grafana.internal/d/ai-overview"
+        - name: slack-warning
+          slack_configs:
+            - channel: "#ai-alerts"
+              send_resolved: true
+        - name: pagerduty
+          pagerduty_configs:
+            - service_key_file: /etc/alertmanager/secrets/pagerduty-service-key
+              severity: '{{ .CommonLabels.severity }}'
+    alertmanagerSpec:
+      secrets:
+        - slack-webhook-secret
+        - pagerduty-secret
+
+  # Grafana — 프로덕션 설정
+  grafana:
+    adminPassword: ""  # existingSecret으로 대체
+    admin:
+      existingSecret: grafana-admin-credentials
+      userKey: admin-user
+      passwordKey: admin-password
+    persistence:
+      enabled: true
+      size: 10Gi
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      hosts:
+        - grafana.internal
+      tls:
+        - secretName: grafana-tls
+          hosts:
+            - grafana.internal
+
+# -----------------------------------------------------------------------------
+# Tempo — 프로덕션 (S3 백엔드)
+# -----------------------------------------------------------------------------
+tempo:
+  tempo:
+    retention: 336h  # 14일
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  persistence:
+    enabled: true
+    size: 50Gi
+
+  config:
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: aiservice-tempo-traces
+          endpoint: s3.ap-northeast-2.amazonaws.com
+          region: ap-northeast-2
+
+# -----------------------------------------------------------------------------
+# Loki — 프로덕션 (S3 백엔드)
+# -----------------------------------------------------------------------------
+loki:
+  loki:
+    limits_config:
+      retention_period: 336h  # 14일
+    storage:
+      type: s3
+      s3:
+        s3: s3://ap-northeast-2/aiservice-loki-logs
+        region: ap-northeast-2
+
+  singleBinary:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+    persistence:
+      enabled: true
+      size: 50Gi
+
+# -----------------------------------------------------------------------------
+# 커스텀 리소스
+# -----------------------------------------------------------------------------
+serviceMonitor:
+  interval: 15s
+  scrapeTimeout: 10s
+
+prometheusRules:
+  enabled: true
+
+grafanaDashboards:
+  enabled: true
+
+rbac:
+  create: true
+  namespaces:
+    - monitoring
+    - ai-inference
