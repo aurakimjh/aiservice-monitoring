@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Service XLog &amp; HeatMap</title>
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+  <!-- ── Top Bar ──────────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="topbar-left">
+      <h1 class="logo">AI Service <span class="accent">XLog</span></h1>
+      <span class="version">v1.0</span>
+    </div>
+    <div class="topbar-center">
+      <label for="serviceFilter">Service:</label>
+      <select id="serviceFilter">
+        <option value="__all__">All Services</option>
+      </select>
+
+      <label for="timeRange">Time:</label>
+      <select id="timeRange">
+        <option value="300">5 min</option>
+        <option value="900" selected>15 min</option>
+        <option value="1800">30 min</option>
+        <option value="3600">1 hour</option>
+      </select>
+
+      <label for="dataSource">Source:</label>
+      <select id="dataSource">
+        <option value="demo" selected>Demo</option>
+        <option value="prometheus">Prometheus</option>
+        <option value="tempo">Tempo</option>
+      </select>
+    </div>
+    <div class="topbar-right">
+      <button id="btnAutoRefresh" class="btn active" title="Auto Refresh (5s)">
+        <span class="indicator"></span> Live
+      </button>
+      <button id="btnClear" class="btn" title="Clear Data">Clear</button>
+      <span id="statsInfo" class="stats">Dots: 0 | Avg: 0ms</span>
+    </div>
+  </header>
+
+  <!-- ── Main Content ────────────────────────────────────────── -->
+  <main id="content">
+    <div id="chartArea">
+      <!-- XLog (Scatter) -->
+      <section id="xlogSection">
+        <div class="section-header">
+          <h2>XLog (Response Time Scatter)</h2>
+          <div class="chart-controls">
+            <label><input type="checkbox" id="logScale"> Log Scale</label>
+          </div>
+        </div>
+        <div class="canvas-wrap" id="xlogWrap">
+          <canvas id="xlogCanvas"></canvas>
+        </div>
+      </section>
+
+      <!-- HeatMap -->
+      <section id="heatmapSection">
+        <div class="section-header">
+          <h2>HeatMap (Request Density)</h2>
+        </div>
+        <div class="canvas-wrap" id="heatmapWrap">
+          <canvas id="heatmapCanvas"></canvas>
+          <div id="heatmapLegend" class="legend">
+            <span class="legend-label">0</span>
+            <div class="legend-bar"></div>
+            <span class="legend-label">100+</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Detail Panel -->
+    <section id="detailPanel" class="collapsed">
+      <div class="detail-header">
+        <h3>Trace Detail</h3>
+        <button id="btnCloseDetail" class="btn-icon">&times;</button>
+      </div>
+      <div id="detailContent">
+        <p class="placeholder">Click a dot in XLog or a cell in HeatMap to see details.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Tooltip ─────────────────────────────────────────────── -->
+  <div id="tooltip" class="tooltip hidden"></div>
+
+  <!-- ── Context Menu ────────────────────────────────────────── -->
+  <div id="contextMenu" class="context-menu hidden">
+    <ul>
+      <li id="ctxJaeger">Jaeger에서 보기</li>
+      <li id="ctxGrafana">Grafana에서 보기</li>
+      <li class="separator"></li>
+      <li id="ctxCopyTraceId">Trace ID 복사</li>
+    </ul>
+  </div>
+
+  <!-- ── Scripts ─────────────────────────────────────────────── -->
+  <script src="js/data-source.js"></script>
+  <script src="js/xlog-chart.js"></script>
+  <script src="js/heatmap-chart.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

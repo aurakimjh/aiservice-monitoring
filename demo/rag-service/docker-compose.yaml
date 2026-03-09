@@ -1,0 +1,27 @@
+version: "3.9"
+
+# RAG 데모 서비스
+# 사전 요구사항: 모니터링 스택이 먼저 실행되어 있어야 합니다.
+#   cd ../../infra/docker && docker compose up -d
+#
+# 실행:
+#   docker compose up --build
+
+services:
+  rag-service:
+    build: .
+    container_name: rag-demo-service
+    ports:
+      - "8000:8000"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - SERVICE_NAME=rag-demo-service
+      - DEPLOYMENT_ENV=development
+      - MOCK_MODE=true
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true
+    name: docker_monitoring

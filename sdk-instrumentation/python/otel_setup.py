@@ -92,10 +92,19 @@ def setup_otel(
         ])
     )
 
-    # Auto-instrumentation
-    HTTPXClientInstrumentor().instrument()
-    RedisInstrumentor().instrument()
-    PymongoInstrumentor().instrument()
+    # Auto-instrumentation (설치되지 않은 라이브러리는 건너뜀)
+    try:
+        HTTPXClientInstrumentor().instrument()
+    except Exception:
+        pass
+    try:
+        RedisInstrumentor().instrument()
+    except Exception:
+        pass
+    try:
+        PymongoInstrumentor().instrument()
+    except Exception:
+        pass
 
     return (
         trace.get_tracer(service_name, service_version),

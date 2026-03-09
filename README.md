@@ -192,6 +192,7 @@ async def validate_input(user_input: str) -> dict:
 | [ARCHITECTURE.md](DOCS/ARCHITECTURE.md) | OTel Collector 아키텍처, Context Propagation | ✅ 완료 |
 | [LOCAL_SETUP.md](DOCS/LOCAL_SETUP.md) | 로컬 개발 환경 구성 가이드 | ✅ 완료 |
 | [TEST_GUIDE.md](DOCS/TEST_GUIDE.md) | 테스트 & 운영 검증 가이드 (9단계) | ✅ 완료 |
+| [AI_SERVICE_FLOW.md](DOCS/AI_SERVICE_FLOW.md) | AI 서비스 처리 흐름 상세 설명 (초보자용) | ✅ 완료 |
 
 ---
 

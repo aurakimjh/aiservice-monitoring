@@ -3,7 +3,7 @@
 > **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-05 (Session 5 완료 기준)
+> **최종 업데이트**: 2026-03-09 (Session 6 완료 기준)
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
 ---
@@ -31,7 +31,7 @@ Phase 3: SDK 계측 코드      [██████████] 100%  ✅
 Phase 4: Grafana 대시보드   [██████████] 100%  ✅
 Phase 5: 통합 테스트 & 검증  [██████████] 100%  ✅  (load-test.py 포함 전체 완성)
 Phase 6: 운영 자동화        [██████████] 100%  ✅  (Helm Chart + GitHub Actions 완성)
-Phase 7: E2E 통합 검증      [░░░░░░░░░░]   0%  📋  🔧 수작업 (로컬 Docker + 부하 + Trace 검증)
+Phase 7: E2E 통합 검증      [███░░░░░░░]  30%  🔄  (RAG 데모 + 버그 픽스 완료, Docker 통합 테스트 대기)
 Phase 8: Kubernetes 배포    [░░░░░░░░░░]   0%  📋  🔧 수작업 (Helm 배포 + 스테이징 + 프로덕션)
 Phase 9: SLO 튜닝/운영 안정화 [░░░░░░░░░░]   0%  📋  🔧 수작업 (임계치 + 샘플링 + 대시보드)
 ```
@@ -320,6 +320,65 @@ Phase 9: SLO 튜닝/운영 안정화 [░░░░░░░░░░]   0%  📋
 
 ---
 
+## Session 6 완료 내역 ✅
+
+> **날짜**: 2026-03-09 (6회차)
+> **커밋**: (아래 참조) — XLog 대시보드, 문서 강화, 버그 픽스, RAG 데모
+
+### 완료된 작업
+
+#### XLog/HeatMap 실시간 대시보드 (신규 6파일)
+- [x] **`dashboards/xlog-heatmap/index.html`** — 메인 대시보드 페이지 (다크 테마, 서비스 필터, 시간 범위, 데이터 소스 선택)
+- [x] **`dashboards/xlog-heatmap/css/dashboard.css`** — Grafana 스타일 다크 테마 CSS
+- [x] **`dashboards/xlog-heatmap/js/data-source.js`** — 3모드 데이터 소스 (demo/prometheus/tempo)
+- [x] **`dashboards/xlog-heatmap/js/xlog-chart.js`** — Canvas 기반 Scatter Plot (그리드 인덱싱, 드래그 줌, 임계선)
+- [x] **`dashboards/xlog-heatmap/js/heatmap-chart.js`** — Canvas 기반 HeatMap (7개 응답시간 밴드, 5초 버킷)
+- [x] **`dashboards/xlog-heatmap/js/app.js`** — IIFE 오케스트레이터 (5초 주기 데이터 페치, 통계 표시)
+- [x] **`infra/docker/docker-compose.yaml`** — xlog-dashboard nginx 서비스 추가 (port 8080)
+
+#### 문서 강화 (초보자용 설명 추가)
+- [x] **`DOCS/ARCHITECTURE.md`** — "이 문서를 읽기 전에 — 핵심 개념 이해하기" 섹션 추가 (고속도로 CCTV 비유)
+- [x] **`DOCS/METRICS_DESIGN.md`** — "AI 서비스 성능 지표란? — 초보자 가이드" 섹션 추가 (식당/타자기/책상 비유)
+- [x] **`DOCS/LOCAL_SETUP.md`** — "완전 초보자를 위한 안내" 섹션 추가 (자동차 계기판/택배 비유)
+- [x] **`DOCS/TEST_GUIDE.md`** — 각 Level에 "왜 필요한가?/실패 시?" 설명 추가, Tempo FAQ, helm dependency 단계, 부록 A(RAG 데모 통합 테스트)
+- [x] **`DOCS/AI_SERVICE_FLOW.md`** (신규, ~530줄) — AI 서비스 처리 흐름 7단계 상세 (택배 추적/도서관/레스토랑 비유, 4개 시나리오, 30개 용어 사전)
+- [x] **`DOCS/html/` 폴더 삭제** — 4개 HTML 파일 제거 (ARCHITECTURE, LOCAL_SETUP, METRICS_DESIGN, README)
+- [x] **`README.md`** — AI_SERVICE_FLOW.md 문서 테이블에 추가
+
+#### 프로젝트 버그 픽스 (Critical 5건 중 3건 수정)
+- [x] **`infra/docker/prometheus.yaml`** — `metric_relabel_configs` regex를 `(otelcol|aiservice)_.*`로 수정 (애플리케이션 메트릭 드롭 방지)
+- [x] **`infra/docker/docker-compose.yaml`** — Jaeger 포트 `14268→14269` (OTel Collector와 포트 충돌 해소)
+- [x] **`DOCS/TEST_GUIDE.md`** — `--lookback 1h` → `--hours 1` 수정 (스크립트 실제 인터페이스와 일치)
+- [x] **`sdk-instrumentation/python/otel_setup.py`** — Auto-instrumentation 개별 try/except 래핑 (미설치 라이브러리 오류 방지)
+- [x] **`sdk-instrumentation/python/` 하위 5개 `__init__.py`** 생성 — ModuleNotFoundError 해소
+
+#### RAG 데모 프로젝트 (신규 30파일, `demo/rag-service/`)
+- [x] **`app/main.py`** — FastAPI 앱 (OTel 초기화, 샘플 문서 자동 로딩, CORS)
+- [x] **`app/config.py`** — pydantic-settings 기반 설정 (`mock_mode=True` 기본)
+- [x] **`app/models.py`** — Pydantic 모델 (ChatRequest/Response, SourceDocument, ResponseMetrics)
+- [x] **`app/services/rag_service.py`** — RAG 파이프라인 오케스트레이터 (가드레일→임베딩→벡터검색→LLM→출력검증)
+- [x] **`app/services/vector_store.py`** — 인메모리 벡터 스토어 (numpy, 코사인 유사도)
+- [x] **`app/services/embedding_service.py`** — Mock(MD5 해시 기반)/Real(OpenAI) 임베딩
+- [x] **`app/services/llm_service.py`** — Mock(한국어 템플릿)/Real(OpenAI) LLM (TTFT/TPS 계측)
+- [x] **`app/services/guardrail_service.py`** — 키워드 기반 입출력 안전 검사
+- [x] **`app/instrumentation/otel_setup.py`** — TracerProvider + MeterProvider OTLP gRPC 설정
+- [x] **`app/instrumentation/rag_tracer.py`** — `@trace_rag_step()` 데코레이터 (sync/async 지원)
+- [x] **`app/instrumentation/metrics.py`** — 8개 히스토그램 + 2개 카운터
+- [x] **`app/routers/chat.py`** — POST `/api/chat` (동기/SSE 스트리밍)
+- [x] **`app/routers/documents.py`** — 문서 업로드/목록 API
+- [x] **`app/routers/health.py`** — 헬스체크 엔드포인트
+- [x] **3개 샘플 문서** — 회사 정책, 제품 매뉴얼, AI/ML 기술 가이드 (한국어)
+- [x] **`requirements.txt`**, **`Dockerfile`**, **`docker-compose.yaml`**, **`.env.example`**, **`README.md`**
+- [x] **3개 테스트 파일** — vector_store, API, rag_service 테스트
+- [x] **5개 `__init__.py`** — Python 패키지 초기화
+
+#### 미수정 이슈 (향후 검토)
+- ⚠️ `helm/values.yaml` line 99: Go 템플릿 문법이 values 파일에 포함됨
+- ⚠️ Grafana 대시보드 `__inputs` 변수: 파일 기반 프로비저닝 시 미해결
+- ⚠️ `values-prod.yaml` 중복 `alertmanagerSpec` 키
+
+---
+
 ## 미완료 항목 — Phase 5: 통합 테스트
 
 > **모두 완료됨.** 잔여 없음.
@@ -423,6 +482,15 @@ Phase 9: SLO 튜닝/운영 안정화 [░░░░░░░░░░]   0%  📋
 | `.github/workflows/validate-traces.yaml` | ✅ | — | staging Tempo 단절 탐지 |
 | `collector/pipelines/traces-pipeline.md` | ✅ | — | 트레이스 흐름 다이어그램 |
 | `collector/pipelines/metrics-pipeline.md` | ✅ | — | 지표 파이프라인 문서 |
+| `DOCS/AI_SERVICE_FLOW.md` | ✅ | ~530 | AI 서비스 처리 흐름 (초보자용) |
+| `dashboards/xlog-heatmap/index.html` | ✅ | — | XLog/HeatMap 대시보드 메인 |
+| `dashboards/xlog-heatmap/css/dashboard.css` | ✅ | — | 다크 테마 CSS |
+| `dashboards/xlog-heatmap/js/data-source.js` | ✅ | — | 3모드 데이터 소스 |
+| `dashboards/xlog-heatmap/js/xlog-chart.js` | ✅ | — | Canvas Scatter Plot |
+| `dashboards/xlog-heatmap/js/heatmap-chart.js` | ✅ | — | Canvas HeatMap |
+| `dashboards/xlog-heatmap/js/app.js` | ✅ | — | 대시보드 오케스트레이터 |
+| `demo/rag-service/` | ✅ | 30파일 | RAG 데모 서비스 (mock_mode 지원) |
+| `sdk-instrumentation/python/__init__.py` (×5) | ✅ | — | 패키지 초기화 |
 
 ---
 
@@ -688,6 +756,9 @@ Phase 9: SLO 튜닝 및 운영 안정화  📋 🔧 수작업
 | `3832418` | docs: add WORK_STATUS.md — project progress tracker and TODO master | 1 |
 | `50e5ba1` | feat: complete SDK instrumentation, K8s manifests, Grafana dashboards, and scripts | 19 |
 | (Session 4) | feat: add load-test.py and Helm chart (Chart.yaml + values.yaml) | 3 |
+| `d6d690a` | feat: complete Phase 6 — Helm templates, CI/CD workflows, and pipeline docs | — |
+| `1bdd8e8` | docs: add TEST_GUIDE.md, enhance DOCS technical accuracy, add Phase 7-9 manual roadmap | — |
+| (Session 6) | feat: add XLog dashboard, RAG demo, docs enhancement, and critical bug fixes | ~50 |
 
 ---
 

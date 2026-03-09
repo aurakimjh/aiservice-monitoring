@@ -20,7 +20,7 @@ scrape_configs:
       - targets: [otel-collector:8889]
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: "otelcol_.*"
+        regex: "(otelcol|aiservice)_.*"
         action: keep
 
   # Collector 내부 상태 메트릭

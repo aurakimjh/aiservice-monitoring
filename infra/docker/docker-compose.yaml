@@ -156,9 +156,22 @@ services:
       - MEMORY_MAX_TRACES=10000
     ports:
       - "16686:16686"  # Jaeger UI
-      - "14268:14268"  # Jaeger HTTP Thrift (레거시)
+      - "14269:14268"  # Jaeger HTTP Thrift (레거시, 14268은 OTel Collector와 충돌 방지)
       - "14250:14250"  # Jaeger gRPC
     networks:
       monitoring:
         ipv4_address: 172.20.0.15
+    restart: unless-stopped
+
+  # ── XLog & HeatMap 대시보드 (Scouter/Whatap 스타일) ──────────────
+  xlog-dashboard:
+    image: nginx:alpine
+    container_name: xlog-dashboard
+    volumes:
+      - ../../dashboards/xlog-heatmap:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"    # XLog Dashboard UI
+    networks:
+      monitoring:
+        ipv4_address: 172.20.0.16
     restart: unless-stopped

@@ -99,6 +99,21 @@ Level 9: CI 로컬 실행          ← act CLI 선택 (15분)
 
 > **목표**: Docker Compose로 모니터링 스택 6개 서비스가 정상 기동되는지 확인
 
+### 왜 이 테스트가 필요한가?
+
+모니터링의 가장 기본은 **모니터링 도구 자체가 동작하는 것**입니다.
+건물의 화재 경보기가 고장나 있으면 화재를 감지할 수 없듯이,
+모니터링 스택이 가동되지 않으면 어떤 성능 문제도 발견할 수 없습니다.
+이 테스트는 6개 핵심 서비스가 모두 정상 동작하는지 확인하는 기초 체크입니다.
+
+### 이 테스트가 실패하면?
+
+- **포트 충돌**: 이미 다른 프로그램이 같은 포트를 사용 중일 수 있습니다.
+  `netstat -ano | findstr :4317` 명령으로 점유 프로세스를 확인하세요.
+- **Docker 미실행**: Docker Desktop이 실행 중인지 확인하세요.
+- **메모리 부족**: 6개 서비스를 동시에 띄우려면 최소 4GB 여유 메모리가 필요합니다.
+  Docker Desktop → Settings → Resources에서 메모리 할당을 확인하세요.
+
 ### Step 1: 스택 시작
 
 ```bash
@@ -192,6 +207,18 @@ docker compose -f infra/docker/docker-compose.yaml up -d
 
 > **목표**: Python SDK로 테스트 Span/Metric을 생성하고, Collector가 수신하는지 확인
 > **전제 조건**: Level 1 완료 (인프라 스택 가동 중)
+
+### 왜 이 테스트가 필요한가?
+
+인프라 서비스가 떠 있어도, 실제 데이터가 **수집되는지**는 별개의 문제입니다.
+도로가 깔려 있어도 차가 실제로 달릴 수 있는지 테스트하는 것과 같습니다.
+SDK → Collector → 저장소(Jaeger/Prometheus)까지 데이터가 흘러가는지 확인합니다.
+
+### 이 테스트가 실패하면?
+
+- **트레이스가 전송되지 않음**: OTel Collector의 gRPC 엔드포인트(4317)에 접근 가능한지 확인하세요.
+- **Jaeger에 서비스가 안 보임**: Collector 로그에서 exporter 오류를 확인하세요. 전송 후 10-30초 대기가 필요합니다(batch processor 버퍼).
+- **Prometheus 메트릭이 0**: Collector의 Prometheus exporter(8889 포트)가 정상 동작하는지 확인하세요.
 
 ### Step 1: 테스트 트레이스 발생
 
@@ -290,6 +317,18 @@ else:
 
 > **목표**: Grafana에 5개 대시보드가 프로비저닝되어 있는지 확인
 > **전제 조건**: Level 1 완료
+
+### 왜 이 테스트가 필요한가?
+
+대시보드는 수집된 데이터를 **눈으로 볼 수 있게** 해주는 핵심 UI입니다.
+데이터가 수집되어도 대시보드가 없으면 활용할 수 없습니다.
+5개 대시보드와 3개 데이터소스가 올바르게 연결되었는지 확인합니다.
+
+### 이 테스트가 실패하면?
+
+- **대시보드가 안 보임**: Grafana 컨테이너가 dashboard JSON 파일을 올바르게 마운트했는지 확인하세요. `docker compose logs grafana --tail=30`으로 프로비저닝 오류를 확인할 수 있습니다.
+- **데이터소스 연결 실패**: Grafana 내 Data sources에서 각 소스의 URL이 올바른지 확인하세요 (Prometheus: `http://prometheus:9090`, Tempo: `http://tempo:3200`, Loki: `http://loki:3100`).
+- **대시보드에 "No Data" 표시**: 정상입니다. 아직 실제 AI 서비스가 연결되지 않았기 때문입니다. 데이터소스 연결만 정상이면 PASS입니다.
 
 ### Step 1: Grafana 접속
 
@@ -501,7 +540,7 @@ python -c "import ast; ast.parse(open('scripts/validate-traces.py').read()); pri
 ```bash
 python scripts/validate-traces.py \
   --tempo-url http://localhost:3200 \
-  --lookback 1h
+  --hours 1
 ```
 
 > **참고**: Level 2에서 전송한 테스트 트레이스가 있어야 결과가 나옵니다.
@@ -512,7 +551,7 @@ python scripts/validate-traces.py \
 ```bash
 python scripts/validate-traces.py \
   --tempo-url http://localhost:3200 \
-  --lookback 1h \
+  --hours 1 \
   --fail-on-broken
 ```
 
@@ -576,7 +615,16 @@ brew install helm
 snap install helm --classic
 ```
 
-### Step 2: Chart Lint (문법 검증)
+### Step 2: 서브차트 의존성 다운로드 (최초 1회)
+
+```bash
+# Helm 서브차트 다운로드 (인터넷 연결 필요)
+helm dependency update helm/aiservice-monitoring/
+```
+
+> 이 단계를 건너뛰면 Step 3~4에서 의존성 오류가 발생합니다.
+
+### Step 3: Chart Lint (문법 검증)
 
 ```bash
 helm lint helm/aiservice-monitoring/
@@ -813,7 +861,20 @@ bash scripts/test-alerts.sh
 wsl bash scripts/test-alerts.sh
 ```
 
-### Q7: Helm template 실행 시 서브차트 의존성 오류
+### Q7: Tempo에서 트레이스가 검색되지 않습니다
+
+Tempo는 트레이스를 수신한 후 인덱싱하는 데 약간의 시간이 걸립니다:
+```bash
+# Tempo 상태 확인
+curl -s http://localhost:3200/ready
+# "ready"가 아니면 아직 초기화 중
+
+# Tempo에 직접 트레이스 검색 (TraceQL)
+curl -s 'http://localhost:3200/api/search?q={}&limit=5' | python -m json.tool
+```
+트레이스 전송 후 30초~1분 정도 기다린 후 다시 시도하세요.
+
+### Q8: Helm template 실행 시 서브차트 의존성 오류
 
 ```bash
 # 서브차트 의존성 다운로드
@@ -827,7 +888,55 @@ helm template test-release helm/aiservice-monitoring/
 
 ---
 
-## 부록: 테스트 완료 후 정리
+## 부록 A: RAG 데모 서비스로 통합 테스트
+
+> Level 1~3 완료 후, RAG 데모 서비스를 이용하면 실제 AI 서비스에서
+> 생성되는 트레이스와 메트릭을 확인할 수 있습니다.
+
+### Step 1: RAG 데모 서비스 실행
+
+```bash
+cd /c/workspace/aiservice-monitoring/demo/rag-service
+
+# 가상환경 설정
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 서비스 시작
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+MOCK_MODE=true \
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### Step 2: API 호출로 트레이스 생성
+
+```bash
+# RAG 질문 (문서 검색 + LLM 추론)
+curl -s -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "연차 휴가 정책을 알려주세요"}' | python -m json.tool
+
+# 여러 번 호출하여 다양한 트레이스 생성
+for i in {1..10}; do
+  curl -s -X POST http://localhost:8000/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"question": "원격 근무 정책은?"}'
+done
+```
+
+### Step 3: 모니터링 확인
+
+1. **Jaeger** (http://localhost:16686): Service `rag-demo-service` 선택 → 트레이스 확인
+   - `rag.pipeline` 부모 Span 아래에 `rag.guardrail_input_check`, `rag.embedding`, `rag.vector_search`, `rag.llm_inference` 등의 자식 Span이 보여야 합니다.
+
+2. **Grafana** (http://localhost:3000): AI Service Overview 대시보드에서 요청 수 확인
+
+3. **XLog Dashboard** (http://localhost:8080): 실시간 산점도에서 요청 포인트 확인
+
+---
+
+## 부록 B: 테스트 완료 후 정리
 
 ```bash
 # 로컬 스택 중지 (데이터 보존)
