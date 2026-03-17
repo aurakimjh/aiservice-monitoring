@@ -14,20 +14,16 @@ from app.services.rag_service import RAGService
 # ── 전역 RAG 서비스 인스턴스 ───────────────────────────────────
 rag_service = RAGService()
 
+# ── OTel 초기화 (앱 생성 전에 실행) ───────────────────────────
+tracer_provider = setup_otel()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 시 실행되는 컨텍스트"""
 
     # ── Startup ────────────────────────────────────────────────
-    # 1. OTel 초기화
-    tracer_provider = setup_otel()
-
-    # 2. FastAPI 자동 계측
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    FastAPIInstrumentor.instrument_app(app)
-
-    # 3. 샘플 문서 로드
+    # 샘플 문서 로드
     sample_dir = Path(__file__).parent / "sample_docs"
     if sample_dir.exists():
         docs = []
@@ -67,6 +63,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── FastAPI 자동 계측 (앱 생성 후, 서버 시작 전) ─────────────
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+FastAPIInstrumentor.instrument_app(app)
 
 # ── 라우터 등록 ────────────────────────────────────────────────
 from app.routers import chat, documents, health

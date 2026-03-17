@@ -51,12 +51,11 @@ services:
       monitoring:
         ipv4_address: 172.20.0.10
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
-             "http://localhost:13133/health"]
+      test: ["CMD", "/otelcol-contrib", "components"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   # ── Prometheus ─────────────────────────────────────────────────────

@@ -63,13 +63,11 @@ exporters:
   # Loki (로그)
   loki:
     endpoint: "http://loki:3100/loki/api/v1/push"
-    labels:
-      resource:
-        service.name: "service_name"
-        deployment.environment: "env"
-      attributes:
-        guardrail.action: "guardrail_action"
-        llm.model: "llm_model"
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
 
   # 디버그 콘솔 출력 (개발 시 확인용)
   debug:
