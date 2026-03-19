@@ -7,8 +7,12 @@
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (상용 솔루션 수준)
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성
+>
+> **외부 참조**:
+> - AITOP_구현_차세대_방향성.MD — AITOP 에이전트가 참조하는 OTel 표준 메트릭명 매핑 (ITEM0200~0230)
 
 ---
 

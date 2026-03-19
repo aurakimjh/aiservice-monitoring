@@ -27,8 +27,14 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 aiservice-monitoring/
 │
 ├── DOCS/                                  # 설계 문서
-│   ├── METRICS_DESIGN.md                 # 지표 정의 및 수집 방안 (현재 문서)
-│   └── ARCHITECTURE.md                   # OTel 아키텍처 설계 (TODO)
+│   ├── METRICS_DESIGN.md                 # 지표 정의 및 수집 방안
+│   ├── ARCHITECTURE.md                   # OTel 아키텍처 설계
+│   ├── UI_DESIGN.md                      # 통합 모니터링 대시보드 UI 설계 (상용 솔루션)
+│   ├── XLOG_DASHBOARD_REDESIGN.md        # XLog/HeatMap 대시보드 상세 설계
+│   ├── AI_SERVICE_FLOW.md                # AI 서비스 처리 흐름 (입문자용)
+│   ├── LOCAL_SETUP.md                    # 로컬 개발 환경 구성 가이드
+│   ├── TEST_GUIDE.md                     # 테스트 & 운영 검증 가이드
+│   └── MANUAL_TESTING_GUIDE.md           # 수동 테스트 절차
 │
 ├── collector/                             # OpenTelemetry Collector 설정
 │   ├── config/

@@ -7,8 +7,13 @@
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (상용 솔루션 수준)
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 가이드
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
+> - [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) — XLog/HeatMap 대시보드 상세 설계
+>
+> **외부 참조**:
+> - AITOP_구현_차세대_방향성.MD — 에이전트 기반 수집 아키텍처 및 AI 진단 31개 항목 통합 설계
 
 ---
 
