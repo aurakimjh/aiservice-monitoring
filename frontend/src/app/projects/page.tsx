@@ -1,21 +1,29 @@
 'use client';
 
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { SearchInput, Button } from '@/components/ui';
+import { SearchInput, Button, Select } from '@/components/ui';
 import { StatusIndicator } from '@/components/monitoring';
+import { useProjectStore } from '@/stores/project-store';
+import { getRelativeTime } from '@/lib/utils';
 import { FolderOpen, Plus, Server, Network, Bot, Bell } from 'lucide-react';
-import type { Status, Environment } from '@/types/monitoring';
+import type { Environment, Status } from '@/types/monitoring';
 
-const DEMO_PROJECTS: {
-  id: string; name: string; env: Environment; status: Status;
-  hosts: number; services: number; aiServices: number; alerts: number;
-  errorRate: number; p95: number; lastActivity: string;
-}[] = [
-  { id: '1', name: 'AI-Production', env: 'production', status: 'healthy', hosts: 12, services: 8, aiServices: 3, alerts: 1, errorRate: 0.12, p95: 245, lastActivity: '2m ago' },
-  { id: '2', name: 'E-Commerce-Staging', env: 'staging', status: 'warning', hosts: 6, services: 5, aiServices: 0, alerts: 2, errorRate: 0.85, p95: 380, lastActivity: '15m ago' },
-  { id: '3', name: 'Banking-Core', env: 'production', status: 'healthy', hosts: 20, services: 15, aiServices: 1, alerts: 0, errorRate: 0.05, p95: 120, lastActivity: '30s ago' },
-  { id: '4', name: 'ML-Training', env: 'development', status: 'critical', hosts: 4, services: 2, aiServices: 2, alerts: 3, errorRate: 2.1, p95: 1200, lastActivity: '5m ago' },
+const ENV_OPTIONS = [
+  { label: 'All Environments', value: 'all' },
+  { label: 'Production', value: 'production' },
+  { label: 'Staging', value: 'staging' },
+  { label: 'Development', value: 'development' },
+];
+
+const STATUS_OPTIONS = [
+  { label: 'All Status', value: 'all' },
+  { label: 'Healthy', value: 'healthy' },
+  { label: 'Warning', value: 'warning' },
+  { label: 'Critical', value: 'critical' },
 ];
 
 const envColor: Record<Environment, string> = {
@@ -25,6 +33,21 @@ const envColor: Record<Environment, string> = {
 };
 
 export default function ProjectsPage() {
+  const router = useRouter();
+  const projects = useProjectStore((s) => s.projects);
+  const [search, setSearch] = useState('');
+  const [envFilter, setEnvFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filtered = useMemo(() => {
+    return projects.filter((p) => {
+      if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (envFilter !== 'all' && p.environment !== envFilter) return false;
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      return true;
+    });
+  }, [projects, search, envFilter, statusFilter]);
+
   return (
     <div className="space-y-4">
       <Breadcrumb items={[
@@ -33,51 +56,71 @@ export default function ProjectsPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Projects</h1>
-        <Button variant="primary" size="md">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          Projects
+          <span className="ml-2 text-sm font-normal text-[var(--text-muted)]">({filtered.length})</span>
+        </h1>
+        <Button variant="primary" size="md" onClick={() => router.push('/projects/new')}>
           <Plus size={14} />
           New Project
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <SearchInput placeholder="Search projects..." className="max-w-xs" />
+      <div className="flex items-center gap-2 flex-wrap">
+        <SearchInput
+          placeholder="Search projects..."
+          className="w-64"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select options={ENV_OPTIONS} value={envFilter} onChange={(e) => setEnvFilter(e.target.value)} />
+        <Select options={STATUS_OPTIONS} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {DEMO_PROJECTS.map((p) => (
-          <Card key={p.id} hover padding="md">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <StatusIndicator status={p.status} size="sm" />
-                  <span className="text-sm font-semibold text-[var(--text-primary)]">{p.name}</span>
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-sm text-[var(--text-muted)]">
+          No projects match your filters.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filtered.map((p) => (
+            <Link key={p.id} href={`/projects/${p.id}`}>
+              <Card hover padding="md" className="h-full">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <StatusIndicator status={p.status} size="sm" />
+                      <span className="text-sm font-semibold text-[var(--text-primary)]">{p.name}</span>
+                    </div>
+                    <span className={`text-[10px] font-medium ${envColor[p.environment]}`}>{p.environment}</span>
+                  </div>
+                  {p.alertCount > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] text-[var(--status-critical)]">
+                      <Bell size={10} /> {p.alertCount}
+                    </span>
+                  )}
                 </div>
-                <span className={`text-[10px] ${envColor[p.env]}`}>{p.env}</span>
-              </div>
-              {p.alerts > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-[var(--status-critical)]">
-                  <Bell size={10} /> {p.alerts}
-                </span>
-              )}
-            </div>
 
-            <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)] mb-3">
-              <span className="flex items-center gap-1"><Server size={11} /> {p.hosts}</span>
-              <span className="flex items-center gap-1"><Network size={11} /> {p.services}</span>
-              <span className="flex items-center gap-1"><Bot size={11} /> {p.aiServices}</span>
-            </div>
+                <p className="text-xs text-[var(--text-muted)] mb-3 line-clamp-2">{p.description}</p>
 
-            <div className="flex items-center justify-between text-xs">
-              <div className="space-x-3">
-                <span className="text-[var(--text-muted)]">Error: <span className="text-[var(--text-secondary)] tabular-nums">{p.errorRate}%</span></span>
-                <span className="text-[var(--text-muted)]">P95: <span className="text-[var(--text-secondary)] tabular-nums">{p.p95}ms</span></span>
-              </div>
-              <span className="text-[var(--text-muted)]">{p.lastActivity}</span>
-            </div>
-          </Card>
-        ))}
-      </div>
+                <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)] mb-3">
+                  <span className="flex items-center gap-1"><Server size={11} /> {p.hostCount}</span>
+                  <span className="flex items-center gap-1"><Network size={11} /> {p.serviceCount}</span>
+                  <span className="flex items-center gap-1"><Bot size={11} /> {p.aiServiceCount}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs border-t border-[var(--border-muted)] pt-2">
+                  <div className="space-x-3">
+                    <span className="text-[var(--text-muted)]">Error: <span className="text-[var(--text-secondary)] tabular-nums">{p.errorRate}%</span></span>
+                    <span className="text-[var(--text-muted)]">P95: <span className="text-[var(--text-secondary)] tabular-nums">{p.p95Latency}ms</span></span>
+                  </div>
+                  <span className="text-[var(--text-muted)]">{getRelativeTime(p.lastActivity)}</span>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
