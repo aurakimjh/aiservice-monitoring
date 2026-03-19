@@ -1,85 +1,184 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, Tabs } from '@/components/ui';
-import { StatusIndicator } from '@/components/monitoring';
-import { Network, List, Share2 } from 'lucide-react';
-import type { Status } from '@/types/monitoring';
+import { Card, CardHeader, CardTitle, Tabs, SearchInput, Select, Button, Badge } from '@/components/ui';
+import { StatusIndicator, KPICard, ServiceMap } from '@/components/monitoring';
+import { useProjectStore } from '@/stores/project-store';
+import { getProjectServices, getServiceTopology, LAYER_CONFIG, type ServiceLayer } from '@/lib/demo-data';
+import { formatDuration } from '@/lib/utils';
+import { Network, List, GitBranch, Plus } from 'lucide-react';
 
-const DEMO_SERVICES: {
-  name: string; framework: string; p95: number; rpm: number;
-  errorRate: number; status: Status;
-}[] = [
-  { name: 'api-gateway', framework: 'Spring Boot', p95: 120, rpm: 4520, errorRate: 0.08, status: 'healthy' },
-  { name: 'user-service', framework: 'Express.js', p95: 85, rpm: 2310, errorRate: 0.12, status: 'healthy' },
-  { name: 'payment-service', framework: 'FastAPI', p95: 340, rpm: 890, errorRate: 1.45, status: 'warning' },
-  { name: 'inventory-service', framework: 'Go Fiber', p95: 45, rpm: 3100, errorRate: 0.03, status: 'healthy' },
-  { name: 'notification-service', framework: 'NestJS', p95: 1200, rpm: 670, errorRate: 4.2, status: 'critical' },
+const VIEW_TABS = [
+  { id: 'list', label: 'List', icon: <List size={13} /> },
+  { id: 'map', label: 'Service Map', icon: <GitBranch size={13} /> },
 ];
 
-const SERVICE_TABS = [
-  { id: 'list', label: 'List', icon: <List size={14} /> },
-  { id: 'service-map', label: 'Service Map', icon: <Share2 size={14} /> },
+const STATUS_OPTIONS = [
+  { label: 'All Status', value: 'all' },
+  { label: 'Healthy', value: 'healthy' },
+  { label: 'Warning', value: 'warning' },
+  { label: 'Critical', value: 'critical' },
+];
+
+const LAYER_OPTIONS: { label: string; value: string }[] = [
+  { label: 'All Layers', value: 'all' },
+  ...Object.entries(LAYER_CONFIG).map(([k, v]) => ({ label: v.label, value: k })),
 ];
 
 export default function ServicesPage() {
-  const [activeTab, setActiveTab] = useState('list');
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const services = getProjectServices(currentProjectId ?? 'proj-ai-prod');
+  const topology = getServiceTopology(currentProjectId ?? 'proj-ai-prod');
+
+  const [view, setView] = useState('list');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [layerFilter, setLayerFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'name' | 'p95' | 'rpm' | 'error'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const filtered = useMemo(() => {
+    const result = services.filter((s) => {
+      if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+      return true;
+    });
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sortBy === 'p95') cmp = a.latencyP95 - b.latencyP95;
+      else if (sortBy === 'rpm') cmp = a.rpm - b.rpm;
+      else if (sortBy === 'error') cmp = a.errorRate - b.errorRate;
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+    return result;
+  }, [services, search, statusFilter, sortBy, sortDir]);
+
+  const handleSort = (col: typeof sortBy) => {
+    if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortBy(col); setSortDir('asc'); }
+  };
+  const sortIcon = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const activeLayerFilter: ServiceLayer[] | undefined =
+    layerFilter === 'all' ? undefined : [layerFilter as ServiceLayer];
+
+  // KPI
+  const total = services.length;
+  const healthy = services.filter((s) => s.status === 'healthy').length;
+  const avgP95 = total > 0 ? Math.round(services.reduce((s, sv) => s + sv.latencyP95, 0) / total) : 0;
+  const totalRpm = services.reduce((s, sv) => s + sv.rpm, 0);
+  const avgError = total > 0 ? (services.reduce((s, sv) => s + sv.errorRate, 0) / total) : 0;
 
   return (
     <div className="space-y-4">
       <Breadcrumb items={[
         { label: 'Home', href: '/' },
-        { label: 'Services', icon: <Network size={14} /> },
+        { label: 'Services (APM)', icon: <Network size={14} /> },
       ]} />
 
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">Services</h1>
+        <Button variant="secondary" size="md"><Plus size={14} /> Register Service</Button>
       </div>
 
-      <Tabs tabs={SERVICE_TABS} activeTab={activeTab} onChange={setActiveTab} variant="pill" />
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <KPICard title="Total Services" value={total} subtitle={`${healthy} healthy`} status="healthy" />
+        <KPICard title="Avg P95 Latency" value={avgP95} unit="ms" status={avgP95 > 1000 ? 'warning' : 'healthy'} />
+        <KPICard title="Total Throughput" value={totalRpm.toLocaleString()} unit="rpm" status="healthy" />
+        <KPICard title="Avg Error Rate" value={avgError.toFixed(2)} unit="%" status={avgError > 0.5 ? 'warning' : 'healthy'} />
+        <KPICard title="Dependencies" value={topology.edges.length} subtitle="call relationships" />
+      </div>
 
-      {activeTab === 'list' && (
+      {/* Filters + View Toggle */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <SearchInput placeholder="Search services..." className="w-56" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select options={STATUS_OPTIONS} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} />
+        {view === 'map' && (
+          <Select options={LAYER_OPTIONS} value={layerFilter} onChange={(e) => setLayerFilter(e.target.value)} />
+        )}
+        <div className="ml-auto">
+          <Tabs tabs={VIEW_TABS} activeTab={view} onChange={setView} variant="pill" />
+        </div>
+      </div>
+
+      {/* List View */}
+      {view === 'list' && (
         <Card padding="none">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-[var(--border-default)] text-[var(--text-secondary)]">
-                  <th className="text-left font-medium px-4 py-2.5">Service Name</th>
-                  <th className="text-left font-medium px-4 py-2.5">Framework</th>
-                  <th className="text-right font-medium px-4 py-2.5">P95</th>
-                  <th className="text-right font-medium px-4 py-2.5">RPM</th>
-                  <th className="text-right font-medium px-4 py-2.5">Error Rate</th>
-                  <th className="text-left font-medium px-4 py-2.5">Status</th>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('name')}>Service{sortIcon('name')}</th>
+                  <th className="px-4 py-2.5 font-medium">Framework</th>
+                  <th className="px-4 py-2.5 font-medium text-right">P50</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('p95')}>P95{sortIcon('p95')}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">P99</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('rpm')}>RPM{sortIcon('rpm')}</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('error')}>Error Rate{sortIcon('error')}</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {DEMO_SERVICES.map((svc) => (
-                  <tr
-                    key={svc.name}
-                    className="border-b border-[var(--border-muted)] last:border-0 hover:bg-[var(--bg-tertiary)] transition-colors"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-[13px] text-[var(--text-primary)]">{svc.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{svc.framework}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{svc.p95} ms</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{svc.rpm.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{svc.errorRate}%</td>
-                    <td className="px-4 py-2.5"><StatusIndicator status={svc.status} size="sm" /></td>
+                {filtered.map((s) => (
+                  <tr key={s.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                    <td className="px-4 py-2.5">
+                      <Link href={`/services/${s.id}`} className="font-medium text-[var(--accent-primary)] hover:underline">
+                        <Network size={12} className="inline mr-1.5 text-[var(--text-muted)]" />
+                        {s.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">
+                      {s.framework} <span className="text-[var(--text-muted)]">({s.language})</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(s.latencyP50)}</td>
+                    <td className={cn('px-4 py-2.5 text-right tabular-nums font-medium', s.latencyP95 > 2000 ? 'text-[var(--status-critical)]' : s.latencyP95 > 500 ? 'text-[var(--status-warning)]' : 'text-[var(--text-secondary)]')}>
+                      {formatDuration(s.latencyP95)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(s.latencyP99)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{s.rpm.toLocaleString()}</td>
+                    <td className={cn('px-4 py-2.5 text-right tabular-nums', s.errorRate > 0.5 ? 'text-[var(--status-critical)] font-medium' : s.errorRate > 0.1 ? 'text-[var(--status-warning)]' : 'text-[var(--text-secondary)]')}>
+                      {s.errorRate}%
+                    </td>
+                    <td className="px-4 py-2.5"><StatusIndicator status={s.status} size="sm" /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {filtered.length === 0 && <div className="text-center py-12 text-sm text-[var(--text-muted)]">No services match your filters.</div>}
         </Card>
       )}
 
-      {activeTab === 'service-map' && (
-        <Card padding="lg">
-          <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm">
-            <div className="text-center space-y-2">
-              <Share2 size={32} className="mx-auto opacity-40" />
-              <p>Service dependency map coming soon</p>
+      {/* Service Map View */}
+      {view === 'map' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Service Topology</CardTitle>
+            <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+              {Object.entries(LAYER_CONFIG).map(([key, config]) => (
+                <span key={key} className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
+                  {config.label.split(': ')[1]}
+                </span>
+              ))}
             </div>
+          </CardHeader>
+          <ServiceMap
+            nodes={topology.nodes}
+            edges={topology.edges}
+            layerFilter={activeLayerFilter}
+            onNodeClick={(id) => {
+              const svc = services.find((s) => s.id === id || s.name === topology.nodes.find((n) => n.id === id)?.name);
+              if (svc) window.location.href = `/services/${svc.id}`;
+            }}
+          />
+          <div className="mt-3 pt-3 border-t border-[var(--border-muted)] text-[10px] text-[var(--text-muted)]">
+            Node size = throughput (RPM) &middot; Node color = health status &middot; Edge thickness = call volume &middot; Drag nodes to rearrange &middot; Scroll to zoom
           </div>
         </Card>
       )}

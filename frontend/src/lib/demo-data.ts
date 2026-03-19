@@ -137,3 +137,67 @@ export function getHealthCells(projectId: string): { id: string; label: string; 
     detail: h.gpus ? `GPU VRAM: ${h.gpus[0]?.vramPercent}%` : `CPU: ${h.cpuPercent}%`,
   }));
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Service Topology — 서비스 맵용 노드/엣지 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export type ServiceLayer = 'ui' | 'agent' | 'llm' | 'data' | 'infra';
+
+export interface TopologyNode {
+  id: string;
+  name: string;
+  layer: ServiceLayer;
+  status: Status;
+  rpm: number;
+  errorRate: number;
+  p95: number;
+  framework?: string;
+}
+
+export interface TopologyEdge {
+  source: string;
+  target: string;
+  rpm: number;
+  errorRate: number;
+  p95: number;
+}
+
+export const LAYER_CONFIG: Record<ServiceLayer, { label: string; color: string; y: number }> = {
+  ui: { label: 'Layer 1: UI/App', color: '#58A6FF', y: 0 },
+  agent: { label: 'Layer 2: Agent', color: '#BC8CFF', y: 1 },
+  llm: { label: 'Layer 3: LLM', color: '#F778BA', y: 2 },
+  data: { label: 'Layer 4: Data', color: '#3FB950', y: 3 },
+  infra: { label: 'Layer 5: Infra', color: '#D29922', y: 4 },
+};
+
+export function getServiceTopology(projectId: string): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
+  // Default: AI-Production topology
+  const nodes: TopologyNode[] = [
+    { id: 'client', name: 'Client (Browser)', layer: 'ui', status: 'healthy', rpm: 1200, errorRate: 0, p95: 0, framework: 'Browser' },
+    { id: 'api-gw', name: 'api-gateway', layer: 'ui', status: 'healthy', rpm: 1200, errorRate: 0.12, p95: 245, framework: 'Express' },
+    { id: 'rag-svc', name: 'rag-service', layer: 'agent', status: 'healthy', rpm: 450, errorRate: 0.22, p95: 1800, framework: 'FastAPI' },
+    { id: 'auth-svc', name: 'auth-service', layer: 'ui', status: 'healthy', rpm: 600, errorRate: 0.01, p95: 45, framework: 'Spring Boot' },
+    { id: 'embed-svc', name: 'embedding-service', layer: 'agent', status: 'healthy', rpm: 800, errorRate: 0.05, p95: 120, framework: 'FastAPI' },
+    { id: 'vllm', name: 'vLLM Inference', layer: 'llm', status: 'healthy', rpm: 450, errorRate: 0.1, p95: 1200, framework: 'vLLM' },
+    { id: 'guardrail', name: 'Guardrail', layer: 'agent', status: 'healthy', rpm: 900, errorRate: 0.05, p95: 80, framework: 'NeMo' },
+    { id: 'qdrant', name: 'Qdrant', layer: 'data', status: 'healthy', rpm: 800, errorRate: 0.02, p95: 120, framework: 'Qdrant' },
+    { id: 'postgres', name: 'PostgreSQL', layer: 'data', status: 'healthy', rpm: 600, errorRate: 0.01, p95: 15, framework: 'PostgreSQL 16' },
+    { id: 'redis', name: 'Redis Cache', layer: 'data', status: 'healthy', rpm: 2000, errorRate: 0, p95: 3, framework: 'Redis 7.2' },
+  ];
+
+  const edges: TopologyEdge[] = [
+    { source: 'client', target: 'api-gw', rpm: 1200, errorRate: 0, p95: 245 },
+    { source: 'api-gw', target: 'rag-svc', rpm: 450, errorRate: 0.1, p95: 1800 },
+    { source: 'api-gw', target: 'auth-svc', rpm: 600, errorRate: 0.01, p95: 45 },
+    { source: 'rag-svc', target: 'guardrail', rpm: 900, errorRate: 0.02, p95: 80 },
+    { source: 'rag-svc', target: 'embed-svc', rpm: 450, errorRate: 0.03, p95: 120 },
+    { source: 'rag-svc', target: 'vllm', rpm: 450, errorRate: 0.1, p95: 1200 },
+    { source: 'embed-svc', target: 'qdrant', rpm: 800, errorRate: 0.02, p95: 120 },
+    { source: 'rag-svc', target: 'redis', rpm: 1200, errorRate: 0, p95: 3 },
+    { source: 'auth-svc', target: 'postgres', rpm: 600, errorRate: 0.01, p95: 15 },
+    { source: 'auth-svc', target: 'redis', rpm: 400, errorRate: 0, p95: 2 },
+  ];
+
+  return { nodes, edges };
+}
