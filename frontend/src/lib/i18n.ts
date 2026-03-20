@@ -1,0 +1,326 @@
+// ═══════════════════════════════════════════════════════════════
+// Lightweight i18n — no external dependencies
+// ═══════════════════════════════════════════════════════════════
+
+export type Locale = 'ko' | 'en' | 'ja';
+
+export const LOCALE_CONFIG: Record<Locale, { label: string; flag: string; dateLocale: string }> = {
+  ko: { label: '한국어', flag: '🇰🇷', dateLocale: 'ko-KR' },
+  en: { label: 'English', flag: '🇺🇸', dateLocale: 'en-US' },
+  ja: { label: '日本語', flag: '🇯🇵', dateLocale: 'ja-JP' },
+};
+
+// Translation keys — flat namespace with dot notation
+const translations: Record<Locale, Record<string, string>> = {
+  ko: {
+    // Navigation
+    'nav.home': '홈',
+    'nav.projects': '프로젝트',
+    'nav.infra': '인프라',
+    'nav.services': '서비스 (APM)',
+    'nav.ai': 'AI 서비스',
+    'nav.metrics': '메트릭',
+    'nav.traces': '트레이스',
+    'nav.logs': '로그',
+    'nav.diagnostics': '진단',
+    'nav.alerts': '알림',
+    'nav.agents': '에이전트',
+    'nav.settings': '설정',
+    'nav.dashboards': '대시보드',
+    'nav.notebooks': '노트북',
+    'nav.slo': 'SLO 관리',
+    'nav.costs': '비용 분석',
+    'nav.executive': '경영진 대시보드',
+    'nav.tenants': '테넌트 관리',
+
+    // Common
+    'common.search': '검색...',
+    'common.filter': '필터',
+    'common.status': '상태',
+    'common.all': '전체',
+    'common.healthy': '정상',
+    'common.warning': '경고',
+    'common.critical': '위험',
+    'common.save': '저장',
+    'common.cancel': '취소',
+    'common.delete': '삭제',
+    'common.edit': '편집',
+    'common.close': '닫기',
+    'common.add': '추가',
+    'common.export': '내보내기',
+    'common.import': '가져오기',
+    'common.loading': '로딩 중...',
+    'common.noData': '데이터가 없습니다',
+    'common.ago': '전',
+
+    // Time
+    'time.seconds': '초',
+    'time.minutes': '분',
+    'time.hours': '시간',
+    'time.days': '일',
+    'time.last5m': '최근 5분',
+    'time.last15m': '최근 15분',
+    'time.last1h': '최근 1시간',
+    'time.last6h': '최근 6시간',
+    'time.last24h': '최근 24시간',
+    'time.last7d': '최근 7일',
+
+    // Pages
+    'page.home.title': '프로젝트 대시보드',
+    'page.services.title': '서비스',
+    'page.services.map': '서비스 맵',
+    'page.services.list': '목록',
+    'page.ai.title': 'AI 서비스',
+    'page.ai.gpu': 'GPU 클러스터',
+    'page.traces.title': 'XLog / HeatMap',
+    'page.logs.title': '로그 탐색기',
+    'page.metrics.title': '메트릭 탐색기',
+    'page.alerts.title': '알림 & 인시던트',
+    'page.alerts.policies': '알림 정책',
+    'page.alerts.incidents': '인시던트',
+    'page.alerts.channels': '채널',
+    'page.agents.title': '에이전트 플릿 콘솔',
+    'page.diagnostics.title': 'AITOP 진단',
+    'page.slo.title': 'SLO 관리',
+    'page.costs.title': '비용 분석',
+    'page.executive.title': '경영진 대시보드',
+    'page.dashboards.title': '대시보드 빌더',
+    'page.notebooks.title': '조사 노트북',
+    'page.tenants.title': '멀티테넌트 관리',
+    'page.settings.title': '설정',
+
+    // KPI labels
+    'kpi.ttft': 'TTFT P95',
+    'kpi.tps': 'TPS P50',
+    'kpi.errorRate': '에러율',
+    'kpi.latency': '레이턴시',
+    'kpi.traffic': '트래픽',
+    'kpi.saturation': '포화도',
+    'kpi.cost': '비용',
+    'kpi.blockRate': '차단율',
+    'kpi.totalServices': '전체 서비스',
+    'kpi.openIncidents': '진행 중 인시던트',
+    'kpi.sloCompliance': 'SLO 준수율',
+
+    // Auth
+    'auth.login': '로그인',
+    'auth.logout': '로그아웃',
+    'auth.demoAccount': '데모 계정',
+  },
+
+  en: {
+    'nav.home': 'Home',
+    'nav.projects': 'Projects',
+    'nav.infra': 'Infrastructure',
+    'nav.services': 'Services (APM)',
+    'nav.ai': 'AI Services',
+    'nav.metrics': 'Metrics',
+    'nav.traces': 'Traces',
+    'nav.logs': 'Logs',
+    'nav.diagnostics': 'Diagnostics',
+    'nav.alerts': 'Alerts',
+    'nav.agents': 'Agents',
+    'nav.settings': 'Settings',
+    'nav.dashboards': 'Dashboards',
+    'nav.notebooks': 'Notebooks',
+    'nav.slo': 'SLO Management',
+    'nav.costs': 'Cost Analysis',
+    'nav.executive': 'Executive Dashboard',
+    'nav.tenants': 'Tenant Management',
+
+    'common.search': 'Search...',
+    'common.filter': 'Filter',
+    'common.status': 'Status',
+    'common.all': 'All',
+    'common.healthy': 'Healthy',
+    'common.warning': 'Warning',
+    'common.critical': 'Critical',
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+    'common.delete': 'Delete',
+    'common.edit': 'Edit',
+    'common.close': 'Close',
+    'common.add': 'Add',
+    'common.export': 'Export',
+    'common.import': 'Import',
+    'common.loading': 'Loading...',
+    'common.noData': 'No data available',
+    'common.ago': 'ago',
+
+    'time.seconds': 'seconds',
+    'time.minutes': 'minutes',
+    'time.hours': 'hours',
+    'time.days': 'days',
+    'time.last5m': 'Last 5m',
+    'time.last15m': 'Last 15m',
+    'time.last1h': 'Last 1h',
+    'time.last6h': 'Last 6h',
+    'time.last24h': 'Last 24h',
+    'time.last7d': 'Last 7d',
+
+    'page.home.title': 'Project Dashboard',
+    'page.services.title': 'Services',
+    'page.services.map': 'Service Map',
+    'page.services.list': 'List',
+    'page.ai.title': 'AI Services',
+    'page.ai.gpu': 'GPU Cluster',
+    'page.traces.title': 'XLog / HeatMap',
+    'page.logs.title': 'Log Explorer',
+    'page.metrics.title': 'Metrics Explorer',
+    'page.alerts.title': 'Alerts & Incidents',
+    'page.alerts.policies': 'Policies',
+    'page.alerts.incidents': 'Incidents',
+    'page.alerts.channels': 'Channels',
+    'page.agents.title': 'Agent Fleet Console',
+    'page.diagnostics.title': 'AITOP Diagnostics',
+    'page.slo.title': 'SLO Management',
+    'page.costs.title': 'Cost Analysis',
+    'page.executive.title': 'Executive Dashboard',
+    'page.dashboards.title': 'Dashboard Builder',
+    'page.notebooks.title': 'Investigation Notebooks',
+    'page.tenants.title': 'Multi-Tenant Management',
+    'page.settings.title': 'Settings',
+
+    'kpi.ttft': 'TTFT P95',
+    'kpi.tps': 'TPS P50',
+    'kpi.errorRate': 'Error Rate',
+    'kpi.latency': 'Latency',
+    'kpi.traffic': 'Traffic',
+    'kpi.saturation': 'Saturation',
+    'kpi.cost': 'Cost',
+    'kpi.blockRate': 'Block Rate',
+    'kpi.totalServices': 'Total Services',
+    'kpi.openIncidents': 'Open Incidents',
+    'kpi.sloCompliance': 'SLO Compliance',
+
+    'auth.login': 'Login',
+    'auth.logout': 'Logout',
+    'auth.demoAccount': 'Demo Account',
+  },
+
+  ja: {
+    'nav.home': 'ホーム',
+    'nav.projects': 'プロジェクト',
+    'nav.infra': 'インフラ',
+    'nav.services': 'サービス (APM)',
+    'nav.ai': 'AIサービス',
+    'nav.metrics': 'メトリクス',
+    'nav.traces': 'トレース',
+    'nav.logs': 'ログ',
+    'nav.diagnostics': '診断',
+    'nav.alerts': 'アラート',
+    'nav.agents': 'エージェント',
+    'nav.settings': '設定',
+    'nav.dashboards': 'ダッシュボード',
+    'nav.notebooks': 'ノートブック',
+    'nav.slo': 'SLO管理',
+    'nav.costs': 'コスト分析',
+    'nav.executive': 'エグゼクティブ',
+    'nav.tenants': 'テナント管理',
+
+    'common.search': '検索...',
+    'common.filter': 'フィルター',
+    'common.status': 'ステータス',
+    'common.all': 'すべて',
+    'common.healthy': '正常',
+    'common.warning': '警告',
+    'common.critical': '危険',
+    'common.save': '保存',
+    'common.cancel': 'キャンセル',
+    'common.delete': '削除',
+    'common.edit': '編集',
+    'common.close': '閉じる',
+    'common.add': '追加',
+    'common.export': 'エクスポート',
+    'common.import': 'インポート',
+    'common.loading': '読み込み中...',
+    'common.noData': 'データがありません',
+    'common.ago': '前',
+
+    'time.seconds': '秒',
+    'time.minutes': '分',
+    'time.hours': '時間',
+    'time.days': '日',
+    'time.last5m': '過去5分',
+    'time.last15m': '過去15分',
+    'time.last1h': '過去1時間',
+    'time.last6h': '過去6時間',
+    'time.last24h': '過去24時間',
+    'time.last7d': '過去7日',
+
+    'page.home.title': 'プロジェクトダッシュボード',
+    'page.services.title': 'サービス',
+    'page.services.map': 'サービスマップ',
+    'page.services.list': 'リスト',
+    'page.ai.title': 'AIサービス',
+    'page.ai.gpu': 'GPUクラスター',
+    'page.traces.title': 'XLog / HeatMap',
+    'page.logs.title': 'ログエクスプローラー',
+    'page.metrics.title': 'メトリクスエクスプローラー',
+    'page.alerts.title': 'アラート＆インシデント',
+    'page.alerts.policies': 'ポリシー',
+    'page.alerts.incidents': 'インシデント',
+    'page.alerts.channels': 'チャネル',
+    'page.agents.title': 'エージェントフリート',
+    'page.diagnostics.title': 'AITOP診断',
+    'page.slo.title': 'SLO管理',
+    'page.costs.title': 'コスト分析',
+    'page.executive.title': 'エグゼクティブダッシュボード',
+    'page.dashboards.title': 'ダッシュボードビルダー',
+    'page.notebooks.title': '調査ノートブック',
+    'page.tenants.title': 'マルチテナント管理',
+    'page.settings.title': '設定',
+
+    'kpi.ttft': 'TTFT P95',
+    'kpi.tps': 'TPS P50',
+    'kpi.errorRate': 'エラー率',
+    'kpi.latency': 'レイテンシー',
+    'kpi.traffic': 'トラフィック',
+    'kpi.saturation': '飽和度',
+    'kpi.cost': 'コスト',
+    'kpi.blockRate': 'ブロック率',
+    'kpi.totalServices': '合計サービス',
+    'kpi.openIncidents': '未解決インシデント',
+    'kpi.sloCompliance': 'SLO準拠率',
+
+    'auth.login': 'ログイン',
+    'auth.logout': 'ログアウト',
+    'auth.demoAccount': 'デモアカウント',
+  },
+};
+
+// Translation function
+export function t(key: string, locale: Locale): string {
+  return translations[locale]?.[key] ?? translations['en']?.[key] ?? key;
+}
+
+// Date/number formatting helpers
+export function formatDateLocale(date: Date | number, locale: Locale, options?: Intl.DateTimeFormatOptions): string {
+  const d = typeof date === 'number' ? new Date(date) : date;
+  return d.toLocaleString(LOCALE_CONFIG[locale].dateLocale, options);
+}
+
+export function formatNumberLocale(value: number, locale: Locale, options?: Intl.NumberFormatOptions): string {
+  return value.toLocaleString(LOCALE_CONFIG[locale].dateLocale, options);
+}
+
+export function formatRelativeTimeLocale(date: Date | string | number, locale: Locale): string {
+  const now = Date.now();
+  const target = typeof date === 'number' ? date : new Date(date).getTime();
+  const diff = now - target;
+
+  const units: [number, string][] = [
+    [86_400_000, t('time.days', locale)],
+    [3_600_000, t('time.hours', locale)],
+    [60_000, t('time.minutes', locale)],
+    [1_000, t('time.seconds', locale)],
+  ];
+
+  for (const [ms, unit] of units) {
+    if (diff >= ms) {
+      const val = Math.floor(diff / ms);
+      return `${val}${unit} ${t('common.ago', locale)}`;
+    }
+  }
+  return `0${t('time.seconds', locale)} ${t('common.ago', locale)}`;
+}

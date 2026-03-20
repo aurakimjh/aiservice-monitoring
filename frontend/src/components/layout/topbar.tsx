@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { LOCALE_CONFIG } from '@/lib/i18n';
+import type { Locale } from '@/lib/i18n';
 import { ROLE_LABELS } from '@/types/auth';
 import { Select } from '@/components/ui';
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '@/components/ui/dropdown';
@@ -63,6 +65,8 @@ export function TopBar() {
   const {
     theme,
     setTheme,
+    locale,
+    setLocale,
     timeRange,
     setTimeRange,
     autoRefresh,
@@ -216,6 +220,29 @@ export function TopBar() {
           <DropdownItem icon={<ExternalLink size={12} />}>
             View all alerts
           </DropdownItem>
+        </Dropdown>
+
+        {/* Language Switcher */}
+        <Dropdown
+          align="right"
+          width={140}
+          trigger={
+            <Button variant="ghost" size="icon" title="Language">
+              <span className="text-xs">{LOCALE_CONFIG[locale].flag}</span>
+            </Button>
+          }
+        >
+          <DropdownLabel>Language</DropdownLabel>
+          {(Object.entries(LOCALE_CONFIG) as [Locale, typeof LOCALE_CONFIG[Locale]][]).map(([key, config]) => (
+            <DropdownItem
+              key={key}
+              active={locale === key}
+              onClick={() => setLocale(key)}
+              icon={<span className="text-sm">{config.flag}</span>}
+            >
+              {config.label}
+            </DropdownItem>
+          ))}
         </Dropdown>
 
         {/* Theme Toggle */}

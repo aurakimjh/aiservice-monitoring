@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
+import { useI18n } from '@/hooks/use-i18n';
 import {
   Home,
   FolderOpen,
@@ -24,30 +25,31 @@ import { Tooltip } from '@/components/ui';
 
 interface NavItem {
   icon: React.ElementType;
-  label: string;
+  i18nKey: string;
   href: string;
   dividerBefore?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { icon: Home, label: 'Home', href: '/' },
-  { icon: FolderOpen, label: 'Projects', href: '/projects', dividerBefore: true },
-  { icon: Server, label: 'Infrastructure', href: '/infra' },
-  { icon: Network, label: 'Services (APM)', href: '/services' },
-  { icon: Bot, label: 'AI Services', href: '/ai' },
-  { icon: BarChart3, label: 'Metrics', href: '/metrics', dividerBefore: true },
-  { icon: Search, label: 'Traces', href: '/traces' },
-  { icon: FileText, label: 'Logs', href: '/logs' },
-  { icon: ClipboardList, label: 'Diagnostics', href: '/diagnostics', dividerBefore: true },
-  { icon: Bell, label: 'Alerts', href: '/alerts' },
-  { icon: Cpu, label: 'Agents', href: '/agents' },
-  { icon: Settings, label: 'Settings', href: '/settings', dividerBefore: true },
+  { icon: Home, i18nKey: 'nav.home', href: '/' },
+  { icon: FolderOpen, i18nKey: 'nav.projects', href: '/projects', dividerBefore: true },
+  { icon: Server, i18nKey: 'nav.infra', href: '/infra' },
+  { icon: Network, i18nKey: 'nav.services', href: '/services' },
+  { icon: Bot, i18nKey: 'nav.ai', href: '/ai' },
+  { icon: BarChart3, i18nKey: 'nav.metrics', href: '/metrics', dividerBefore: true },
+  { icon: Search, i18nKey: 'nav.traces', href: '/traces' },
+  { icon: FileText, i18nKey: 'nav.logs', href: '/logs' },
+  { icon: ClipboardList, i18nKey: 'nav.diagnostics', href: '/diagnostics', dividerBefore: true },
+  { icon: Bell, i18nKey: 'nav.alerts', href: '/alerts' },
+  { icon: Cpu, i18nKey: 'nav.agents', href: '/agents' },
+  { icon: Settings, i18nKey: 'nav.settings', href: '/settings', dividerBefore: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const expanded = useUIStore((s) => s.sidebarExpanded);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const { t } = useI18n();
 
   return (
     <aside
@@ -66,6 +68,7 @@ export function Sidebar() {
               ? pathname === '/'
               : pathname.startsWith(item.href);
           const Icon = item.icon;
+          const label = t(item.i18nKey);
 
           return (
             <div key={item.href}>
@@ -87,10 +90,10 @@ export function Sidebar() {
                     <span className="absolute left-0 w-[3px] h-5 bg-[var(--sidebar-active)] rounded-r" />
                   )}
                   <Icon size={18} className="shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{label}</span>
                 </Link>
               ) : (
-                <Tooltip content={item.label} side="right">
+                <Tooltip content={label} side="right">
                   <Link
                     href={item.href}
                     className={cn(
