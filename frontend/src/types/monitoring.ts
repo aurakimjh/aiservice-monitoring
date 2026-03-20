@@ -405,6 +405,29 @@ export interface DashboardConfig {
   updatedAt: number;
 }
 
+// Phase 14-4: Investigation Notebook
+
+export type NotebookCellType = 'markdown' | 'query' | 'chart';
+
+export interface NotebookCell {
+  id: string;
+  type: NotebookCellType;
+  content: string; // markdown text, PromQL query, or metric name
+  output?: string; // rendered output or query result
+}
+
+export interface Notebook {
+  id: string;
+  title: string;
+  description: string;
+  author: string;
+  relatedIncident?: string;
+  cells: NotebookCell[];
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;

@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1137,6 +1137,65 @@ export function getDashboardTemplates(): DashboardConfig[] {
         { id: 'w7', type: 'text', title: 'Notes', size: '2x1', content: 'Weekly review: GPU costs trending up 4%. Consider int8 quantization for Llama-3-70B.' },
       ],
       createdAt: now - 86400_000 * 3, updatedAt: now - 1800_000,
+    },
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 14-4: Investigation Notebook
+// ═══════════════════════════════════════════════════════════════
+
+export function getSampleNotebooks(): Notebook[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'nb-1',
+      title: 'INC-0312: GPU VRAM Critical Investigation',
+      description: 'Root cause analysis for prod-gpu-03 VRAM critical alert on 2026-03-20',
+      author: 'kim.sre',
+      relatedIncident: 'INC-2026-0312',
+      tags: ['incident', 'gpu', 'vram', 'postmortem'],
+      cells: [
+        { id: 'c1', type: 'markdown', content: '## Incident Summary\n\nAt 14:30 UTC, GPU VRAM on **prod-gpu-03** exceeded 90% threshold, triggering a critical alert. The issue was caused by deploying Llama-3-70B in fp16 without adjusting the batch size.\n\n### Timeline\n- 14:25 — New model deployed (Llama-3-70B-fp16)\n- 14:30 — VRAM alert fired (86%)\n- 14:32 — VRAM critical (92%)\n- 14:36 — Batch size reduced 32→16\n- 14:45 — VRAM stabilized at 82%' },
+        { id: 'c2', type: 'query', content: 'gpu_vram_used_bytes{instance="prod-gpu-03"}' },
+        { id: 'c3', type: 'chart', content: 'gpu_vram_used_bytes' },
+        { id: 'c4', type: 'markdown', content: '### Analysis\n\nThe fp16 model requires ~15% more VRAM than the previous int8 quantized version. With batch size 32, total allocation exceeded GPU capacity.\n\n**AITOP Diagnostic cross-reference:**\n- ITEM0218 (Quantization Adequacy) — fp16 → int8 recommended\n- ITEM0208 (OOM Prevention) — `max_batch_tokens` not configured' },
+        { id: 'c5', type: 'query', content: 'gpu_temperature_celsius{instance="prod-gpu-03"}' },
+        { id: 'c6', type: 'chart', content: 'gpu_temperature_celsius' },
+        { id: 'c7', type: 'markdown', content: '### Resolution\n\n1. Immediate: Reduced batch size 32→16\n2. Short-term: Set `--max-batch-tokens 8192` in vLLM config\n3. Long-term: Apply GPTQ int8 quantization (saves ~40% VRAM)\n\n### Action Items\n- [ ] Apply int8 quantization to Llama-3-70B\n- [ ] Add `max_batch_tokens` to all GPU service configs\n- [ ] Update deployment checklist to include VRAM impact assessment' },
+      ],
+      createdAt: now - 7200_000,
+      updatedAt: now - 3600_000,
+    },
+    {
+      id: 'nb-2',
+      title: 'RAG TTFT Performance Analysis',
+      description: 'Investigating TTFT P95 increase from 1.2s to 2.8s during traffic spike',
+      author: 'park.ai',
+      relatedIncident: 'INC-2026-0311',
+      tags: ['performance', 'rag', 'ttft', 'scaling'],
+      cells: [
+        { id: 'c1', type: 'markdown', content: '## Context\n\nDuring a marketing campaign, RAG service TTFT P95 spiked from 1.2s to 2.8s, exceeding the 2s SLO threshold.' },
+        { id: 'c2', type: 'query', content: 'histogram_quantile(0.95, rate(llm_ttft_seconds_bucket[5m]))' },
+        { id: 'c3', type: 'chart', content: 'llm_ttft_seconds' },
+        { id: 'c4', type: 'markdown', content: '### Findings\n\n1. Traffic increased 3x during campaign window\n2. GPU queue depth maxed out → queuing delay dominated TTFT\n3. Horizontal scaling from 2→3 replicas resolved the issue\n\n### Recommendation\n- Configure HPA based on `llm_requests_in_flight` metric\n- Set target: scale up when concurrent requests > 15' },
+      ],
+      createdAt: now - 43200_000,
+      updatedAt: now - 39600_000,
+    },
+    {
+      id: 'nb-3',
+      title: 'Weekly Cost Review — Week 12',
+      description: 'Regular cost review and optimization opportunities',
+      author: 'kim.aura',
+      tags: ['cost', 'review', 'weekly'],
+      cells: [
+        { id: 'c1', type: 'markdown', content: '## Cost Summary (Week 12)\n\n| Category | Amount | Trend |\n|----------|--------|-------|\n| LLM API | $2,100/week | +12% |\n| GPU Compute | $672/week | flat |\n| Infrastructure | $168/week | flat |\n| Storage | $62/week | +10% |\n\n**Total: $3,002/week** ($12,900/month)' },
+        { id: 'c2', type: 'chart', content: 'llm_cost_dollars_total' },
+        { id: 'c3', type: 'markdown', content: '### Optimization Opportunities\n\n1. **Embedding cache**: Hit rate 94% → increasing to 97% could save ~$150/week\n2. **Prompt compression**: Average input tokens 1,240 → target 800 with summarization\n3. **Model tiering**: Route simple queries to GPT-3.5-Turbo instead of GPT-4o\n\n### Decisions\n- Approved: Implement prompt compression (ETA: next sprint)\n- Deferred: Model tiering (needs quality evaluation first)' },
+      ],
+      createdAt: now - 172800_000,
+      updatedAt: now - 86400_000,
     },
   ];
 }
