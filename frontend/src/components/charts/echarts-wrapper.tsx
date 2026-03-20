@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, memo } from 'react';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart } from 'echarts/charts';
@@ -13,16 +13,20 @@ import {
   MarkAreaComponent,
   TitleComponent,
   ToolboxComponent,
+  VisualMapComponent,
+  BrushComponent,
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
 
 type EChartsInstance = ReturnType<typeof echarts.init>;
 
+// Register once at module level
 echarts.use([
   CanvasRenderer,
   LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart,
   GridComponent, TooltipComponent, LegendComponent, DataZoomComponent,
   MarkLineComponent, MarkAreaComponent, TitleComponent, ToolboxComponent,
+  VisualMapComponent, BrushComponent,
 ]);
 
 // Dark theme for all charts
@@ -63,34 +67,40 @@ interface EChartsWrapperProps {
   onInit?: (chart: EChartsInstance) => void;
 }
 
-export function EChartsWrapper({ option, height = 300, className, onInit }: EChartsWrapperProps) {
+export const EChartsWrapper = memo(function EChartsWrapper({ option, height = 300, className, onInit }: EChartsWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsInstance | null>(null);
+  const onInitRef = useRef(onInit);
+  onInitRef.current = onInit;
 
-  const initChart = useCallback(() => {
+  // Init chart once, reuse on option change
+  useEffect(() => {
     if (!containerRef.current) return;
-    if (chartRef.current) chartRef.current.dispose();
 
-    const chart = echarts.init(containerRef.current, undefined, { renderer: 'canvas' });
-    chartRef.current = chart;
+    if (!chartRef.current) {
+      chartRef.current = echarts.init(containerRef.current, undefined, { renderer: 'canvas' });
+      onInitRef.current?.(chartRef.current);
+    }
 
     const mergedOption = echarts.util.merge(
       echarts.util.clone(DARK_THEME),
       option,
       true,
     ) as EChartsOption;
-    chart.setOption(mergedOption);
-    onInit?.(chart);
-  }, [option, onInit]);
+    chartRef.current.setOption(mergedOption, { notMerge: true });
 
+    return () => {};
+  }, [option]);
+
+  // Cleanup on unmount
   useEffect(() => {
-    initChart();
     return () => {
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [initChart]);
+  }, []);
 
+  // Resize observer
   useEffect(() => {
     const handleResize = () => chartRef.current?.resize();
     const observer = new ResizeObserver(handleResize);
@@ -102,7 +112,9 @@ export function EChartsWrapper({ option, height = 300, className, onInit }: ECha
     <div
       ref={containerRef}
       className={className}
+      role="img"
+      aria-label="Chart"
       style={{ height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}
     />
   );
-}
+});

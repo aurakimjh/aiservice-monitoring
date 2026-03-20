@@ -7,3 +7,5 @@ export { Modal } from './modal';
 export { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from './dropdown';
 export { Breadcrumb, type BreadcrumbItem } from './breadcrumb';
 export { Tabs } from './tabs';
+export { VirtualList } from './virtual-list';
+export { SkipLink } from './skip-link';
