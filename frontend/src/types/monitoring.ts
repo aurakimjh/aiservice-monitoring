@@ -188,6 +188,17 @@ export interface LogPattern {
   lastSeen: number;
 }
 
+export type MetricType = 'counter' | 'gauge' | 'histogram' | 'summary';
+
+export interface MetricDefinition {
+  name: string;
+  type: MetricType;
+  description: string;
+  unit: string;
+  labels: string[];
+  category: 'system' | 'http' | 'llm' | 'vectordb' | 'gpu' | 'custom';
+}
+
 export interface AIService {
   id: string;
   name: string;

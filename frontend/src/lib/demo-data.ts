@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -766,4 +766,84 @@ export function getLogPatterns(): LogPattern[] {
     { id: 'lp-7', pattern: 'GPU memory pressure: vram_used=*% threshold=*%', count: 56, level: 'WARN', services: ['rag-service'], sample: 'GPU memory pressure: vram_used=87% threshold=85%', firstSeen: now - 7200_000, lastSeen: now - 300_000 },
     { id: 'lp-8', pattern: 'Embedding completed: * tokens=* elapsed=*ms', count: 6780, level: 'INFO', services: ['embedding-service'], sample: 'Embedding completed: model=text-embedding-3-large tokens=128 elapsed=42ms', firstSeen: now - 86400_000, lastSeen: now - 20_000 },
   ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Metrics Explorer — 메트릭 카탈로그 및 쿼리 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export const METRIC_CATALOG: MetricDefinition[] = [
+  // System
+  { name: 'node_cpu_seconds_total', type: 'counter', description: 'Total CPU time spent per mode', unit: 'seconds', labels: ['cpu', 'mode', 'instance'], category: 'system' },
+  { name: 'node_memory_MemAvailable_bytes', type: 'gauge', description: 'Available memory in bytes', unit: 'bytes', labels: ['instance'], category: 'system' },
+  { name: 'node_disk_io_time_seconds_total', type: 'counter', description: 'Total disk I/O time', unit: 'seconds', labels: ['device', 'instance'], category: 'system' },
+  { name: 'node_network_receive_bytes_total', type: 'counter', description: 'Total network bytes received', unit: 'bytes', labels: ['device', 'instance'], category: 'system' },
+  { name: 'node_filesystem_avail_bytes', type: 'gauge', description: 'Available filesystem space', unit: 'bytes', labels: ['mountpoint', 'instance'], category: 'system' },
+  // HTTP
+  { name: 'http_requests_total', type: 'counter', description: 'Total HTTP requests processed', unit: 'requests', labels: ['method', 'path', 'status', 'service'], category: 'http' },
+  { name: 'http_request_duration_seconds', type: 'histogram', description: 'HTTP request latency', unit: 'seconds', labels: ['method', 'path', 'service', 'le'], category: 'http' },
+  { name: 'http_requests_in_flight', type: 'gauge', description: 'Current in-flight HTTP requests', unit: 'requests', labels: ['service'], category: 'http' },
+  { name: 'http_response_size_bytes', type: 'histogram', description: 'HTTP response body size', unit: 'bytes', labels: ['method', 'path', 'service', 'le'], category: 'http' },
+  // LLM
+  { name: 'llm_request_duration_seconds', type: 'histogram', description: 'LLM inference request duration', unit: 'seconds', labels: ['model', 'service', 'le'], category: 'llm' },
+  { name: 'llm_ttft_seconds', type: 'histogram', description: 'Time to First Token', unit: 'seconds', labels: ['model', 'service', 'le'], category: 'llm' },
+  { name: 'llm_tokens_per_second', type: 'gauge', description: 'Token generation throughput', unit: 'tokens/s', labels: ['model', 'service'], category: 'llm' },
+  { name: 'llm_tokens_total', type: 'counter', description: 'Total tokens generated', unit: 'tokens', labels: ['model', 'service', 'type'], category: 'llm' },
+  { name: 'llm_cost_dollars_total', type: 'counter', description: 'Cumulative LLM API cost', unit: 'dollars', labels: ['model', 'service'], category: 'llm' },
+  { name: 'llm_guardrail_checks_total', type: 'counter', description: 'Total guardrail checks', unit: 'checks', labels: ['policy', 'action', 'service'], category: 'llm' },
+  // VectorDB
+  { name: 'vectordb_query_duration_seconds', type: 'histogram', description: 'Vector search query latency', unit: 'seconds', labels: ['collection', 'service', 'le'], category: 'vectordb' },
+  { name: 'vectordb_vectors_total', type: 'gauge', description: 'Total vectors stored', unit: 'vectors', labels: ['collection'], category: 'vectordb' },
+  { name: 'vectordb_queries_total', type: 'counter', description: 'Total vector queries', unit: 'queries', labels: ['collection', 'service'], category: 'vectordb' },
+  // GPU
+  { name: 'gpu_vram_used_bytes', type: 'gauge', description: 'GPU VRAM used', unit: 'bytes', labels: ['gpu', 'instance'], category: 'gpu' },
+  { name: 'gpu_temperature_celsius', type: 'gauge', description: 'GPU temperature', unit: 'celsius', labels: ['gpu', 'instance'], category: 'gpu' },
+  { name: 'gpu_power_draw_watts', type: 'gauge', description: 'GPU power consumption', unit: 'watts', labels: ['gpu', 'instance'], category: 'gpu' },
+  { name: 'gpu_sm_occupancy_percent', type: 'gauge', description: 'GPU SM occupancy', unit: 'percent', labels: ['gpu', 'instance'], category: 'gpu' },
+  { name: 'gpu_utilization_percent', type: 'gauge', description: 'GPU utilization', unit: 'percent', labels: ['gpu', 'instance'], category: 'gpu' },
+];
+
+// Simulate query execution → time series
+export function executeMetricQuery(
+  metricName: string,
+  points = 60,
+): { label: string; data: [number, number][] }[] {
+  const now = Date.now();
+  const metric = METRIC_CATALOG.find((m) => m.name === metricName);
+  if (!metric) return [];
+
+  // Generate realistic series based on metric type
+  const baselines: Record<string, { base: number; variance: number; labels: string[][] }> = {
+    'node_cpu_seconds_total': { base: 45, variance: 15, labels: [['user'], ['system'], ['iowait']] },
+    'node_memory_MemAvailable_bytes': { base: 42, variance: 8, labels: [['prod-api-01'], ['prod-gpu-01']] },
+    'http_requests_total': { base: 1200, variance: 200, labels: [['200'], ['404'], ['500']] },
+    'http_request_duration_seconds': { base: 0.245, variance: 0.08, labels: [['p50'], ['p95'], ['p99']] },
+    'http_requests_in_flight': { base: 25, variance: 10, labels: [['api-gateway'], ['rag-service']] },
+    'llm_request_duration_seconds': { base: 1.8, variance: 0.5, labels: [['p50'], ['p95'], ['p99']] },
+    'llm_ttft_seconds': { base: 0.95, variance: 0.3, labels: [['gpt-4o'], ['llama-3-70b']] },
+    'llm_tokens_per_second': { base: 42, variance: 8, labels: [['gpt-4o'], ['llama-3-70b']] },
+    'llm_tokens_total': { base: 5000, variance: 1000, labels: [['input'], ['output']] },
+    'llm_cost_dollars_total': { base: 8.5, variance: 2, labels: [['gpt-4o'], ['llama-3-70b']] },
+    'llm_guardrail_checks_total': { base: 900, variance: 100, labels: [['PASS'], ['BLOCK']] },
+    'vectordb_query_duration_seconds': { base: 0.12, variance: 0.04, labels: [['p50'], ['p95']] },
+    'vectordb_vectors_total': { base: 125000, variance: 500, labels: [['documents_v3']] },
+    'vectordb_queries_total': { base: 800, variance: 120, labels: [['documents_v3']] },
+    'gpu_vram_used_bytes': { base: 72, variance: 8, labels: [['gpu0'], ['gpu1']] },
+    'gpu_temperature_celsius': { base: 62, variance: 6, labels: [['gpu0'], ['gpu1']] },
+    'gpu_power_draw_watts': { base: 280, variance: 30, labels: [['gpu0'], ['gpu1']] },
+    'gpu_sm_occupancy_percent': { base: 85, variance: 8, labels: [['gpu0'], ['gpu1']] },
+    'gpu_utilization_percent': { base: 78, variance: 12, labels: [['gpu0'], ['gpu1']] },
+  };
+
+  const config = baselines[metricName] ?? { base: 50, variance: 10, labels: [['default']] };
+
+  return config.labels.map((labelSet, idx) => {
+    const label = labelSet.join(', ');
+    const baseVal = config.base * (1 + idx * 0.3);
+    const data: [number, number][] = Array.from({ length: points }, (_, i) => [
+      now - (points - i) * 60_000,
+      Math.max(0, baseVal + (Math.random() - 0.5) * config.variance * 2),
+    ]);
+    return { label, data };
+  });
 }
