@@ -1,0 +1,76 @@
+# AITOP Agent Configuration
+# See DOCS/AGENT_DESIGN.md for full documentation
+
+agent:
+  id: ""                          # auto-generated on first registration
+  mode: "full"                    # full, collect-only, collect-export
+
+server:
+  url: "https://localhost:50051"
+  project_token: ""               # project registration token
+  tls:
+    cert: ""
+    key: ""
+    ca: ""
+
+schedule:
+  default: "0 */6 * * *"         # evidence collection every 6 hours
+  metrics: "*/60 * * * * *"      # metric push every 60 seconds
+
+collectors:
+  os:
+    enabled: "true"
+  web:
+    enabled: "true"
+    config_paths:
+      - "/etc/nginx"
+      - "/etc/httpd"
+      - "/etc/apache2"
+  was:
+    enabled: "true"
+  db:
+    enabled: "true"
+    connections: []
+    # - type: "postgresql"
+    #   host: "localhost"
+    #   port: 5432
+    #   user: "aitop_readonly"
+    #   password_env: "AITOP_DB_PASSWORD"
+  ai_llm:
+    enabled: "auto"               # auto-detect LLM/Agent environment
+  ai_gpu:
+    enabled: "auto"               # auto-detect NVIDIA GPU
+  ai_vectordb:
+    enabled: "auto"               # auto-detect Vector DB
+  otel_metrics:
+    enabled: "false"
+    prometheus_url: "http://localhost:9090"
+
+remote_shell:
+  enabled: true
+  allowed_roles:
+    - "admin"
+    - "sre"
+  max_sessions: 3
+  idle_timeout: 600               # 10 minutes
+  max_session_duration: 3600      # 1 hour
+  blocked_commands:
+    - "rm -rf /"
+    - "mkfs"
+    - "dd if=/dev/zero"
+    - "shutdown"
+    - "reboot"
+    - "halt"
+    - "init 0"
+  audit_enabled: true
+  audit_log_path: "/var/log/aitop-agent/terminal-audit.log"
+
+buffer:
+  path: "/var/lib/aitop-agent/buffer.db"
+  max_size_mb: 500
+
+logging:
+  level: "info"                   # debug, info, warn, error
+  path: "/var/log/aitop-agent/agent.log"
+  max_size_mb: 100
+  max_backups: 5
