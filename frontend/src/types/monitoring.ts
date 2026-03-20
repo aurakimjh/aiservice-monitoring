@@ -255,6 +255,97 @@ export interface GuardrailData {
   latencyContribution: number;
 }
 
+// Agent Fleet types
+
+export interface CollectionJob {
+  id: string;
+  type: 'scheduled' | 'ai_diagnostic' | 'emergency';
+  target: string;
+  targetCount: number;
+  items: number;
+  progress: number; // 0-100
+  status: 'running' | 'completed' | 'failed';
+  startTime: number;
+}
+
+export interface AgentPlugin {
+  name: string;
+  version: string;
+  activeAgents: number;
+  totalAgents: number;
+  collectItems: string;
+  status: Status;
+}
+
+// Diagnostic types
+
+export interface DiagnosticRun {
+  id: string;
+  scope: 'full' | 'ai' | 'infra';
+  items: number;
+  passed: number;
+  warned: number;
+  failed: number;
+  status: Status;
+  timestamp: number;
+  duration: number; // seconds
+}
+
+export interface DiagnosticItem {
+  id: string;
+  category: 'os' | 'middleware' | 'gpu' | 'llm' | 'vectordb' | 'guardrail' | 'agent';
+  name: string;
+  result: 'pass' | 'warn' | 'fail';
+  value: string;
+  threshold: string;
+  recommendation?: string;
+}
+
+// Alert & Incident types
+
+export interface AlertPolicy {
+  id: string;
+  name: string;
+  severity: Severity;
+  target: string;
+  conditionType: 'metric' | 'trace' | 'log' | 'composite';
+  condition: string;
+  thresholdType: 'static' | 'dynamic' | 'forecast';
+  channels: string[];
+  enabled: boolean;
+  lastTriggered?: number;
+}
+
+export interface IncidentEvent {
+  timestamp: number;
+  type: 'alert' | 'notification' | 'ack' | 'action' | 'resolve' | 'escalation';
+  icon: string;
+  message: string;
+  actor?: string;
+}
+
+export interface IncidentDetail {
+  id: string;
+  title: string;
+  severity: Severity;
+  status: 'open' | 'acknowledged' | 'resolved';
+  assignee?: string;
+  createdAt: number;
+  resolvedAt?: number;
+  duration?: number;
+  relatedAlertPolicy: string;
+  timeline: IncidentEvent[];
+  rca?: string;
+}
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: 'slack' | 'email' | 'pagerduty' | 'webhook' | 'teams';
+  config: string;
+  enabled: boolean;
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;

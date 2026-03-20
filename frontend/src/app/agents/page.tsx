@@ -1,78 +1,218 @@
 'use client';
 
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card } from '@/components/ui';
-import { KPICard, StatusIndicator } from '@/components/monitoring';
-import { Cpu } from 'lucide-react';
-import type { Status } from '@/types/monitoring';
+import { Card, CardHeader, CardTitle, Tabs, Badge } from '@/components/ui';
+import { StatusIndicator, KPICard } from '@/components/monitoring';
+import { useProjectStore } from '@/stores/project-store';
+import { getProjectHosts, getCollectionJobs, getAgentPlugins } from '@/lib/demo-data';
+import { getRelativeTime } from '@/lib/utils';
+import {
+  Cpu,
+  Activity,
+  Package,
+  Clock,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  XCircle,
+} from 'lucide-react';
 
-const DEMO_AGENTS: {
-  hostname: string; version: string; status: Status;
-  os: string; plugins: number; lastCollection: string;
-}[] = [
-  { hostname: 'prod-web-01', version: 'v2.4.1', status: 'healthy', os: 'Ubuntu 22.04', plugins: 6, lastCollection: '15s ago' },
-  { hostname: 'prod-web-02', version: 'v2.4.1', status: 'healthy', os: 'Ubuntu 22.04', plugins: 6, lastCollection: '12s ago' },
-  { hostname: 'prod-db-01', version: 'v2.4.0', status: 'warning', os: 'RHEL 9.2', plugins: 4, lastCollection: '45s ago' },
-  { hostname: 'prod-gpu-01', version: 'v2.4.1', status: 'healthy', os: 'Ubuntu 22.04', plugins: 8, lastCollection: '10s ago' },
-  { hostname: 'staging-app-01', version: 'v2.3.9', status: 'critical', os: 'Debian 12', plugins: 5, lastCollection: '5m ago' },
+const VIEW_TABS = [
+  { id: 'agents', label: 'Agent List', icon: <Cpu size={13} /> },
+  { id: 'jobs', label: 'Collection Jobs', icon: <Clock size={13} /> },
+  { id: 'plugins', label: 'Plugins', icon: <Package size={13} /> },
 ];
 
+const JOB_TYPE_LABELS: Record<string, string> = {
+  scheduled: 'Scheduled',
+  ai_diagnostic: 'AI Diagnostic',
+  emergency: 'Emergency',
+};
+
 export default function AgentsPage() {
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
+  const jobs = useMemo(() => getCollectionJobs(), []);
+  const plugins = useMemo(() => getAgentPlugins(), []);
+
+  const [activeTab, setActiveTab] = useState('agents');
+
+  // Agent stats from hosts with agent info
+  const agents = useMemo(() => hosts.filter((h) => h.agent), [hosts]);
+  const stats = useMemo(() => {
+    const total = agents.length;
+    const healthy = agents.filter((h) => h.agent?.status === 'healthy').length;
+    const degraded = agents.filter((h) => h.agent?.status === 'degraded').length;
+    const offline = agents.filter((h) => h.agent?.status === 'offline').length;
+    const needsUpdate = agents.filter((h) => h.agent && h.agent.version !== '1.2.0').length;
+    return { total, healthy, degraded, offline, needsUpdate };
+  }, [agents]);
+
   return (
     <div className="space-y-4">
       <Breadcrumb items={[
         { label: 'Home', href: '/' },
-        { label: 'Agents', icon: <Cpu size={14} /> },
+        { label: 'Agent Fleet', icon: <Cpu size={14} /> },
       ]} />
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Agent Fleet Console</h1>
-      </div>
+      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Agent Fleet Console</h1>
 
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KPICard title="Total" value={5} subtitle="registered agents" />
-        <KPICard title="Healthy" value={3} status="healthy" />
-        <KPICard title="Warning" value={1} status="warning" />
-        <KPICard title="Offline" value={1} status="critical" subtitle="needs attention" />
-        <KPICard
-          title="Updates"
-          value={2}
-          subtitle="agents need update"
-          trend={{ direction: 'flat', value: 'v2.4.1 latest' }}
-        />
+        <KPICard title="Total Agents" value={stats.total} subtitle="registered" status="healthy" />
+        <KPICard title="Healthy" value={stats.healthy} status="healthy" />
+        <KPICard title="Degraded" value={stats.degraded} status={stats.degraded > 0 ? 'warning' : 'healthy'} />
+        <KPICard title="Offline" value={stats.offline} status={stats.offline > 0 ? 'critical' : 'healthy'} subtitle="needs attention" />
+        <KPICard title="Updates" value={stats.needsUpdate} subtitle="agents need update" trend={{ direction: 'flat', value: 'v1.2.0 latest' }} />
       </div>
 
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border-default)] text-[var(--text-secondary)]">
-                <th className="text-left font-medium px-4 py-2.5">Hostname</th>
-                <th className="text-left font-medium px-4 py-2.5">Version</th>
-                <th className="text-left font-medium px-4 py-2.5">Status</th>
-                <th className="text-left font-medium px-4 py-2.5">OS</th>
-                <th className="text-right font-medium px-4 py-2.5">Plugins</th>
-                <th className="text-left font-medium px-4 py-2.5">Last Collection</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DEMO_AGENTS.map((agent) => (
-                <tr
-                  key={agent.hostname}
-                  className="border-b border-[var(--border-muted)] last:border-0 hover:bg-[var(--bg-tertiary)] transition-colors"
-                >
-                  <td className="px-4 py-2.5 font-mono text-[13px] text-[var(--text-primary)]">{agent.hostname}</td>
-                  <td className="px-4 py-2.5 font-mono text-[13px] text-[var(--text-secondary)]">{agent.version}</td>
-                  <td className="px-4 py-2.5"><StatusIndicator status={agent.status} size="sm" /></td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{agent.os}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{agent.plugins}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-muted)]">{agent.lastCollection}</td>
+      <Tabs tabs={VIEW_TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+      {/* ── Agent List ── */}
+      {activeTab === 'agents' && (
+        <Card padding="none">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium">Hostname</th>
+                  <th className="px-4 py-2.5 font-medium">Version</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">OS</th>
+                  <th className="px-4 py-2.5 font-medium">Mode</th>
+                  <th className="px-4 py-2.5 font-medium">Plugins</th>
+                  <th className="px-4 py-2.5 font-medium">Last Heartbeat</th>
+                  <th className="px-4 py-2.5 font-medium">Last Collection</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {agents.map((host) => {
+                  const agent = host.agent!;
+                  const isOutdated = agent.version !== '1.2.0';
+                  return (
+                    <tr key={host.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                      <td className="px-4 py-2.5">
+                        <Link href={`/infra/${host.hostname}`} className="font-medium text-[var(--accent-primary)] hover:underline font-mono">
+                          {host.hostname}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn('font-mono', isOutdated && 'text-[var(--status-warning)]')}>
+                          v{agent.version}
+                        </span>
+                        {isOutdated && (
+                          <span className="ml-1 text-[10px] text-[var(--status-warning)]">
+                            <AlertTriangle size={10} className="inline" /> update
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <StatusIndicator status={agent.status === 'healthy' ? 'healthy' : agent.status === 'degraded' ? 'warning' : 'critical'} label={agent.status} size="sm" />
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{host.os}</td>
+                      <td className="px-4 py-2.5">
+                        <Badge>{agent.mode}</Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {agent.plugins.length > 0 ? (
+                          <span className="text-[var(--text-secondary)]">{agent.plugins.map((p) => p.name).join(', ')}</span>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">IT (default)</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastHeartbeat)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastCollection)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Collection Jobs ── */}
+      {activeTab === 'jobs' && (
+        <Card padding="none">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium">Job ID</th>
+                  <th className="px-4 py-2.5 font-medium">Type</th>
+                  <th className="px-4 py-2.5 font-medium">Target</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Items</th>
+                  <th className="px-4 py-2.5 font-medium" style={{ width: 160 }}>Progress</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Started</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr key={job.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                    <td className="px-4 py-2.5 font-mono text-[var(--accent-primary)]">{job.id}</td>
+                    <td className="px-4 py-2.5">
+                      <Badge variant={job.type === 'emergency' ? 'severity' : 'tag'} severity={job.type === 'emergency' ? 'critical' : undefined}>
+                        {JOB_TYPE_LABELS[job.type]}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--text-primary)]">{job.target}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{job.items}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', job.status === 'running' ? 'bg-[var(--accent-primary)]' : job.status === 'completed' ? 'bg-[var(--status-healthy)]' : 'bg-[var(--status-critical)]')} style={{ width: `${job.progress}%` }} />
+                        </div>
+                        <span className="text-[10px] tabular-nums text-[var(--text-muted)] w-8 text-right">{job.progress}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {job.status === 'running' && <span className="flex items-center gap-1 text-[var(--accent-primary)]"><Loader2 size={11} className="animate-spin" /> Running</span>}
+                      {job.status === 'completed' && <span className="flex items-center gap-1 text-[var(--status-healthy)]"><CheckCircle2 size={11} /> Done</span>}
+                      {job.status === 'failed' && <span className="flex items-center gap-1 text-[var(--status-critical)]"><XCircle size={11} /> Failed</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(job.startTime))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Plugins ── */}
+      {activeTab === 'plugins' && (
+        <Card padding="none">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium">Plugin</th>
+                  <th className="px-4 py-2.5 font-medium">Version</th>
+                  <th className="px-4 py-2.5 font-medium">Active Agents</th>
+                  <th className="px-4 py-2.5 font-medium">Collect Items</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plugins.map((p) => (
+                  <tr key={p.name} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{p.name}</td>
+                    <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{p.version}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--text-secondary)]">{p.activeAgents}/{p.totalAgents}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.collectItems}</td>
+                    <td className="px-4 py-2.5"><StatusIndicator status={p.status} size="sm" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

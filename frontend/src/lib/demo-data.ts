@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -913,4 +913,129 @@ export function getGuardrailData(): GuardrailData {
     ],
     latencyContribution: 8.5,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 13: 에이전트 통합 + 알림 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export function getCollectionJobs(): CollectionJob[] {
+  const now = Date.now();
+  return [
+    { id: 'JOB-0145', type: 'scheduled', target: 'All Hosts (48)', targetCount: 48, items: 86, progress: 92, status: 'running', startTime: now - 180_000 },
+    { id: 'JOB-0144', type: 'ai_diagnostic', target: 'GPU Group (4)', targetCount: 4, items: 31, progress: 100, status: 'completed', startTime: now - 900_000 },
+    { id: 'JOB-0143', type: 'emergency', target: 'prod-gpu-03', targetCount: 1, items: 86, progress: 100, status: 'completed', startTime: now - 3600_000 },
+    { id: 'JOB-0142', type: 'scheduled', target: 'All Hosts (48)', targetCount: 48, items: 86, progress: 100, status: 'completed', startTime: now - 7200_000 },
+  ];
+}
+
+export function getAgentPlugins(): AgentPlugin[] {
+  return [
+    { name: 'IT - OS Plugin', version: '1.2.0', activeAgents: 48, totalAgents: 48, collectItems: 'OS Metrics', status: 'healthy' },
+    { name: 'IT - MW Plugin', version: '1.2.0', activeAgents: 35, totalAgents: 48, collectItems: 'WEB/WAS/DB', status: 'healthy' },
+    { name: 'AI - GPU/Serving', version: '1.0.0', activeAgents: 4, totalAgents: 48, collectItems: 'ITEM0207~0220', status: 'healthy' },
+    { name: 'AI - LLM/Agent', version: '1.0.0', activeAgents: 6, totalAgents: 48, collectItems: 'ITEM0200~0204', status: 'healthy' },
+    { name: 'AI - VectorDB', version: '1.0.0', activeAgents: 3, totalAgents: 48, collectItems: 'ITEM0205~0206', status: 'healthy' },
+    { name: 'Diagnostic (py-spy)', version: '0.9.0', activeAgents: 2, totalAgents: 48, collectItems: 'Flamegraph', status: 'warning' },
+  ];
+}
+
+export function getDiagnosticRuns(): DiagnosticRun[] {
+  const now = Date.now();
+  return [
+    { id: 'run-001', scope: 'full', items: 86, passed: 78, warned: 4, failed: 4, status: 'warning', timestamp: now - 3600_000, duration: 245 },
+    { id: 'run-002', scope: 'ai', items: 31, passed: 29, warned: 2, failed: 0, status: 'healthy', timestamp: now - 7200_000, duration: 120 },
+    { id: 'run-003', scope: 'infra', items: 55, passed: 47, warned: 3, failed: 5, status: 'critical', timestamp: now - 21600_000, duration: 180 },
+    { id: 'run-004', scope: 'full', items: 86, passed: 82, warned: 2, failed: 2, status: 'warning', timestamp: now - 86400_000, duration: 260 },
+  ];
+}
+
+export function getDiagnosticItems(runId: string): DiagnosticItem[] {
+  return [
+    { id: 'ITEM0001', category: 'os', name: 'CPU Usage Optimization', result: 'pass', value: '45%', threshold: '<85%' },
+    { id: 'ITEM0010', category: 'middleware', name: 'WAS Thread Pool', result: 'pass', value: '62/200', threshold: '<90%' },
+    { id: 'ITEM0015', category: 'middleware', name: 'DB Connection Pool', result: 'warn', value: '92/100', threshold: '<85%', recommendation: 'Increase pool size to 150 or optimize query latency' },
+    { id: 'ITEM0020', category: 'middleware', name: 'Redis Memory Usage', result: 'pass', value: '2.1GB/4GB', threshold: '<75%' },
+    { id: 'ITEM0200', category: 'llm', name: 'LLM Inference Latency (TTFT)', result: 'pass', value: 'P95: 1.2s', threshold: '<2s' },
+    { id: 'ITEM0202', category: 'llm', name: 'Token Throughput (TPS)', result: 'pass', value: 'P50: 42 tok/s', threshold: '>30' },
+    { id: 'ITEM0204', category: 'llm', name: 'LLM Error Rate', result: 'pass', value: '0.22%', threshold: '<1%' },
+    { id: 'ITEM0205', category: 'vectordb', name: 'Vector Search Latency', result: 'pass', value: 'P99: 120ms', threshold: '<500ms' },
+    { id: 'ITEM0206', category: 'vectordb', name: 'Vector Index Health', result: 'pass', value: '125K vectors, 8 segments', threshold: 'N/A' },
+    { id: 'ITEM0207', category: 'gpu', name: 'GPU VRAM Usage', result: 'warn', value: '89%', threshold: '<85%', recommendation: 'Consider int8 quantization or reduce batch size' },
+    { id: 'ITEM0208', category: 'gpu', name: 'GPU OOM Prevention', result: 'fail', value: 'max_batch_tokens not set', threshold: 'configured', recommendation: 'Set --max-batch-tokens in vLLM config to prevent OOM' },
+    { id: 'ITEM0212', category: 'gpu', name: 'GPU Temperature', result: 'pass', value: '62°C', threshold: '<85°C' },
+    { id: 'ITEM0218', category: 'gpu', name: 'Quantization Adequacy', result: 'fail', value: 'fp16 (no quantization)', threshold: 'int8 recommended for 70B', recommendation: 'Apply GPTQ int8 quantization — saves ~40% VRAM' },
+    { id: 'ITEM0220', category: 'gpu', name: 'Continuous Batching', result: 'warn', value: 'disabled', threshold: 'enabled', recommendation: 'Enable --enable-continuous-batching for 2x throughput' },
+    { id: 'ITEM0300', category: 'guardrail', name: 'Guardrail Block Rate', result: 'pass', value: '2.1%', threshold: '<5%' },
+    { id: 'ITEM0301', category: 'guardrail', name: 'Guardrail Latency', result: 'warn', value: 'P95: 130ms', threshold: '<100ms', recommendation: 'Optimize content_safety policy regex patterns' },
+  ];
+}
+
+export function getAlertPolicies(): AlertPolicy[] {
+  const now = Date.now();
+  return [
+    { id: 'ap-1', name: 'GPU VRAM Critical', severity: 'critical', target: 'GPU Hosts', conditionType: 'metric', condition: 'gpu_vram_used_bytes / gpu_vram_total_bytes > 0.9', thresholdType: 'static', channels: ['slack-alerts', 'pagerduty'], enabled: true, lastTriggered: now - 10800_000 },
+    { id: 'ap-2', name: 'LLM TTFT High', severity: 'warning', target: 'AI Services', conditionType: 'metric', condition: 'histogram_quantile(0.95, llm_ttft_seconds) > 2', thresholdType: 'static', channels: ['slack-alerts'], enabled: true, lastTriggered: now - 3600_000 },
+    { id: 'ap-3', name: 'Error Rate Spike', severity: 'warning', target: 'All Services', conditionType: 'metric', condition: 'rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01', thresholdType: 'dynamic', channels: ['slack-alerts', 'email-oncall'], enabled: true, lastTriggered: now - 7200_000 },
+    { id: 'ap-4', name: 'Host CPU Critical', severity: 'critical', target: 'All Hosts', conditionType: 'metric', condition: 'node_cpu_seconds_total{mode="idle"} < 10', thresholdType: 'static', channels: ['slack-alerts', 'pagerduty'], enabled: true },
+    { id: 'ap-5', name: 'Disk Space Low', severity: 'warning', target: 'prod-db-*', conditionType: 'metric', condition: 'node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.15', thresholdType: 'forecast', channels: ['slack-infra'], enabled: true },
+    { id: 'ap-6', name: 'Guardrail Block Spike', severity: 'warning', target: 'RAG Services', conditionType: 'metric', condition: 'rate(llm_guardrail_checks_total{action="BLOCK"}[5m]) > 0.05', thresholdType: 'dynamic', channels: ['slack-alerts'], enabled: true },
+    { id: 'ap-7', name: 'GPU Temperature High', severity: 'info', target: 'GPU Hosts', conditionType: 'metric', condition: 'gpu_temperature_celsius > 80', thresholdType: 'static', channels: ['slack-infra'], enabled: false },
+    { id: 'ap-8', name: 'Log Error Burst', severity: 'warning', target: 'All Services', conditionType: 'log', condition: 'count(level="ERROR") > 50 in 5m', thresholdType: 'static', channels: ['slack-alerts'], enabled: true },
+  ];
+}
+
+export function getIncidents(): IncidentDetail[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'INC-2026-0312', title: 'GPU VRAM Critical — prod-gpu-03', severity: 'critical', status: 'resolved', assignee: 'kim.sre',
+      createdAt: now - 7200_000, resolvedAt: now - 5400_000, duration: 1800,
+      relatedAlertPolicy: 'GPU VRAM Critical',
+      timeline: [
+        { timestamp: now - 7200_000, type: 'alert', icon: '🟡', message: 'GPU VRAM 85% exceeded (86%)', actor: 'system' },
+        { timestamp: now - 7080_000, type: 'alert', icon: '🔴', message: 'GPU VRAM 90% exceeded (92%)', actor: 'system' },
+        { timestamp: now - 7080_000, type: 'notification', icon: '📧', message: 'Alert sent: Slack #alerts, @oncall', actor: 'system' },
+        { timestamp: now - 6900_000, type: 'ack', icon: '👤', message: 'Acknowledged', actor: 'kim.sre' },
+        { timestamp: now - 6600_000, type: 'action', icon: '🔧', message: 'Reducing batch size: 32 → 16', actor: 'kim.sre' },
+        { timestamp: now - 6000_000, type: 'action', icon: '📉', message: 'VRAM dropping: 88% — stabilizing', actor: 'system' },
+        { timestamp: now - 5400_000, type: 'resolve', icon: '✅', message: 'VRAM 82% — back to normal range', actor: 'kim.sre' },
+      ],
+      rca: 'New model (Llama-3-70B-fp16) deployed at 14:25 uses 15% more VRAM than previous. Batch size 32 caused VRAM to exceed limit. Related: ITEM0218 (quantization) and ITEM0208 (OOM prevention).',
+    },
+    {
+      id: 'INC-2026-0311', title: 'LLM TTFT degradation — rag-service', severity: 'warning', status: 'resolved', assignee: 'park.ai',
+      createdAt: now - 43200_000, resolvedAt: now - 39600_000, duration: 3600,
+      relatedAlertPolicy: 'LLM TTFT High',
+      timeline: [
+        { timestamp: now - 43200_000, type: 'alert', icon: '🟡', message: 'TTFT P95 exceeded 2s (2.8s)', actor: 'system' },
+        { timestamp: now - 43200_000, type: 'notification', icon: '📧', message: 'Alert sent: Slack #alerts', actor: 'system' },
+        { timestamp: now - 42000_000, type: 'ack', icon: '👤', message: 'Acknowledged', actor: 'park.ai' },
+        { timestamp: now - 40800_000, type: 'action', icon: '🔧', message: 'Scaled GPU replicas 2 → 3', actor: 'park.ai' },
+        { timestamp: now - 39600_000, type: 'resolve', icon: '✅', message: 'TTFT P95 back to 1.3s', actor: 'park.ai' },
+      ],
+      rca: 'Traffic spike from marketing campaign caused queue saturation. Resolved by horizontal scaling.',
+    },
+    {
+      id: 'INC-2026-0310', title: 'Error rate spike — api-gateway', severity: 'warning', status: 'open', assignee: 'lee.ops',
+      createdAt: now - 1800_000,
+      relatedAlertPolicy: 'Error Rate Spike',
+      timeline: [
+        { timestamp: now - 1800_000, type: 'alert', icon: '🟡', message: 'Error rate 4.2% (threshold 1%)', actor: 'system' },
+        { timestamp: now - 1800_000, type: 'notification', icon: '📧', message: 'Alert sent: Slack #alerts, email-oncall', actor: 'system' },
+        { timestamp: now - 1500_000, type: 'ack', icon: '👤', message: 'Acknowledged', actor: 'lee.ops' },
+        { timestamp: now - 1200_000, type: 'action', icon: '🔧', message: 'Investigating upstream rag-service 502 errors', actor: 'lee.ops' },
+      ],
+    },
+  ];
+}
+
+export function getNotificationChannels(): NotificationChannel[] {
+  return [
+    { id: 'nc-1', name: 'slack-alerts', type: 'slack', config: '#monitoring-alerts', enabled: true },
+    { id: 'nc-2', name: 'slack-infra', type: 'slack', config: '#infra-alerts', enabled: true },
+    { id: 'nc-3', name: 'email-oncall', type: 'email', config: 'oncall@example.com', enabled: true },
+    { id: 'nc-4', name: 'pagerduty', type: 'pagerduty', config: 'Service: AI-Production', enabled: true },
+    { id: 'nc-5', name: 'webhook-ci', type: 'webhook', config: 'https://ci.example.com/hooks/alert', enabled: false },
+  ];
 }
