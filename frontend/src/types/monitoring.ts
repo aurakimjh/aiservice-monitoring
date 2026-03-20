@@ -106,6 +106,36 @@ export interface ServiceDependency {
   status: Status;
 }
 
+export type TransactionStatus = 'normal' | 'slow' | 'very_slow' | 'error';
+
+export interface TransactionSpan {
+  spanId: string;
+  parentId: string;
+  name: string;
+  startOffset: number; // ms from root
+  duration: number; // ms
+  status: 'ok' | 'error';
+  attributes: Record<string, string | number>;
+}
+
+export interface Transaction {
+  traceId: string;
+  rootSpanId: string;
+  timestamp: number; // epoch ms
+  elapsed: number; // ms
+  service: string;
+  endpoint: string;
+  status: TransactionStatus;
+  statusCode: number;
+  metrics: {
+    ttft_ms: number;
+    tps: number;
+    tokens_generated: number;
+    guardrail_action: 'PASS' | 'BLOCK';
+  };
+  spans: TransactionSpan[];
+}
+
 export interface AIService {
   id: string;
   name: string;

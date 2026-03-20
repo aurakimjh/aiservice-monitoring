@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -344,6 +344,144 @@ export function generateXLogScatterData(
       responseTime *= 1.5 + Math.random() * 2;
     }
     data.push([timestamp, Math.round(responseTime), isError]);
+  }
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Transactions — XLog/HeatMap 통합 대시보드용 트랜잭션 데이터
+// ═══════════════════════════════════════════════════════════════
+
+const ENDPOINTS = [
+  'POST /api/chat',
+  'POST /api/chat/stream',
+  'POST /api/search',
+  'POST /api/documents',
+  'GET /api/health',
+  'POST /api/embed',
+];
+
+const SERVICES = ['rag-service', 'api-gateway', 'embedding-service', 'auth-service'];
+
+function randomHex(len: number): string {
+  const chars = '0123456789abcdef';
+  let result = '';
+  for (let i = 0; i < len; i++) result += chars[Math.floor(Math.random() * 16)];
+  return result;
+}
+
+function classifyStatus(elapsed: number, isError: boolean): TransactionStatus {
+  if (isError) return 'error';
+  if (elapsed >= 3000) return 'very_slow';
+  if (elapsed >= 1000) return 'slow';
+  return 'normal';
+}
+
+export function generateTransactions(count = 200, serviceFilter?: string): Transaction[] {
+  const now = Date.now();
+  const txns: Transaction[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const timestamp = now - (count - i) * 3000 + Math.random() * 2000;
+    const service = serviceFilter ?? SERVICES[Math.floor(Math.random() * SERVICES.length)];
+    const isRag = service === 'rag-service';
+    const endpoint = isRag
+      ? ENDPOINTS[Math.floor(Math.random() * 3)] // chat, stream, search
+      : ENDPOINTS[Math.floor(Math.random() * ENDPOINTS.length)];
+
+    // Elapsed time distribution
+    const base = isRag ? 800 : 120;
+    const jitter = Math.random();
+    let elapsed: number;
+    if (jitter < 0.6) elapsed = base * (0.3 + Math.random() * 1.2);
+    else if (jitter < 0.92) elapsed = base + (base * 2) * Math.random();
+    else elapsed = base * 3 + base * 2 * Math.random();
+    elapsed = Math.round(elapsed);
+
+    const isError = Math.random() < 0.04;
+    const isBlock = !isError && Math.random() < 0.02;
+    const status = classifyStatus(elapsed, isError || isBlock);
+    const statusCode = isError ? (Math.random() < 0.5 ? 500 : 502) : 200;
+
+    const traceId = randomHex(32);
+    const rootSpanId = randomHex(12);
+
+    // RAG pipeline spans
+    const guardrailIn = Math.round(20 + Math.random() * 40);
+    const embedding = Math.round(20 + Math.random() * 30);
+    const vectorSearch = Math.round(30 + Math.random() * 50);
+    const llmInference = Math.max(100, elapsed - guardrailIn - embedding - vectorSearch - 30);
+    const guardrailOut = Math.round(10 + Math.random() * 20);
+
+    const ttft = isRag ? Math.round(llmInference * 0.3 + Math.random() * 100) : 0;
+    const tps = isRag ? Math.round(20 + Math.random() * 40 * 10) / 10 : 0;
+    const tokens = isRag ? Math.round(tps * (llmInference / 1000)) : 0;
+
+    const spans: TransactionSpan[] = isRag ? [
+      { spanId: randomHex(12), parentId: rootSpanId, name: 'rag.guardrail_input_check', startOffset: 0, duration: guardrailIn, status: 'ok' as const, attributes: { 'guardrail.action': isBlock ? 'BLOCK' : 'PASS', 'guardrail.policy': 'content_safety' } },
+      { spanId: randomHex(12), parentId: rootSpanId, name: 'rag.embedding', startOffset: guardrailIn + 2, duration: embedding, status: 'ok' as const, attributes: { 'embedding.model': 'text-embedding-3-large', 'embedding.dimensions': 1536 } },
+      { spanId: randomHex(12), parentId: rootSpanId, name: 'rag.vector_search', startOffset: guardrailIn + embedding + 5, duration: vectorSearch, status: 'ok' as const, attributes: { 'vectordb.engine': 'qdrant', 'vectordb.results_count': Math.floor(3 + Math.random() * 5) } },
+      { spanId: randomHex(12), parentId: rootSpanId, name: 'rag.llm_inference', startOffset: guardrailIn + embedding + vectorSearch + 8, duration: llmInference, status: isError ? 'error' as const : 'ok' as const, attributes: { 'llm.model': 'gpt-4o', 'llm.ttft_ms': ttft, 'llm.tokens': tokens, 'llm.tps': tps } },
+      { spanId: randomHex(12), parentId: rootSpanId, name: 'rag.guardrail_output_check', startOffset: elapsed - guardrailOut, duration: guardrailOut, status: 'ok' as const, attributes: { 'guardrail.action': 'PASS' } },
+    ] : [
+      { spanId: randomHex(12), parentId: rootSpanId, name: `${service}.handler`, startOffset: 0, duration: elapsed, status: isError ? 'error' as const : 'ok' as const, attributes: { 'http.method': endpoint.split(' ')[0], 'http.target': endpoint.split(' ')[1] } },
+    ];
+
+    txns.push({
+      traceId,
+      rootSpanId,
+      timestamp,
+      elapsed,
+      service,
+      endpoint,
+      status,
+      statusCode,
+      metrics: {
+        ttft_ms: ttft,
+        tps,
+        tokens_generated: tokens,
+        guardrail_action: isBlock ? 'BLOCK' : 'PASS',
+      },
+      spans,
+    });
+  }
+
+  return txns;
+}
+
+// HeatMap 데이터 생성: [시간 버킷, 응답시간 버킷, 트랜잭션 수]
+export function generateHeatMapData(
+  transactions: Transaction[],
+  timeBuckets = 30,
+  latencyBuckets = ['0-100', '100-300', '300-500', '500-1000', '1000-2000', '2000-3000', '3000+'],
+): [number, number, number][] {
+  if (transactions.length === 0) return [];
+  const minT = Math.min(...transactions.map((t) => t.timestamp));
+  const maxT = Math.max(...transactions.map((t) => t.timestamp));
+  const bucketWidth = (maxT - minT) / timeBuckets || 1;
+
+  const grid: number[][] = Array.from({ length: timeBuckets }, () =>
+    new Array(latencyBuckets.length).fill(0),
+  );
+
+  for (const txn of transactions) {
+    const tIdx = Math.min(Math.floor((txn.timestamp - minT) / bucketWidth), timeBuckets - 1);
+    let lIdx: number;
+    if (txn.elapsed < 100) lIdx = 0;
+    else if (txn.elapsed < 300) lIdx = 1;
+    else if (txn.elapsed < 500) lIdx = 2;
+    else if (txn.elapsed < 1000) lIdx = 3;
+    else if (txn.elapsed < 2000) lIdx = 4;
+    else if (txn.elapsed < 3000) lIdx = 5;
+    else lIdx = 6;
+    grid[tIdx][lIdx]++;
+  }
+
+  const data: [number, number, number][] = [];
+  for (let t = 0; t < timeBuckets; t++) {
+    for (let l = 0; l < latencyBuckets.length; l++) {
+      data.push([t, l, grid[t][l]]);
+    }
   }
   return data;
 }

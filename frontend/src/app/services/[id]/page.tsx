@@ -398,17 +398,23 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
       {/* ── XLog Tab ── */}
       {activeTab === 'xlog' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>XLog Scatter Plot</CardTitle>
-            <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>
-              <span>Drag to select area for trace drill-down</span>
-            </div>
-          </CardHeader>
-          <EChartsWrapper option={xlogOption} height={400} />
-        </Card>
+        <div className="space-y-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>XLog Scatter Plot</CardTitle>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>
+              </div>
+            </CardHeader>
+            <EChartsWrapper option={xlogOption} height={400} />
+          </Card>
+          <div className="text-center">
+            <Link href="/traces" className="text-xs text-[var(--accent-primary)] hover:underline">
+              Open full XLog / HeatMap dashboard &rarr;
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* ── Traces Tab (Placeholder) ── */}
