@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1088,4 +1088,55 @@ export function getExecutiveSummary(): ExecutiveSummary {
       { title: 'API latency P95 error budget at 42%', severity: 'warning', age: '1d' },
     ],
   };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 14-1: 커스텀 대시보드 템플릿
+// ═══════════════════════════════════════════════════════════════
+
+export function getDashboardTemplates(): DashboardConfig[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'tpl-ai', name: 'AI Service Overview', description: 'LLM performance, GPU status, guardrail metrics', template: 'ai',
+      widgets: [
+        { id: 'w1', type: 'kpi', title: 'TTFT P95', size: '1x1', metric: 'llm_ttft_seconds' },
+        { id: 'w2', type: 'kpi', title: 'TPS P50', size: '1x1', metric: 'llm_tokens_per_second' },
+        { id: 'w3', type: 'kpi', title: 'GPU VRAM', size: '1x1', metric: 'gpu_vram_used_bytes' },
+        { id: 'w4', type: 'kpi', title: 'Block Rate', size: '1x1', metric: 'llm_guardrail_checks_total' },
+        { id: 'w5', type: 'timeseries', title: 'TTFT Trend', size: '2x1', metric: 'llm_ttft_seconds' },
+        { id: 'w6', type: 'timeseries', title: 'TPS Trend', size: '2x1', metric: 'llm_tokens_per_second' },
+        { id: 'w7', type: 'bar', title: 'Token Cost by Model', size: '2x1', metric: 'llm_cost_dollars_total' },
+        { id: 'w8', type: 'timeseries', title: 'GPU Temperature', size: '2x1', metric: 'gpu_temperature_celsius' },
+      ],
+      createdAt: now - 86400_000 * 7, updatedAt: now - 3600_000,
+    },
+    {
+      id: 'tpl-infra', name: 'Infrastructure', description: 'Host resources, network, disk usage', template: 'infra',
+      widgets: [
+        { id: 'w1', type: 'kpi', title: 'CPU Usage', size: '1x1', metric: 'node_cpu_seconds_total' },
+        { id: 'w2', type: 'kpi', title: 'Memory', size: '1x1', metric: 'node_memory_MemAvailable_bytes' },
+        { id: 'w3', type: 'kpi', title: 'Disk I/O', size: '1x1', metric: 'node_disk_io_time_seconds_total' },
+        { id: 'w4', type: 'kpi', title: 'Network', size: '1x1', metric: 'node_network_receive_bytes_total' },
+        { id: 'w5', type: 'timeseries', title: 'CPU Trend', size: '2x1', metric: 'node_cpu_seconds_total' },
+        { id: 'w6', type: 'timeseries', title: 'Memory Trend', size: '2x1', metric: 'node_memory_MemAvailable_bytes' },
+        { id: 'w7', type: 'timeseries', title: 'Disk Usage', size: '2x1', metric: 'node_filesystem_avail_bytes' },
+        { id: 'w8', type: 'timeseries', title: 'Network I/O', size: '2x1', metric: 'node_network_receive_bytes_total' },
+      ],
+      createdAt: now - 86400_000 * 7, updatedAt: now - 7200_000,
+    },
+    {
+      id: 'tpl-exec', name: 'Executive Summary', description: 'High-level KPIs, SLO compliance, cost overview', template: 'executive',
+      widgets: [
+        { id: 'w1', type: 'kpi', title: 'SLO Compliance', size: '1x1', metric: 'slo_compliance' },
+        { id: 'w2', type: 'kpi', title: 'Active Incidents', size: '1x1', metric: 'incidents_active' },
+        { id: 'w3', type: 'kpi', title: 'Daily Cost', size: '1x1', metric: 'cost_total' },
+        { id: 'w4', type: 'kpi', title: 'MTTR', size: '1x1', metric: 'mttr' },
+        { id: 'w5', type: 'pie', title: 'Cost Breakdown', size: '2x2', metric: 'cost_breakdown' },
+        { id: 'w6', type: 'timeseries', title: 'Error Rate Trend', size: '2x1', metric: 'http_requests_total' },
+        { id: 'w7', type: 'text', title: 'Notes', size: '2x1', content: 'Weekly review: GPU costs trending up 4%. Consider int8 quantization for Llama-3-70B.' },
+      ],
+      createdAt: now - 86400_000 * 3, updatedAt: now - 1800_000,
+    },
+  ];
 }

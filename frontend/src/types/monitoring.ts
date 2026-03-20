@@ -380,6 +380,31 @@ export interface ExecutiveSummary {
   topIssues: { title: string; severity: Severity; age: string }[];
 }
 
+// Phase 14-1: Custom Dashboard Builder
+
+export type WidgetType = 'kpi' | 'timeseries' | 'bar' | 'pie' | 'table' | 'text';
+export type WidgetSize = '1x1' | '2x1' | '1x2' | '2x2';
+
+export interface WidgetConfig {
+  id: string;
+  type: WidgetType;
+  title: string;
+  size: WidgetSize;
+  metric?: string;
+  query?: string;
+  content?: string; // for text widget
+}
+
+export interface DashboardConfig {
+  id: string;
+  name: string;
+  description: string;
+  template?: string;
+  widgets: WidgetConfig[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;
