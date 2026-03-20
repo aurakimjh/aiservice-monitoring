@@ -1,0 +1,584 @@
+'use client';
+
+import { useState, use, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/ui';
+import { StatusIndicator, KPICard } from '@/components/monitoring';
+import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
+import { useProjectStore } from '@/stores/project-store';
+import {
+  getProjectServices,
+  getProjectHosts,
+  getServiceEndpoints,
+  getServiceDeployments,
+  getServiceDependencies,
+  generateXLogScatterData,
+  generateTimeSeries,
+} from '@/lib/demo-data';
+import { formatDuration } from '@/lib/utils';
+import {
+  Network,
+  Activity,
+  Globe,
+  GitBranch,
+  AlertTriangle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Rocket,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  Loader2,
+  Search,
+} from 'lucide-react';
+
+const SERVICE_TABS = [
+  { id: 'overview', label: 'Overview', icon: <Activity size={13} /> },
+  { id: 'endpoints', label: 'Endpoints', icon: <Globe size={13} /> },
+  { id: 'xlog', label: 'XLog', icon: <Search size={13} /> },
+  { id: 'traces', label: 'Traces', icon: <GitBranch size={13} /> },
+  { id: 'errors', label: 'Errors', icon: <AlertTriangle size={13} /> },
+  { id: 'dependencies', label: 'Dependencies', icon: <Network size={13} /> },
+  { id: 'deployments', label: 'Deployments', icon: <Rocket size={13} /> },
+];
+
+const METHOD_COLORS: Record<string, string> = {
+  GET: 'bg-[#1F6FEB]/20 text-[#58A6FF]',
+  POST: 'bg-[#238636]/20 text-[#3FB950]',
+  PUT: 'bg-[#9E6A03]/20 text-[#D29922]',
+  DELETE: 'bg-[#DA3633]/20 text-[#F85149]',
+  PATCH: 'bg-[#8B5CF6]/20 text-[#BC8CFF]',
+};
+
+const DEPLOY_STATUS_ICON = {
+  'success': <CheckCircle2 size={14} className="text-[var(--status-healthy)]" />,
+  'failed': <XCircle size={14} className="text-[var(--status-critical)]" />,
+  'rolling-back': <RotateCcw size={14} className="text-[var(--status-warning)]" />,
+  'in-progress': <Loader2 size={14} className="text-[var(--accent-primary)] animate-spin" />,
+};
+
+export default function ServiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const router = useRouter();
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const projectId = currentProjectId ?? 'proj-ai-prod';
+  const services = getProjectServices(projectId);
+  const service = services.find((s) => s.id === id);
+
+  const [activeTab, setActiveTab] = useState('overview');
+  const [epSortBy, setEpSortBy] = useState<'rpm' | 'p95' | 'error'>('rpm');
+  const [epSortDir, setEpSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Data hooks (always called, even if service is null)
+  const endpoints = useMemo(() => service ? getServiceEndpoints(id) : [], [id, service]);
+  const deployments = useMemo(() => service ? getServiceDeployments(id) : [], [id, service]);
+  const dependencies = useMemo(() => service ? getServiceDependencies(id) : [], [id, service]);
+  const xlogData = useMemo(() => service ? generateXLogScatterData(service, 500) : [], [service]);
+
+  const hosts = getProjectHosts(projectId);
+  const serviceHosts = useMemo(
+    () => service ? hosts.filter((h) => service.hostIds.includes(h.id)) : [],
+    [service, hosts],
+  );
+
+  // Saturation: avg CPU/MEM across service hosts
+  const saturation = useMemo(() => {
+    if (serviceHosts.length === 0) return { cpu: 0, mem: 0, gpu: null as number | null };
+    const avgCpu = serviceHosts.reduce((s, h) => s + h.cpuPercent, 0) / serviceHosts.length;
+    const avgMem = serviceHosts.reduce((s, h) => s + h.memPercent, 0) / serviceHosts.length;
+    const gpuHosts = serviceHosts.filter((h) => h.gpus && h.gpus.length > 0);
+    const avgGpu = gpuHosts.length > 0
+      ? gpuHosts.reduce((s, h) => s + (h.gpus?.[0]?.vramPercent ?? 0), 0) / gpuHosts.length
+      : null;
+    return { cpu: Math.round(avgCpu), mem: Math.round(avgMem), gpu: avgGpu ? Math.round(avgGpu) : null };
+  }, [serviceHosts]);
+
+  // Sorted endpoints for Endpoints tab
+  const sortedEndpoints = useMemo(() => {
+    const sorted = [...endpoints];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      if (epSortBy === 'rpm') cmp = a.rpm - b.rpm;
+      else if (epSortBy === 'p95') cmp = a.latencyP95 - b.latencyP95;
+      else if (epSortBy === 'error') cmp = a.errorRate - b.errorRate;
+      return epSortDir === 'desc' ? -cmp : cmp;
+    });
+    return sorted;
+  }, [endpoints, epSortBy, epSortDir]);
+
+  // XLog ECharts option
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const xlogOption = useMemo<any>(() => {
+    const normal = xlogData.filter((d) => !d[2]).map((d) => [d[0], d[1]]);
+    const errors = xlogData.filter((d) => d[2]).map((d) => [d[0], d[1]]);
+    return {
+      animation: false,
+      xAxis: { type: 'time' as const },
+      yAxis: {
+        type: 'value' as const,
+        name: 'ms',
+        nameTextStyle: { color: '#8B949E', fontSize: 10, padding: [0, 0, 0, -30] },
+      },
+      series: [
+        {
+          name: 'Normal',
+          type: 'scatter' as const,
+          data: normal,
+          symbolSize: 3,
+          itemStyle: { color: '#58A6FF', opacity: 0.6 },
+        },
+        {
+          name: 'Error',
+          type: 'scatter' as const,
+          data: errors,
+          symbolSize: 4,
+          itemStyle: { color: '#F85149', opacity: 0.8 },
+        },
+      ],
+      tooltip: {
+        trigger: 'item' as const,
+        formatter: (p: { seriesName: string; data: number[] }) =>
+          `${p.seriesName}<br/>Response: ${Math.round(p.data[1])}ms`,
+      },
+      legend: {
+        show: true,
+        bottom: 0,
+        itemWidth: 10,
+        itemHeight: 10,
+        textStyle: { fontSize: 11 },
+      },
+      grid: { left: 52, right: 16, top: 24, bottom: 36 },
+      dataZoom: [{ type: 'inside' as const }, { type: 'slider' as const, height: 16, bottom: 52 }],
+    };
+  }, [xlogData]);
+
+  const upstream = dependencies.filter((d) => d.direction === 'upstream');
+  const downstream = dependencies.filter((d) => d.direction === 'downstream');
+
+  if (!service) {
+    return (
+      <div className="text-center py-20 space-y-3">
+        <div className="text-4xl">404</div>
+        <div className="text-sm text-[var(--text-muted)]">Service &quot;{id}&quot; not found</div>
+        <Button variant="secondary" onClick={() => router.push('/services')}>Back to Services</Button>
+      </div>
+    );
+  }
+
+  const handleEpSort = (col: typeof epSortBy) => {
+    if (epSortBy === col) setEpSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setEpSortBy(col); setEpSortDir('desc'); }
+  };
+  const epSortIcon = (col: typeof epSortBy) => epSortBy === col ? (epSortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
+
+  return (
+    <div className="space-y-4">
+      <Breadcrumb items={[
+        { label: 'Home', href: '/' },
+        { label: 'Services', href: '/services', icon: <Network size={14} /> },
+        { label: service.name },
+      ]} />
+
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <StatusIndicator status={service.status} size="lg" pulse={service.status === 'critical'} />
+            <h1 className="text-lg font-semibold text-[var(--text-primary)]">{service.name}</h1>
+            <Badge variant="status" status={service.status}>{service.status}</Badge>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+            <span>{service.framework}</span>
+            <span>{service.language}</span>
+            <span className="flex items-center gap-1">
+              {serviceHosts.length} host{serviceHosts.length !== 1 && 's'}
+              {serviceHosts.map((h) => (
+                <Link
+                  key={h.id}
+                  href={`/infra/${h.hostname}`}
+                  className="text-[var(--accent-primary)] hover:underline"
+                >
+                  {h.hostname}
+                </Link>
+              ))}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <Tabs tabs={SERVICE_TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+      {/* ── Overview Tab ── */}
+      {activeTab === 'overview' && (
+        <div className="space-y-4">
+          {/* Golden Signals */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KPICard
+              title="Latency (P95)"
+              value={formatDuration(service.latencyP95)}
+              subtitle={`P50: ${formatDuration(service.latencyP50)} / P99: ${formatDuration(service.latencyP99)}`}
+              status={service.latencyP95 > 2000 ? 'critical' : service.latencyP95 > 500 ? 'warning' : 'healthy'}
+              sparkData={[180, 210, 195, 230, 245, 220, 260, 240, 250, service.latencyP95 / 10]}
+            />
+            <KPICard
+              title="Traffic"
+              value={service.rpm.toLocaleString()}
+              unit="rpm"
+              trend={{ direction: 'up', value: '+12%', positive: true }}
+              status="healthy"
+              sparkData={[900, 950, 1020, 980, 1050, 1100, 1080, 1120, 1150, service.rpm]}
+            />
+            <KPICard
+              title="Error Rate"
+              value={service.errorRate.toFixed(2)}
+              unit="%"
+              status={service.errorRate > 1 ? 'critical' : service.errorRate > 0.1 ? 'warning' : 'healthy'}
+              sparkData={[0.1, 0.12, 0.08, 0.15, 0.11, 0.09, 0.13, 0.1, 0.12, service.errorRate]}
+            />
+            <KPICard
+              title="Saturation"
+              value={`${saturation.cpu}%`}
+              subtitle={`MEM ${saturation.mem}%${saturation.gpu !== null ? ` / GPU ${saturation.gpu}%` : ''}`}
+              status={saturation.cpu > 85 ? 'critical' : saturation.cpu > 70 ? 'warning' : 'healthy'}
+              sparkData={[40, 45, 48, 52, 55, 50, 58, 55, 52, saturation.cpu]}
+            />
+          </div>
+
+          {/* Time Series Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <Card>
+              <CardHeader><CardTitle>Latency</CardTitle></CardHeader>
+              <TimeSeriesChart
+                series={[
+                  { name: 'P50', data: generateTimeSeries(service.latencyP50, service.latencyP50 * 0.2, 60), color: '#3FB950' },
+                  { name: 'P95', data: generateTimeSeries(service.latencyP95, service.latencyP95 * 0.15, 60), color: '#D29922' },
+                  { name: 'P99', data: generateTimeSeries(service.latencyP99, service.latencyP99 * 0.1, 60), color: '#F85149', dashStyle: true },
+                ]}
+                yAxisLabel="ms"
+                height={200}
+              />
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Traffic (RPM)</CardTitle></CardHeader>
+              <TimeSeriesChart
+                series={[
+                  { name: 'RPM', data: generateTimeSeries(service.rpm, service.rpm * 0.15, 60), type: 'area', color: '#58A6FF' },
+                ]}
+                yAxisLabel="rpm"
+                height={200}
+              />
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Error Rate</CardTitle></CardHeader>
+              <TimeSeriesChart
+                series={[
+                  { name: 'Error Rate', data: generateTimeSeries(service.errorRate, service.errorRate * 0.3, 60), type: 'area', color: '#F85149' },
+                ]}
+                yAxisLabel="%"
+                thresholdLine={{ value: 1, label: 'SLO 1%', color: '#F85149' }}
+                height={200}
+              />
+            </Card>
+          </div>
+
+          {/* XLog Scatter */}
+          <Card>
+            <CardHeader>
+              <CardTitle>XLog (Response Distribution)</CardTitle>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>
+              </div>
+            </CardHeader>
+            <EChartsWrapper option={xlogOption} height={280} />
+          </Card>
+
+          {/* Endpoint Top 10 */}
+          <Card padding="none">
+            <div className="px-4 pt-3 pb-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Top Endpoints by RPM</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2 font-medium">Endpoint</th>
+                    <th className="px-4 py-2 font-medium text-right">RPM</th>
+                    <th className="px-4 py-2 font-medium text-right">P95</th>
+                    <th className="px-4 py-2 font-medium text-right">Error %</th>
+                    <th className="px-4 py-2 font-medium" style={{ width: 120 }}>Contribution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {endpoints.slice(0, 10).map((ep) => (
+                    <tr key={ep.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                      <td className="px-4 py-2">
+                        <span className={cn('inline-block px-1.5 py-0.5 text-[10px] font-bold rounded mr-2', METHOD_COLORS[ep.method])}>
+                          {ep.method}
+                        </span>
+                        <span className="font-mono text-[var(--text-primary)]">{ep.path}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{ep.rpm.toLocaleString()}</td>
+                      <td className={cn('px-4 py-2 text-right tabular-nums', ep.latencyP95 > 1000 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]')}>
+                        {formatDuration(ep.latencyP95)}
+                      </td>
+                      <td className={cn('px-4 py-2 text-right tabular-nums', ep.errorRate > 0.2 ? 'text-[var(--status-critical)]' : 'text-[var(--text-secondary)]')}>
+                        {ep.errorRate}%
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--accent-primary)] rounded-full" style={{ width: `${ep.contribution}%` }} />
+                          </div>
+                          <span className="text-[10px] tabular-nums text-[var(--text-muted)] w-8 text-right">{ep.contribution}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Endpoints Tab ── */}
+      {activeTab === 'endpoints' && (
+        <Card padding="none">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium">Endpoint</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleEpSort('rpm')}>RPM{epSortIcon('rpm')}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">P50</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleEpSort('p95')}>P95{epSortIcon('p95')}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">P99</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleEpSort('error')}>Error %{epSortIcon('error')}</th>
+                  <th className="px-4 py-2.5 font-medium" style={{ width: 120 }}>Contribution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedEndpoints.map((ep) => (
+                  <tr key={ep.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                    <td className="px-4 py-2.5">
+                      <span className={cn('inline-block px-1.5 py-0.5 text-[10px] font-bold rounded mr-2', METHOD_COLORS[ep.method])}>
+                        {ep.method}
+                      </span>
+                      <span className="font-mono text-[var(--text-primary)]">{ep.path}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{ep.rpm.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(ep.latencyP50)}</td>
+                    <td className={cn('px-4 py-2.5 text-right tabular-nums font-medium', ep.latencyP95 > 1000 ? 'text-[var(--status-warning)]' : 'text-[var(--text-secondary)]')}>
+                      {formatDuration(ep.latencyP95)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(ep.latencyP99)}</td>
+                    <td className={cn('px-4 py-2.5 text-right tabular-nums', ep.errorRate > 0.2 ? 'text-[var(--status-critical)]' : 'text-[var(--text-secondary)]')}>
+                      {ep.errorRate}%
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                          <div className="h-full bg-[var(--accent-primary)] rounded-full" style={{ width: `${ep.contribution}%` }} />
+                        </div>
+                        <span className="text-[10px] tabular-nums text-[var(--text-muted)] w-8 text-right">{ep.contribution}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {endpoints.length === 0 && <div className="text-center py-12 text-sm text-[var(--text-muted)]">No endpoints found.</div>}
+        </Card>
+      )}
+
+      {/* ── XLog Tab ── */}
+      {activeTab === 'xlog' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>XLog Scatter Plot</CardTitle>
+            <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>
+              <span>Drag to select area for trace drill-down</span>
+            </div>
+          </CardHeader>
+          <EChartsWrapper option={xlogOption} height={400} />
+        </Card>
+      )}
+
+      {/* ── Traces Tab (Placeholder) ── */}
+      {activeTab === 'traces' && (
+        <Card>
+          <div className="text-center py-16 space-y-3">
+            <GitBranch size={32} className="mx-auto text-[var(--text-muted)]" />
+            <div className="text-sm font-medium text-[var(--text-secondary)]">Distributed Tracing</div>
+            <div className="text-xs text-[var(--text-muted)]">Coming in Phase 11-3 &mdash; Trace waterfall and span analysis</div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Errors Tab (Placeholder) ── */}
+      {activeTab === 'errors' && (
+        <Card>
+          <div className="text-center py-16 space-y-3">
+            <AlertTriangle size={32} className="mx-auto text-[var(--text-muted)]" />
+            <div className="text-sm font-medium text-[var(--text-secondary)]">Error Tracking</div>
+            <div className="text-xs text-[var(--text-muted)]">Coming in Phase 11-4 &mdash; Error grouping and stack traces</div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Dependencies Tab ── */}
+      {activeTab === 'dependencies' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Upstream */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <ArrowDownRight size={14} className="inline mr-1 text-[var(--accent-primary)]" />
+                Upstream (Callers)
+              </CardTitle>
+            </CardHeader>
+            {upstream.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                      <th className="px-3 py-2 font-medium">Service</th>
+                      <th className="px-3 py-2 font-medium text-right">RPM</th>
+                      <th className="px-3 py-2 font-medium text-right">Error %</th>
+                      <th className="px-3 py-2 font-medium text-right">P95</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upstream.map((dep) => (
+                      <tr key={dep.serviceId} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                        <td className="px-3 py-2">
+                          {dep.serviceId.startsWith('s-') ? (
+                            <Link href={`/services/${dep.serviceId}`} className="text-[var(--accent-primary)] hover:underline font-medium">
+                              {dep.serviceName}
+                            </Link>
+                          ) : (
+                            <span className="text-[var(--text-primary)] font-medium">{dep.serviceName}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{dep.rpm.toLocaleString()}</td>
+                        <td className={cn('px-3 py-2 text-right tabular-nums', dep.errorRate > 0.5 ? 'text-[var(--status-critical)]' : 'text-[var(--text-secondary)]')}>
+                          {dep.errorRate}%
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(dep.latencyP95)}</td>
+                        <td className="px-3 py-2"><StatusIndicator status={dep.status} size="sm" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-xs text-[var(--text-muted)]">No upstream callers</div>
+            )}
+          </Card>
+
+          {/* Downstream */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <ArrowUpRight size={14} className="inline mr-1 text-[var(--status-warning)]" />
+                Downstream (Dependencies)
+              </CardTitle>
+            </CardHeader>
+            {downstream.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                      <th className="px-3 py-2 font-medium">Service</th>
+                      <th className="px-3 py-2 font-medium text-right">RPM</th>
+                      <th className="px-3 py-2 font-medium text-right">Error %</th>
+                      <th className="px-3 py-2 font-medium text-right">P95</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {downstream.map((dep) => (
+                      <tr key={dep.serviceId} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                        <td className="px-3 py-2">
+                          {dep.serviceId.startsWith('s-') ? (
+                            <Link href={`/services/${dep.serviceId}`} className="text-[var(--accent-primary)] hover:underline font-medium">
+                              {dep.serviceName}
+                            </Link>
+                          ) : (
+                            <span className="text-[var(--text-primary)] font-medium">{dep.serviceName}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{dep.rpm.toLocaleString()}</td>
+                        <td className={cn('px-3 py-2 text-right tabular-nums', dep.errorRate > 0.5 ? 'text-[var(--status-critical)]' : 'text-[var(--text-secondary)]')}>
+                          {dep.errorRate}%
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{formatDuration(dep.latencyP95)}</td>
+                        <td className="px-3 py-2"><StatusIndicator status={dep.status} size="sm" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-xs text-[var(--text-muted)]">No downstream dependencies</div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── Deployments Tab ── */}
+      {activeTab === 'deployments' && (
+        <Card>
+          <CardHeader><CardTitle>Recent Deployments</CardTitle></CardHeader>
+          <div className="space-y-0">
+            {deployments.map((deploy, idx) => (
+              <div
+                key={deploy.id}
+                className={cn(
+                  'flex items-start gap-4 py-3 px-2',
+                  idx < deployments.length - 1 && 'border-b border-[var(--border-muted)]',
+                )}
+              >
+                {/* Timeline dot + line */}
+                <div className="flex flex-col items-center pt-0.5">
+                  {DEPLOY_STATUS_ICON[deploy.status]}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="tag" className="font-mono text-[10px]">{deploy.version}</Badge>
+                    <Badge
+                      variant="status"
+                      status={deploy.status === 'success' ? 'healthy' : deploy.status === 'failed' ? 'critical' : 'warning'}
+                    >
+                      {deploy.status}
+                    </Badge>
+                    <span className="text-[10px] text-[var(--text-muted)]">{deploy.duration}s</span>
+                  </div>
+                  <div className="text-xs text-[var(--text-primary)] mt-1">{deploy.description}</div>
+                  <div className="flex items-center gap-3 mt-1 text-[10px] text-[var(--text-muted)]">
+                    <span>{deploy.deployer}</span>
+                    <span className="font-mono">{deploy.commitHash}</span>
+                    <span>{new Date(deploy.timestamp).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {deployments.length === 0 && (
+              <div className="text-center py-8 text-xs text-[var(--text-muted)]">No deployment history</div>
+            )}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

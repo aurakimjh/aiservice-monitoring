@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -200,4 +200,150 @@ export function getServiceTopology(projectId: string): { nodes: TopologyNode[]; 
   ];
 
   return { nodes, edges };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Service Detail — 서비스 상세 대시보드용 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export function getServiceEndpoints(serviceId: string): Endpoint[] {
+  const sets: Record<string, Endpoint[]> = {
+    's-apigw': [
+      { id: 'ep-1', method: 'GET', path: '/api/health', rpm: 120, latencyP50: 5, latencyP95: 12, latencyP99: 25, errorRate: 0, contribution: 10 },
+      { id: 'ep-2', method: 'POST', path: '/api/chat', rpm: 450, latencyP50: 120, latencyP95: 340, latencyP99: 580, errorRate: 0.15, contribution: 37.5 },
+      { id: 'ep-3', method: 'GET', path: '/api/conversations', rpm: 280, latencyP50: 45, latencyP95: 95, latencyP99: 180, errorRate: 0.05, contribution: 23.3 },
+      { id: 'ep-4', method: 'POST', path: '/api/auth/token', rpm: 200, latencyP50: 30, latencyP95: 55, latencyP99: 90, errorRate: 0.02, contribution: 16.7 },
+      { id: 'ep-5', method: 'GET', path: '/api/models', rpm: 80, latencyP50: 15, latencyP95: 28, latencyP99: 45, errorRate: 0, contribution: 6.7 },
+      { id: 'ep-6', method: 'DELETE', path: '/api/conversations/:id', rpm: 70, latencyP50: 35, latencyP95: 70, latencyP99: 120, errorRate: 0.01, contribution: 5.8 },
+    ],
+    's-rag': [
+      { id: 'ep-10', method: 'POST', path: '/api/chat', rpm: 200, latencyP50: 820, latencyP95: 1800, latencyP99: 3200, errorRate: 0.3, contribution: 44.4 },
+      { id: 'ep-11', method: 'POST', path: '/api/search', rpm: 150, latencyP50: 350, latencyP95: 700, latencyP99: 1200, errorRate: 0.1, contribution: 33.3 },
+      { id: 'ep-12', method: 'POST', path: '/api/embed', rpm: 60, latencyP50: 120, latencyP95: 280, latencyP99: 450, errorRate: 0.05, contribution: 13.3 },
+      { id: 'ep-13', method: 'GET', path: '/api/health', rpm: 40, latencyP50: 3, latencyP95: 8, latencyP99: 15, errorRate: 0, contribution: 8.9 },
+    ],
+    's-embed': [
+      { id: 'ep-20', method: 'POST', path: '/api/embed', rpm: 500, latencyP50: 42, latencyP95: 110, latencyP99: 190, errorRate: 0.03, contribution: 62.5 },
+      { id: 'ep-21', method: 'POST', path: '/api/embed/batch', rpm: 200, latencyP50: 180, latencyP95: 350, latencyP99: 500, errorRate: 0.08, contribution: 25 },
+      { id: 'ep-22', method: 'GET', path: '/api/health', rpm: 60, latencyP50: 2, latencyP95: 5, latencyP99: 10, errorRate: 0, contribution: 7.5 },
+      { id: 'ep-23', method: 'GET', path: '/api/models', rpm: 40, latencyP50: 8, latencyP95: 18, latencyP99: 30, errorRate: 0, contribution: 5 },
+    ],
+    's-auth': [
+      { id: 'ep-30', method: 'POST', path: '/api/auth/login', rpm: 180, latencyP50: 25, latencyP95: 45, latencyP99: 80, errorRate: 0.02, contribution: 30 },
+      { id: 'ep-31', method: 'POST', path: '/api/auth/token', rpm: 250, latencyP50: 15, latencyP95: 30, latencyP99: 55, errorRate: 0.01, contribution: 41.7 },
+      { id: 'ep-32', method: 'GET', path: '/api/auth/verify', rpm: 120, latencyP50: 10, latencyP95: 22, latencyP99: 40, errorRate: 0, contribution: 20 },
+      { id: 'ep-33', method: 'POST', path: '/api/auth/logout', rpm: 50, latencyP50: 8, latencyP95: 18, latencyP99: 30, errorRate: 0, contribution: 8.3 },
+    ],
+  };
+  return sets[serviceId] ?? sets['s-apigw'];
+}
+
+export function getServiceDeployments(serviceId: string): DeploymentEvent[] {
+  const now = Date.now();
+  const sets: Record<string, DeploymentEvent[]> = {
+    's-apigw': [
+      { id: 'd-1', version: 'v2.4.1', timestamp: new Date(now - 2 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'a3f8c2d', description: 'Fix CORS headers for new client SDK', duration: 45 },
+      { id: 'd-2', version: 'v2.4.0', timestamp: new Date(now - 26 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'b7e1f90', description: 'Add rate limiting per API key', duration: 62 },
+      { id: 'd-3', version: 'v2.3.9', timestamp: new Date(now - 72 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'c4d2a11', description: 'Upgrade Express to 4.19', duration: 38 },
+      { id: 'd-4', version: 'v2.3.8', timestamp: new Date(now - 168 * 3600_000).toISOString(), status: 'failed', deployer: 'park.js', commitHash: 'e9f0b33', description: 'WebSocket connection pooling (rolled back)', duration: 120 },
+    ],
+    's-rag': [
+      { id: 'd-10', version: 'v1.8.0', timestamp: new Date(now - 5 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'f1a2b3c', description: 'Upgrade to GPT-4-Turbo with streaming', duration: 180 },
+      { id: 'd-11', version: 'v1.7.5', timestamp: new Date(now - 48 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'g4h5i6j', description: 'Add context window overflow handling', duration: 95 },
+      { id: 'd-12', version: 'v1.7.4', timestamp: new Date(now - 120 * 3600_000).toISOString(), status: 'rolling-back', deployer: 'lee.ml', commitHash: 'k7l8m9n', description: 'Qdrant index migration (partial rollback)', duration: 300 },
+    ],
+    's-embed': [
+      { id: 'd-20', version: 'v3.1.0', timestamp: new Date(now - 8 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'o1p2q3r', description: 'Switch to text-embedding-3-large', duration: 55 },
+      { id: 'd-21', version: 'v3.0.9', timestamp: new Date(now - 96 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 's4t5u6v', description: 'Batch embedding optimization', duration: 42 },
+      { id: 'd-22', version: 'v3.0.8', timestamp: new Date(now - 240 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'w7x8y9z', description: 'Add embedding cache layer', duration: 68 },
+    ],
+    's-auth': [
+      { id: 'd-30', version: 'v5.2.0', timestamp: new Date(now - 12 * 3600_000).toISOString(), status: 'success', deployer: 'park.js', commitHash: 'a1b2c3d', description: 'Add MFA support for admin accounts', duration: 75 },
+      { id: 'd-31', version: 'v5.1.9', timestamp: new Date(now - 72 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'e4f5g6h', description: 'JWT rotation key update', duration: 30 },
+      { id: 'd-32', version: 'v5.1.8', timestamp: new Date(now - 168 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'i7j8k9l', description: 'Spring Boot 3.2 upgrade', duration: 90 },
+    ],
+  };
+  return sets[serviceId] ?? sets['s-apigw'];
+}
+
+export function getServiceDependencies(serviceId: string): ServiceDependency[] {
+  const topology = getServiceTopology('proj-ai-prod');
+  const deps: ServiceDependency[] = [];
+
+  // Find edges where this service is source (downstream deps)
+  // or target (upstream callers) using topology node names
+  const nodeMap: Record<string, string> = {
+    's-apigw': 'api-gw',
+    's-rag': 'rag-svc',
+    's-embed': 'embed-svc',
+    's-auth': 'auth-svc',
+  };
+  const reverseNodeMap: Record<string, string> = {};
+  for (const [svcId, nodeId] of Object.entries(nodeMap)) {
+    reverseNodeMap[nodeId] = svcId;
+  }
+
+  const topoNodeId = nodeMap[serviceId];
+  if (!topoNodeId) return deps;
+
+  for (const edge of topology.edges) {
+    if (edge.source === topoNodeId) {
+      const targetNode = topology.nodes.find((n) => n.id === edge.target);
+      if (targetNode) {
+        deps.push({
+          serviceId: reverseNodeMap[edge.target] ?? edge.target,
+          serviceName: targetNode.name,
+          direction: 'downstream',
+          rpm: edge.rpm,
+          errorRate: edge.errorRate,
+          latencyP95: edge.p95,
+          status: targetNode.status,
+        });
+      }
+    }
+    if (edge.target === topoNodeId) {
+      const sourceNode = topology.nodes.find((n) => n.id === edge.source);
+      if (sourceNode) {
+        deps.push({
+          serviceId: reverseNodeMap[edge.source] ?? edge.source,
+          serviceName: sourceNode.name,
+          direction: 'upstream',
+          rpm: edge.rpm,
+          errorRate: edge.errorRate,
+          latencyP95: edge.p95,
+          status: sourceNode.status,
+        });
+      }
+    }
+  }
+
+  return deps;
+}
+
+export function generateXLogScatterData(
+  service: { latencyP50: number; latencyP95: number; errorRate: number },
+  points = 500,
+): [number, number, boolean][] {
+  const now = Date.now();
+  const data: [number, number, boolean][] = [];
+  for (let i = 0; i < points; i++) {
+    const timestamp = now - (points - i) * 6000 + Math.random() * 3000;
+    const isError = Math.random() * 100 < service.errorRate;
+    // Log-normal-ish distribution centered around P50
+    const base = service.latencyP50;
+    const jitter = Math.random();
+    let responseTime: number;
+    if (jitter < 0.5) {
+      responseTime = base * (0.3 + Math.random() * 1.0);
+    } else if (jitter < 0.9) {
+      responseTime = base + (service.latencyP95 - base) * Math.random();
+    } else {
+      responseTime = service.latencyP95 + (service.latencyP95 * 0.5) * Math.random();
+    }
+    if (isError) {
+      responseTime *= 1.5 + Math.random() * 2;
+    }
+    data.push([timestamp, Math.round(responseTime), isError]);
+  }
+  return data;
 }

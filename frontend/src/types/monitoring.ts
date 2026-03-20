@@ -73,6 +73,39 @@ export interface Service {
   status: Status;
 }
 
+export interface Endpoint {
+  id: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  path: string;
+  rpm: number;
+  latencyP50: number;
+  latencyP95: number;
+  latencyP99: number;
+  errorRate: number;
+  contribution: number; // 0-100%
+}
+
+export interface DeploymentEvent {
+  id: string;
+  version: string;
+  timestamp: string;
+  status: 'success' | 'failed' | 'rolling-back' | 'in-progress';
+  deployer: string;
+  commitHash: string;
+  description: string;
+  duration: number; // seconds
+}
+
+export interface ServiceDependency {
+  serviceId: string;
+  serviceName: string;
+  direction: 'upstream' | 'downstream';
+  rpm: number;
+  errorRate: number;
+  latencyP95: number;
+  status: Status;
+}
+
 export interface AIService {
   id: string;
   name: string;
