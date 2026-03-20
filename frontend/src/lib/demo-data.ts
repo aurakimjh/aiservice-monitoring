@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -484,4 +484,152 @@ export function generateHeatMapData(
     }
   }
   return data;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Distributed Traces — 트레이스 상세 워터폴용 데이터
+// ═══════════════════════════════════════════════════════════════
+
+function generateTraceSpans(traceId: string, startTime: number): TraceSpan[] {
+  const rootId = randomHex(16);
+  const spans: TraceSpan[] = [];
+
+  // api-gateway root span
+  const gwDur = 1800 + Math.round(Math.random() * 400);
+  spans.push({
+    spanId: rootId, parentSpanId: '', traceId, service: 'api-gateway', name: 'POST /api/chat',
+    kind: 'server', startTime, duration: gwDur, status: 'ok', attributes: { 'http.method': 'POST', 'http.target': '/api/chat', 'http.status_code': 200 }, events: [],
+  });
+
+  // auth check
+  const authId = randomHex(16);
+  const authStart = startTime + 5;
+  const authDur = 15 + Math.round(Math.random() * 10);
+  spans.push({
+    spanId: authId, parentSpanId: rootId, traceId, service: 'auth-service', name: 'auth.verify_token',
+    kind: 'server', startTime: authStart, duration: authDur, status: 'ok', attributes: { 'auth.method': 'JWT', 'auth.user_id': 'user_29384' }, events: [],
+  });
+
+  // redis cache check from auth
+  spans.push({
+    spanId: randomHex(16), parentSpanId: authId, traceId, service: 'auth-service', name: 'redis.get',
+    kind: 'client', startTime: authStart + 2, duration: 3, status: 'ok', attributes: { 'db.system': 'redis', 'db.operation': 'GET', 'db.key': 'session:user_29384' }, events: [],
+  });
+
+  // rag-service
+  const ragId = randomHex(16);
+  const ragStart = startTime + authDur + 10;
+  const ragDur = gwDur - authDur - 30;
+  spans.push({
+    spanId: ragId, parentSpanId: rootId, traceId, service: 'rag-service', name: 'rag.pipeline',
+    kind: 'server', startTime: ragStart, duration: ragDur, status: 'ok', attributes: { 'rag.pipeline_id': 'chat_v2', 'rag.model': 'gpt-4o' }, events: [],
+  });
+
+  // guardrail input
+  const gInId = randomHex(16);
+  const gInDur = 30 + Math.round(Math.random() * 25);
+  spans.push({
+    spanId: gInId, parentSpanId: ragId, traceId, service: 'rag-service', name: 'rag.guardrail_input_check',
+    kind: 'internal', startTime: ragStart + 2, duration: gInDur, status: 'ok', attributes: { 'guardrail.action': 'PASS', 'guardrail.policy': 'content_safety', 'guardrail.score': 0.12 },
+    events: [{ name: 'policy_evaluation_complete', timestamp: ragStart + 2 + gInDur - 5 }],
+  });
+
+  // embedding
+  const embedStart = ragStart + gInDur + 5;
+  const embedDur = 25 + Math.round(Math.random() * 20);
+  spans.push({
+    spanId: randomHex(16), parentSpanId: ragId, traceId, service: 'embedding-service', name: 'embedding.encode',
+    kind: 'server', startTime: embedStart, duration: embedDur, status: 'ok', attributes: { 'embedding.model': 'text-embedding-3-large', 'embedding.dimensions': 1536, 'embedding.tokens': 128 }, events: [],
+  });
+
+  // vector search
+  const vsId = randomHex(16);
+  const vsStart = embedStart + embedDur + 3;
+  const vsDur = 35 + Math.round(Math.random() * 30);
+  spans.push({
+    spanId: vsId, parentSpanId: ragId, traceId, service: 'rag-service', name: 'rag.vector_search',
+    kind: 'client', startTime: vsStart, duration: vsDur, status: 'ok', attributes: { 'vectordb.engine': 'qdrant', 'vectordb.collection': 'documents_v3', 'vectordb.results_count': 3 + Math.floor(Math.random() * 5), 'vectordb.score_threshold': 0.75 }, events: [],
+  });
+
+  // qdrant query
+  spans.push({
+    spanId: randomHex(16), parentSpanId: vsId, traceId, service: 'qdrant', name: 'qdrant.search',
+    kind: 'server', startTime: vsStart + 2, duration: vsDur - 5, status: 'ok', attributes: { 'db.system': 'qdrant', 'db.operation': 'search' }, events: [],
+  });
+
+  // redis cache (context)
+  const cacheStart = vsStart + vsDur + 2;
+  spans.push({
+    spanId: randomHex(16), parentSpanId: ragId, traceId, service: 'rag-service', name: 'redis.set',
+    kind: 'client', startTime: cacheStart, duration: 4, status: 'ok', attributes: { 'db.system': 'redis', 'db.operation': 'SET' }, events: [],
+  });
+
+  // llm inference
+  const llmId = randomHex(16);
+  const llmStart = cacheStart + 8;
+  const llmDur = ragDur - (llmStart - ragStart) - 30;
+  const ttft = Math.round(llmDur * 0.3 + Math.random() * 100);
+  const tps = Math.round((20 + Math.random() * 35) * 10) / 10;
+  const tokens = Math.round(tps * (llmDur / 1000));
+  spans.push({
+    spanId: llmId, parentSpanId: ragId, traceId, service: 'rag-service', name: 'rag.llm_inference',
+    kind: 'internal', startTime: llmStart, duration: llmDur, status: 'ok',
+    attributes: { 'llm.model': 'gpt-4o', 'llm.input_tokens': 1240, 'llm.output_tokens': tokens, 'llm.ttft_ms': ttft, 'llm.tps': tps, 'llm.cost': Math.round(tokens * 0.00006 * 1000) / 1000 },
+    events: [
+      { name: 'first_token_received', timestamp: llmStart + ttft },
+      { name: 'generation_complete', timestamp: llmStart + llmDur - 5, attributes: { 'tokens_generated': tokens } },
+    ],
+  });
+
+  // guardrail output
+  const gOutStart = llmStart + llmDur + 3;
+  const gOutDur = 15 + Math.round(Math.random() * 15);
+  spans.push({
+    spanId: randomHex(16), parentSpanId: ragId, traceId, service: 'rag-service', name: 'rag.guardrail_output_check',
+    kind: 'internal', startTime: gOutStart, duration: gOutDur, status: 'ok', attributes: { 'guardrail.action': 'PASS', 'guardrail.policy': 'output_safety' },
+    events: [{ name: 'policy_evaluation_complete', timestamp: gOutStart + gOutDur - 3 }],
+  });
+
+  return spans;
+}
+
+export function generateTrace(traceId?: string): Trace {
+  const id = traceId ?? randomHex(32);
+  const startTime = Date.now() - Math.round(Math.random() * 3600_000);
+  const spans = generateTraceSpans(id, startTime);
+  const services = new Set(spans.map((s) => s.service));
+  const duration = Math.max(...spans.map((s) => (s.startTime - startTime) + s.duration));
+  const errorCount = spans.filter((s) => s.status === 'error').length;
+
+  return {
+    traceId: id,
+    rootService: 'api-gateway',
+    rootEndpoint: 'POST /api/chat',
+    startTime,
+    duration,
+    spanCount: spans.length,
+    serviceCount: services.size,
+    errorCount,
+    spans,
+  };
+}
+
+export function getRecentTraces(count = 20, serviceFilter?: string): Trace[] {
+  const traces: Trace[] = [];
+  for (let i = 0; i < count; i++) {
+    const trace = generateTrace();
+    if (Math.random() < 0.08) {
+      const errSpan = trace.spans[Math.floor(Math.random() * trace.spans.length)];
+      errSpan.status = 'error';
+      errSpan.statusMessage = 'Internal server error';
+      trace.errorCount = 1;
+    }
+    if (Math.random() < 0.3) {
+      trace.rootEndpoint = 'POST /api/search';
+      trace.spans[0].name = 'POST /api/search';
+    }
+    if (serviceFilter && !trace.spans.some((s) => s.service === serviceFilter)) continue;
+    traces.push(trace);
+  }
+  return traces.sort((a, b) => b.startTime - a.startTime);
 }

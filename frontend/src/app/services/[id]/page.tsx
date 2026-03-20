@@ -17,6 +17,7 @@ import {
   getServiceDependencies,
   generateXLogScatterData,
   generateTimeSeries,
+  getRecentTraces,
 } from '@/lib/demo-data';
 import { formatDuration } from '@/lib/utils';
 import {
@@ -419,13 +420,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
       {/* ── Traces Tab (Placeholder) ── */}
       {activeTab === 'traces' && (
-        <Card>
-          <div className="text-center py-16 space-y-3">
-            <GitBranch size={32} className="mx-auto text-[var(--text-muted)]" />
-            <div className="text-sm font-medium text-[var(--text-secondary)]">Distributed Tracing</div>
-            <div className="text-xs text-[var(--text-muted)]">Coming in Phase 11-3 &mdash; Trace waterfall and span analysis</div>
-          </div>
-        </Card>
+        <TracesTab serviceName={service.name} />
       )}
 
       {/* ── Errors Tab (Placeholder) ── */}
@@ -585,6 +580,75 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ── TracesTab component ──
+
+function TracesTab({ serviceName }: { serviceName: string }) {
+  const traces = useMemo(() => getRecentTraces(15, serviceName), [serviceName]);
+
+  return (
+    <div className="space-y-3">
+      <Card padding="none">
+        <div className="px-4 py-2.5 border-b border-[var(--border-default)] flex items-center justify-between">
+          <span className="text-xs font-medium text-[var(--text-primary)]">
+            Recent Traces ({traces.length})
+          </span>
+          <Link href="/traces" className="text-xs text-[var(--accent-primary)] hover:underline">
+            Open full XLog dashboard &rarr;
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                <th className="px-4 py-2 font-medium">Trace ID</th>
+                <th className="px-4 py-2 font-medium">Endpoint</th>
+                <th className="px-4 py-2 font-medium text-right">Duration</th>
+                <th className="px-4 py-2 font-medium text-right">Spans</th>
+                <th className="px-4 py-2 font-medium text-right">Services</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {traces.map((trace) => (
+                <tr key={trace.traceId} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                  <td className="px-4 py-2">
+                    <Link href={`/traces/${trace.traceId}`} className="font-mono text-[var(--accent-primary)] hover:underline">
+                      {trace.traceId.slice(0, 12)}...
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 font-mono text-[var(--text-primary)]">{trace.rootEndpoint}</td>
+                  <td className={cn(
+                    'px-4 py-2 text-right tabular-nums',
+                    trace.duration > 2000 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]',
+                  )}>
+                    {formatDuration(trace.duration)}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{trace.spanCount}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{trace.serviceCount}</td>
+                  <td className="px-4 py-2">
+                    {trace.errorCount > 0 ? (
+                      <span className="text-[var(--status-critical)] font-medium">Error</span>
+                    ) : (
+                      <span className="text-[var(--status-healthy)]">OK</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-[var(--text-muted)] tabular-nums">
+                    {new Date(trace.startTime).toLocaleTimeString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {traces.length === 0 && (
+          <div className="text-center py-12 text-sm text-[var(--text-muted)]">No traces found for this service.</div>
+        )}
+      </Card>
     </div>
   );
 }

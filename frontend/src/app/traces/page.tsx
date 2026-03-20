@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Tabs, Badge, Select, Button } from '@/components/ui';
@@ -466,13 +467,18 @@ export default function TracesPage() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyTraceId(txn.traceId); }}
-                        className="flex items-center gap-1 font-mono text-[var(--accent-primary)] hover:underline"
-                      >
-                        {txn.traceId.slice(0, 8)}...
-                        {copiedId === txn.traceId ? <Check size={11} className="text-[var(--status-healthy)]" /> : <Copy size={11} />}
-                      </button>
+                      <span className="flex items-center gap-1">
+                        <Link
+                          href={`/traces/${txn.traceId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[var(--accent-primary)] hover:underline"
+                        >
+                          {txn.traceId.slice(0, 8)}...
+                        </Link>
+                        <button onClick={(e) => { e.stopPropagation(); copyTraceId(txn.traceId); }} className="p-0.5 hover:bg-[var(--bg-tertiary)] rounded">
+                          {copiedId === txn.traceId ? <Check size={11} className="text-[var(--status-healthy)]" /> : <Copy size={11} className="text-[var(--text-muted)]" />}
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 ))}

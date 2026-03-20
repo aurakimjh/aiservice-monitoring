@@ -136,6 +136,33 @@ export interface Transaction {
   spans: TransactionSpan[];
 }
 
+export interface TraceSpan {
+  spanId: string;
+  parentSpanId: string;
+  traceId: string;
+  service: string;
+  name: string;
+  kind: 'server' | 'client' | 'internal' | 'producer' | 'consumer';
+  startTime: number; // epoch ms
+  duration: number; // ms
+  status: 'ok' | 'error' | 'unset';
+  statusMessage?: string;
+  attributes: Record<string, string | number>;
+  events: { name: string; timestamp: number; attributes?: Record<string, string | number> }[];
+}
+
+export interface Trace {
+  traceId: string;
+  rootService: string;
+  rootEndpoint: string;
+  startTime: number; // epoch ms
+  duration: number; // ms
+  spanCount: number;
+  serviceCount: number;
+  errorCount: number;
+  spans: TraceSpan[];
+}
+
 export interface AIService {
   id: string;
   name: string;
