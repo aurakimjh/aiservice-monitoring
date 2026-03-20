@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -632,4 +632,138 @@ export function getRecentTraces(count = 20, serviceFilter?: string): Trace[] {
     traces.push(trace);
   }
   return traces.sort((a, b) => b.startTime - a.startTime);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Log Entries — 로그 탐색 대시보드용 데이터
+// ═══════════════════════════════════════════════════════════════
+
+const LOG_SERVICES = ['api-gateway', 'rag-service', 'embedding-service', 'auth-service', 'qdrant'];
+const LOG_HOSTS = ['prod-api-01', 'prod-api-02', 'prod-gpu-01', 'prod-gpu-02', 'prod-db-01', 'prod-redis-01'];
+
+const LOG_TEMPLATES: { level: LogLevel; service: string; messages: string[] }[] = [
+  { level: 'INFO', service: 'api-gateway', messages: [
+    'Request completed: POST /api/chat 200 ({elapsed}ms)',
+    'Request completed: GET /api/conversations 200 ({elapsed}ms)',
+    'Rate limiter: key=api_key_{id} remaining={remaining}',
+    'WebSocket connection established: client_id={id}',
+    'Health check passed: uptime={uptime}s',
+  ]},
+  { level: 'INFO', service: 'rag-service', messages: [
+    'Pipeline completed: trace_id={traceId} elapsed={elapsed}ms tokens={tokens}',
+    'Vector search: collection=documents_v3 results={results} score_avg={score}',
+    'LLM inference started: model=gpt-4o input_tokens={tokens}',
+    'Guardrail check passed: policy=content_safety score={score}',
+    'Cache hit: key=embed_{id} ttl=3600s',
+  ]},
+  { level: 'INFO', service: 'embedding-service', messages: [
+    'Embedding completed: model=text-embedding-3-large tokens={tokens} elapsed={elapsed}ms',
+    'Batch processed: count={count} total_tokens={tokens}',
+  ]},
+  { level: 'INFO', service: 'auth-service', messages: [
+    'Token verified: user_id=user_{id} session_id=sess_{id}',
+    'Login successful: user_id=user_{id} method=SSO',
+    'Token refreshed: user_id=user_{id}',
+  ]},
+  { level: 'WARN', service: 'api-gateway', messages: [
+    'Slow request: POST /api/chat elapsed={elapsed}ms threshold=2000ms',
+    'Rate limit approaching: key=api_key_{id} usage=85%',
+    'Connection pool near capacity: used=95/100',
+  ]},
+  { level: 'WARN', service: 'rag-service', messages: [
+    'LLM response slow: TTFT={elapsed}ms threshold=1500ms',
+    'Vector search latency high: {elapsed}ms threshold=200ms',
+    'Context window near limit: tokens={tokens}/128000',
+    'GPU memory pressure: vram_used=87% threshold=85%',
+  ]},
+  { level: 'WARN', service: 'embedding-service', messages: [
+    'Batch queue depth high: pending={count} threshold=100',
+  ]},
+  { level: 'ERROR', service: 'api-gateway', messages: [
+    'Request failed: POST /api/chat 502 Bad Gateway — upstream timeout',
+    'WebSocket disconnected unexpectedly: client_id={id} reason=timeout',
+  ]},
+  { level: 'ERROR', service: 'rag-service', messages: [
+    'LLM inference failed: model=gpt-4o error="rate_limit_exceeded" retry_after=30s',
+    'Vector search failed: connection to qdrant timed out after 5000ms',
+    'Guardrail BLOCKED: policy=content_safety input_score=0.92 threshold=0.85',
+    'Pipeline error: trace_id={traceId} stage=llm_inference error="context_length_exceeded"',
+  ]},
+  { level: 'ERROR', service: 'auth-service', messages: [
+    'Authentication failed: invalid_token user_id=user_{id}',
+    'Redis connection lost: reconnecting in 5s',
+  ]},
+  { level: 'DEBUG', service: 'rag-service', messages: [
+    'Prompt assembled: system_tokens=850 context_tokens={tokens} user_tokens=120',
+    'Chunk reranking: input={count} output=3 model=cross-encoder',
+    'Streaming response: chunk_idx={count} tokens={tokens}',
+  ]},
+  { level: 'DEBUG', service: 'api-gateway', messages: [
+    'CORS preflight: origin=https://app.example.com allowed=true',
+    'Request middleware chain: auth→rate_limit→proxy elapsed={elapsed}ms',
+  ]},
+  { level: 'FATAL', service: 'rag-service', messages: [
+    'GPU CUDA error: out of memory — cannot allocate 2.1GB on device 0',
+  ]},
+];
+
+function fillTemplate(template: string): string {
+  return template
+    .replace(/\{elapsed\}/g, String(Math.round(50 + Math.random() * 3000)))
+    .replace(/\{tokens\}/g, String(Math.round(100 + Math.random() * 2000)))
+    .replace(/\{id\}/g, randomHex(6))
+    .replace(/\{traceId\}/g, randomHex(32))
+    .replace(/\{remaining\}/g, String(Math.round(Math.random() * 1000)))
+    .replace(/\{uptime\}/g, String(Math.round(Math.random() * 86400)))
+    .replace(/\{results\}/g, String(Math.round(2 + Math.random() * 8)))
+    .replace(/\{score\}/g, (Math.random() * 0.5 + 0.5).toFixed(3))
+    .replace(/\{count\}/g, String(Math.round(5 + Math.random() * 50)));
+}
+
+export function generateLogEntries(count = 200, opts?: { service?: string; level?: string; search?: string }): LogEntry[] {
+  const now = Date.now();
+  const entries: LogEntry[] = [];
+
+  for (let i = 0; i < count * 2 && entries.length < count; i++) {
+    const template = LOG_TEMPLATES[Math.floor(Math.random() * LOG_TEMPLATES.length)];
+    if (opts?.service && opts.service !== 'all' && template.service !== opts.service) continue;
+    if (opts?.level && opts.level !== 'all' && template.level !== opts.level) continue;
+
+    const msg = fillTemplate(template.messages[Math.floor(Math.random() * template.messages.length)]);
+    if (opts?.search && !msg.toLowerCase().includes(opts.search.toLowerCase())) continue;
+
+    const timestamp = now - (count * 2 - i) * 500 + Math.random() * 300;
+    const hasTrace = Math.random() < 0.6;
+
+    entries.push({
+      id: randomHex(16),
+      timestamp,
+      level: template.level,
+      service: template.service,
+      hostname: LOG_HOSTS[Math.floor(Math.random() * LOG_HOSTS.length)],
+      message: msg,
+      traceId: hasTrace ? randomHex(32) : undefined,
+      spanId: hasTrace ? randomHex(16) : undefined,
+      attributes: {
+        'process.pid': Math.round(1000 + Math.random() * 5000),
+        'thread.name': template.service === 'rag-service' ? 'asyncio-worker' : 'http-handler',
+      },
+    });
+  }
+
+  return entries.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export function getLogPatterns(): LogPattern[] {
+  const now = Date.now();
+  return [
+    { id: 'lp-1', pattern: 'Request completed: * 200 (*ms)', count: 12450, level: 'INFO', services: ['api-gateway'], sample: 'Request completed: POST /api/chat 200 (245ms)', firstSeen: now - 86400_000, lastSeen: now - 30_000 },
+    { id: 'lp-2', pattern: 'Pipeline completed: trace_id=* elapsed=*ms tokens=*', count: 4320, level: 'INFO', services: ['rag-service'], sample: 'Pipeline completed: trace_id=a1b2c3 elapsed=1247ms tokens=380', firstSeen: now - 86400_000, lastSeen: now - 45_000 },
+    { id: 'lp-3', pattern: 'Slow request: * elapsed=*ms threshold=*ms', count: 234, level: 'WARN', services: ['api-gateway'], sample: 'Slow request: POST /api/chat elapsed=2850ms threshold=2000ms', firstSeen: now - 43200_000, lastSeen: now - 120_000 },
+    { id: 'lp-4', pattern: 'LLM inference failed: * error="*"', count: 47, level: 'ERROR', services: ['rag-service'], sample: 'LLM inference failed: model=gpt-4o error="rate_limit_exceeded" retry_after=30s', firstSeen: now - 21600_000, lastSeen: now - 600_000 },
+    { id: 'lp-5', pattern: 'Guardrail BLOCKED: policy=* input_score=* threshold=*', count: 18, level: 'ERROR', services: ['rag-service'], sample: 'Guardrail BLOCKED: policy=content_safety input_score=0.92 threshold=0.85', firstSeen: now - 14400_000, lastSeen: now - 1800_000 },
+    { id: 'lp-6', pattern: 'Token verified: user_id=* session_id=*', count: 8900, level: 'INFO', services: ['auth-service'], sample: 'Token verified: user_id=user_29384 session_id=sess_ab12cd', firstSeen: now - 86400_000, lastSeen: now - 15_000 },
+    { id: 'lp-7', pattern: 'GPU memory pressure: vram_used=*% threshold=*%', count: 56, level: 'WARN', services: ['rag-service'], sample: 'GPU memory pressure: vram_used=87% threshold=85%', firstSeen: now - 7200_000, lastSeen: now - 300_000 },
+    { id: 'lp-8', pattern: 'Embedding completed: * tokens=* elapsed=*ms', count: 6780, level: 'INFO', services: ['embedding-service'], sample: 'Embedding completed: model=text-embedding-3-large tokens=128 elapsed=42ms', firstSeen: now - 86400_000, lastSeen: now - 20_000 },
+  ];
 }

@@ -163,6 +163,31 @@ export interface Trace {
   spans: TraceSpan[];
 }
 
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+
+export interface LogEntry {
+  id: string;
+  timestamp: number; // epoch ms
+  level: LogLevel;
+  service: string;
+  hostname: string;
+  message: string;
+  traceId?: string;
+  spanId?: string;
+  attributes: Record<string, string | number>;
+}
+
+export interface LogPattern {
+  id: string;
+  pattern: string;
+  count: number;
+  level: LogLevel;
+  services: string[];
+  sample: string;
+  firstSeen: number;
+  lastSeen: number;
+}
+
 export interface AIService {
   id: string;
   name: string;
