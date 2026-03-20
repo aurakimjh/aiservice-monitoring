@@ -214,6 +214,47 @@ export interface AIService {
   status: Status;
 }
 
+// AI Service detail data
+
+export interface RAGPipelineStage {
+  name: string;
+  avgDuration: number;
+  p95Duration: number;
+  percentage: number;
+  color: string;
+}
+
+export interface RAGPipelineData {
+  stages: RAGPipelineStage[];
+  totalDuration: number;
+  searchQuality: { relevancyScore: number; topKHitRate: number; emptyResultRate: number; faithfulness: number; answerRelevancy: number };
+  embeddingPerf: { model: string; dimensions: number; batchSize: number; p95Latency: number; throughput: number; cacheHitRate: number };
+  vectorDB: { engine: string; collection: string; vectorCount: number; segments: number; indexType: string; diskUsage: string; searchP99: number; insertP99: number; availability: number };
+}
+
+export interface AgentExecution {
+  id: string;
+  startTime: number;
+  duration: number;
+  steps: number;
+  toolCalls: number;
+  cost: number;
+  status: 'success' | 'warning' | 'error';
+  iterationsUsed: number;
+  maxIterations: number;
+  traceId: string;
+}
+
+export type GuardrailViolationType = 'pii_detection' | 'harmful_content' | 'sql_injection' | 'prompt_injection' | 'copyright' | 'other';
+
+export interface GuardrailData {
+  totalChecks: number;
+  blockCount: number;
+  blockRate: number;
+  violations: { type: GuardrailViolationType; label: string; count: number }[];
+  latencyContribution: number;
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;

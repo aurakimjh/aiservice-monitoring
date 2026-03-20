@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -846,4 +846,71 @@ export function executeMetricQuery(
     ]);
     return { label, data };
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 12: AI Native — AI 서비스 상세 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export function getTTFTHistogram(): { bucket: string; count: number }[] {
+  return [
+    { bucket: '0-200', count: 45 },
+    { bucket: '200-400', count: 120 },
+    { bucket: '400-600', count: 280 },
+    { bucket: '600-800', count: 350 },
+    { bucket: '800-1000', count: 420 },
+    { bucket: '1000-1200', count: 380 },
+    { bucket: '1200-1500', count: 220 },
+    { bucket: '1500-2000', count: 95 },
+    { bucket: '2000-2500', count: 35 },
+    { bucket: '2500-3000', count: 12 },
+    { bucket: '3000+', count: 5 },
+  ];
+}
+
+export function getRAGPipelineData(): RAGPipelineData {
+  return {
+    stages: [
+      { name: 'Input Validation', avgDuration: 50, p95Duration: 80, percentage: 3, color: '#9B59B6' },
+      { name: 'Embedding', avgDuration: 120, p95Duration: 200, percentage: 7, color: '#3498DB' },
+      { name: 'Vector Search', avgDuration: 85, p95Duration: 150, percentage: 5, color: '#2ECC71' },
+      { name: 'Reranking', avgDuration: 60, p95Duration: 100, percentage: 4, color: '#1ABC9C' },
+      { name: 'LLM Inference', avgDuration: 1250, p95Duration: 1800, percentage: 76, color: '#E67E22' },
+      { name: 'Output Validation', avgDuration: 80, p95Duration: 120, percentage: 5, color: '#9B59B6' },
+    ],
+    totalDuration: 1645,
+    searchQuality: { relevancyScore: 0.82, topKHitRate: 94, emptyResultRate: 1.2, faithfulness: 0.89, answerRelevancy: 0.85 },
+    embeddingPerf: { model: 'text-embedding-3-large', dimensions: 3072, batchSize: 32, p95Latency: 120, throughput: 850, cacheHitRate: 94 },
+    vectorDB: { engine: 'Qdrant', collection: 'documents_v3', vectorCount: 125000, segments: 8, indexType: 'HNSW (m=16, ef=100)', diskUsage: '2.3GB', searchP99: 120, insertP99: 45, availability: 99.99 },
+  };
+}
+
+export function getAgentExecutions(): AgentExecution[] {
+  const now = Date.now();
+  return [
+    { id: 'exec-4521', startTime: now - 120_000, duration: 8200, steps: 5, toolCalls: 3, cost: 0.15, status: 'success', iterationsUsed: 5, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4520', startTime: now - 300_000, duration: 4500, steps: 3, toolCalls: 2, cost: 0.08, status: 'success', iterationsUsed: 3, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4519', startTime: now - 480_000, duration: 25300, steps: 12, toolCalls: 8, cost: 0.45, status: 'warning', iterationsUsed: 12, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4518', startTime: now - 720_000, duration: 3200, steps: 4, toolCalls: 2, cost: 0.10, status: 'success', iterationsUsed: 4, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4517', startTime: now - 900_000, duration: 45000, steps: 15, toolCalls: 11, cost: 0.82, status: 'error', iterationsUsed: 15, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4516', startTime: now - 1200_000, duration: 6800, steps: 6, toolCalls: 4, cost: 0.18, status: 'success', iterationsUsed: 6, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4515', startTime: now - 1500_000, duration: 5100, steps: 4, toolCalls: 3, cost: 0.12, status: 'success', iterationsUsed: 4, maxIterations: 15, traceId: randomHex(32) },
+    { id: 'exec-4514', startTime: now - 1800_000, duration: 9500, steps: 7, toolCalls: 5, cost: 0.22, status: 'success', iterationsUsed: 7, maxIterations: 15, traceId: randomHex(32) },
+  ];
+}
+
+export function getGuardrailData(): GuardrailData {
+  return {
+    totalChecks: 2000,
+    blockCount: 42,
+    blockRate: 2.1,
+    violations: [
+      { type: 'pii_detection', label: 'PII Detection', count: 15 },
+      { type: 'harmful_content', label: 'Harmful Content', count: 12 },
+      { type: 'sql_injection', label: 'SQL Injection', count: 8 },
+      { type: 'prompt_injection', label: 'Prompt Injection', count: 5 },
+      { type: 'other', label: 'Other', count: 2 },
+    ],
+    latencyContribution: 8.5,
+  };
 }
