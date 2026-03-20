@@ -346,6 +346,40 @@ export interface NotificationChannel {
   enabled: boolean;
 }
 
+// Phase 14: SLO, Cost, Executive
+
+export interface SLODefinition {
+  id: string;
+  name: string;
+  service: string;
+  sli: string;
+  target: number; // e.g., 99.9
+  window: '7d' | '30d' | '90d';
+  current: number;
+  errorBudgetRemaining: number; // percentage
+  status: 'met' | 'at_risk' | 'breached';
+  burnRate: number;
+}
+
+export interface CostBreakdown {
+  category: string;
+  subcategory: string;
+  amount: number;
+  trend: number; // percent change
+  unit: string;
+}
+
+export interface ExecutiveSummary {
+  overallHealth: Status;
+  sloCompliance: number;
+  totalServices: number;
+  activeIncidents: number;
+  mttr: number; // minutes
+  totalCostPerDay: number;
+  costTrend: number;
+  topIssues: { title: string; severity: Severity; age: string }[];
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;

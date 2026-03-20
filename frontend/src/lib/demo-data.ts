@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1038,4 +1038,54 @@ export function getNotificationChannels(): NotificationChannel[] {
     { id: 'nc-4', name: 'pagerduty', type: 'pagerduty', config: 'Service: AI-Production', enabled: true },
     { id: 'nc-5', name: 'webhook-ci', type: 'webhook', config: 'https://ci.example.com/hooks/alert', enabled: false },
   ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 14: SLO, Cost, Executive 데이터
+// ═══════════════════════════════════════════════════════════════
+
+export function getSLODefinitions(): SLODefinition[] {
+  return [
+    { id: 'slo-1', name: 'API Availability', service: 'api-gateway', sli: 'success_rate(http_requests_total)', target: 99.9, window: '30d', current: 99.92, errorBudgetRemaining: 78, status: 'met', burnRate: 0.8 },
+    { id: 'slo-2', name: 'API Latency P95', service: 'api-gateway', sli: 'histogram_quantile(0.95, http_request_duration_seconds)', target: 99.5, window: '30d', current: 99.3, errorBudgetRemaining: 42, status: 'at_risk', burnRate: 1.8 },
+    { id: 'slo-3', name: 'RAG TTFT P95', service: 'rag-service', sli: 'histogram_quantile(0.95, llm_ttft_seconds) < 2s', target: 99.0, window: '30d', current: 98.2, errorBudgetRemaining: 18, status: 'at_risk', burnRate: 2.5 },
+    { id: 'slo-4', name: 'RAG Error Rate', service: 'rag-service', sli: 'error_rate(http_requests_total{service="rag"})', target: 99.5, window: '30d', current: 99.78, errorBudgetRemaining: 85, status: 'met', burnRate: 0.5 },
+    { id: 'slo-5', name: 'Embedding Latency', service: 'embedding-service', sli: 'histogram_quantile(0.99, embedding_duration_seconds) < 500ms', target: 99.9, window: '7d', current: 99.95, errorBudgetRemaining: 92, status: 'met', burnRate: 0.3 },
+    { id: 'slo-6', name: 'GPU VRAM Availability', service: 'gpu-cluster', sli: 'avg(gpu_vram_used_bytes/gpu_vram_total_bytes) < 0.9', target: 99.0, window: '7d', current: 97.5, errorBudgetRemaining: 5, status: 'breached', burnRate: 4.2 },
+  ];
+}
+
+export function getCostBreakdowns(): CostBreakdown[] {
+  return [
+    { category: 'LLM API', subcategory: 'GPT-4o (rag-service)', amount: 204, trend: 12, unit: '$/day' },
+    { category: 'LLM API', subcategory: 'GPT-4o (code-assistant)', amount: 76.8, trend: -3, unit: '$/day' },
+    { category: 'LLM API', subcategory: 'Llama-3-70B (doc-summarizer)', amount: 19.2, trend: 5, unit: '$/day' },
+    { category: 'GPU Compute', subcategory: 'prod-gpu-01 (2x A100)', amount: 48, trend: 0, unit: '$/day' },
+    { category: 'GPU Compute', subcategory: 'prod-gpu-02 (2x A100)', amount: 48, trend: 0, unit: '$/day' },
+    { category: 'Infrastructure', subcategory: 'API Servers (2x)', amount: 12, trend: 0, unit: '$/day' },
+    { category: 'Infrastructure', subcategory: 'Database (PostgreSQL)', amount: 8, trend: 0, unit: '$/day' },
+    { category: 'Infrastructure', subcategory: 'Cache (Redis)', amount: 4, trend: 0, unit: '$/day' },
+    { category: 'Storage', subcategory: 'Prometheus (metrics)', amount: 3.5, trend: 8, unit: '$/day' },
+    { category: 'Storage', subcategory: 'Tempo (traces)', amount: 2.1, trend: 15, unit: '$/day' },
+    { category: 'Storage', subcategory: 'Loki (logs)', amount: 1.8, trend: 10, unit: '$/day' },
+    { category: 'Storage', subcategory: 'Qdrant (vectors)', amount: 1.5, trend: 2, unit: '$/day' },
+    { category: 'External API', subcategory: 'OpenAI Embedding API', amount: 5.2, trend: -8, unit: '$/day' },
+  ];
+}
+
+export function getExecutiveSummary(): ExecutiveSummary {
+  return {
+    overallHealth: 'healthy',
+    sloCompliance: 99.7,
+    totalServices: 8,
+    activeIncidents: 1,
+    mttr: 30,
+    totalCostPerDay: 433.1,
+    costTrend: 4.2,
+    topIssues: [
+      { title: 'GPU VRAM SLO breached — prod-gpu-03', severity: 'critical', age: '2h' },
+      { title: 'RAG TTFT P95 approaching SLO threshold', severity: 'warning', age: '6h' },
+      { title: 'API latency P95 error budget at 42%', severity: 'warning', age: '1d' },
+    ],
+  };
 }
