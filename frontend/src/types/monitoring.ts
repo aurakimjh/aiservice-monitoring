@@ -428,6 +428,26 @@ export interface Notebook {
   updatedAt: number;
 }
 
+// Phase 14-6: Multi-tenant
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: 'free' | 'pro' | 'enterprise';
+  status: 'active' | 'suspended' | 'trial';
+  logo?: string;
+  primaryColor?: string;
+  projectCount: number;
+  userCount: number;
+  hostCount: number;
+  monthlyUsage: number; // dollars
+  monthlyLimit: number;
+  dataRetentionDays: number;
+  createdAt: number;
+  contactEmail: string;
+}
+
 export interface AgentInfo {
   id: string;
   hostId: string;

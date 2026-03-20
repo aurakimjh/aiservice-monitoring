@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1197,5 +1197,21 @@ export function getSampleNotebooks(): Notebook[] {
       createdAt: now - 172800_000,
       updatedAt: now - 86400_000,
     },
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 14-6: Multi-tenant
+// ═══════════════════════════════════════════════════════════════
+
+export function getTenants(): Tenant[] {
+  const now = Date.now();
+  return [
+    { id: 't-aitop', name: 'AITOP Corp', slug: 'aitop', plan: 'enterprise', status: 'active', primaryColor: '#58A6FF', projectCount: 4, userCount: 25, hostCount: 48, monthlyUsage: 12900, monthlyLimit: 20000, dataRetentionDays: 90, createdAt: now - 86400_000 * 180, contactEmail: 'admin@aitop.io' },
+    { id: 't-acme', name: 'Acme AI Labs', slug: 'acme', plan: 'pro', status: 'active', primaryColor: '#3FB950', projectCount: 2, userCount: 12, hostCount: 16, monthlyUsage: 4200, monthlyLimit: 8000, dataRetentionDays: 30, createdAt: now - 86400_000 * 90, contactEmail: 'ops@acme-ai.com' },
+    { id: 't-fintech', name: 'FinTech Solutions', slug: 'fintech', plan: 'enterprise', status: 'active', primaryColor: '#D29922', projectCount: 3, userCount: 18, hostCount: 32, monthlyUsage: 8500, monthlyLimit: 15000, dataRetentionDays: 180, createdAt: now - 86400_000 * 120, contactEmail: 'infra@fintech-sol.kr' },
+    { id: 't-startup', name: 'ML Startup Inc', slug: 'mlstartup', plan: 'free', status: 'trial', primaryColor: '#BC8CFF', projectCount: 1, userCount: 3, hostCount: 4, monthlyUsage: 280, monthlyLimit: 500, dataRetentionDays: 7, createdAt: now - 86400_000 * 14, contactEmail: 'dev@mlstartup.io' },
+    { id: 't-health', name: 'HealthAI Corp', slug: 'healthai', plan: 'enterprise', status: 'active', primaryColor: '#F778BA', projectCount: 2, userCount: 15, hostCount: 24, monthlyUsage: 6800, monthlyLimit: 12000, dataRetentionDays: 365, createdAt: now - 86400_000 * 60, contactEmail: 'platform@healthai.co.kr' },
+    { id: 't-suspended', name: 'OldTech LLC', slug: 'oldtech', plan: 'pro', status: 'suspended', projectCount: 1, userCount: 5, hostCount: 8, monthlyUsage: 0, monthlyLimit: 8000, dataRetentionDays: 30, createdAt: now - 86400_000 * 200, contactEmail: 'admin@oldtech.com' },
   ];
 }
