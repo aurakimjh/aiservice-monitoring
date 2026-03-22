@@ -9,7 +9,8 @@ LDFLAGS := -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.Versio
            -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.BuildDate=$(BUILD_DATE) \
            -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.GoVersion=$(GO_VERSION)
 
-.PHONY: build build-linux build-windows build-collection-server test clean run lint package
+.PHONY: build build-linux build-windows build-collection-server test clean run lint package \
+        verify-pipeline verify-ui verify-all docker-test-up docker-test-down
 
 ## build: Build for current platform
 build:
@@ -95,6 +96,42 @@ version:
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Date: $(BUILD_DATE)"
 	@echo "Go Version: $(GO_VERSION)"
+
+## ─── Phase 17-3: 실데이터 통합 검증 ──────────────────────────────────────
+
+## docker-test-up: Docker 테스트 환경 기동 (Collection Server + PostgreSQL + MinIO + OTel)
+docker-test-up:
+	docker compose -f ../infra/docker/docker-compose.test.yaml up -d --build
+	@echo "Test environment started. Wait for health checks to pass (~30s)"
+
+## docker-test-down: Docker 테스트 환경 종료 및 볼륨 삭제
+docker-test-down:
+	docker compose -f ../infra/docker/docker-compose.test.yaml down -v
+
+## verify-install: Phase 17-3-1 — 에이전트 빌드 + Docker 컨테이너 등록
+verify-install: build-linux
+	chmod +x ../scripts/phase17-3/01-agent-install.sh
+	../scripts/phase17-3/01-agent-install.sh
+
+## verify-pipeline: Phase 17-3-2 — 데이터 파이프라인 검증
+verify-pipeline:
+	chmod +x ../scripts/phase17-3/02-pipeline-verify.sh
+	../scripts/phase17-3/02-pipeline-verify.sh
+
+## verify-ui: Phase 17-3-3~6 — UI 뷰 API 검증
+verify-ui:
+	chmod +x ../scripts/phase17-3/03-ui-api-verify.sh
+	../scripts/phase17-3/03-ui-api-verify.sh
+
+## verify-all: Phase 17-3 전체 실행 (Docker 기동 → 에이전트 설치 → 파이프라인 → UI)
+verify-all:
+	chmod +x ../scripts/phase17-3/run-all.sh
+	../scripts/phase17-3/run-all.sh
+
+## verify-all-no-docker: Phase 17-3 전체 실행 (Docker 미기동 — 이미 실행 중)
+verify-all-no-docker:
+	chmod +x ../scripts/phase17-3/run-all.sh
+	../scripts/phase17-3/run-all.sh --no-docker --no-cleanup
 
 ## help: Show this help
 help:
