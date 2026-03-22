@@ -1,15 +1,17 @@
 # 통합 모니터링 대시보드 UI 설계서
 
-> **문서 버전**: v1.0.0
-> **작성일**: 2026-03-19
+> **문서 버전**: v2.0.0
+> **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-22 (Phase 16 구현 완료 반영)
 > **관점**: 상용 솔루션 수준 UI/UX — Datadog, New Relic, Dynatrace 참조
 > **대상**: 프론트엔드 개발팀, UX 디자이너, 제품 기획
+> **구현 상태**: Phase 10~14 UI 전체 완성 ✅ | Phase 15~16 Agent 연동 완성 ✅
 >
 > **관련 문서**:
-> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의 및 수식
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Collector, Fleet, CLI, OTA)
 > - [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) — XLog/HeatMap 상세 설계
-> - AITOP_구현_차세대_방향성.MD — 에이전트 기반 수집 아키텍처 (외부 참조)
+> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석
 
 ---
 
@@ -1546,5 +1548,63 @@ admin (100) > sre (80) > ai_engineer (60) > viewer (10)
 
 ---
 
-> **다음 단계**: 이 설계 문서를 기반으로 Phase 10부터 구현을 시작한다.
-> 각 Phase 완료 시 디자인 리뷰 → 사용자 테스트 → 피드백 반영 사이클을 진행한다.
+## 구현 완료 현황 (2026-03-22)
+
+> 이 설계 문서의 모든 주요 기능이 구현 완료되었습니다.
+
+### 구현된 화면 (26개 라우트)
+
+| Phase | 카테고리 | 화면 | 경로 | 상태 |
+|-------|---------|------|------|------|
+| 10-1 | 기반 | 디자인 시스템 + Next.js 프로젝트 | — | ✅ |
+| 10-2 | 기반 | 글로벌 네비게이션 (사이드바, 상단바, Command Palette) | — | ✅ |
+| 10-3 | 기반 | 인증/인가 (RBAC 4역할, 데모 계정) | `/login` | ✅ |
+| 10-4 | 프로젝트 | 프로젝트 관리 (목록/상세/생성) | `/projects` | ✅ |
+| 10-5 | 인프라 | 인프라 뷰 (호스트 목록/HexMap/상세) | `/infra` | ✅ |
+| 11-1 | APM | 서비스 맵 + 서비스 목록 | `/services` | ✅ |
+| 11-2 | APM | 서비스 상세 (7탭: Overview/Endpoints/Dependencies/Deployments/Traces) | `/services/[id]` | ✅ |
+| 11-3 | APM | XLog/HeatMap 통합 대시보드 | `/traces` | ✅ |
+| 11-4 | APM | 트레이스 상세 워터폴 | `/traces/[traceId]` | ✅ |
+| 11-5 | APM | 로그 탐색기 (Stream + Patterns) | `/logs` | ✅ |
+| 11-6 | APM | 메트릭 탐색기 (PromQL + 23개 카탈로그) | `/metrics` | ✅ |
+| 12-1 | AI | AI 서비스 개요 (Executive KPI + 테이블) | `/ai` | ✅ |
+| 12-2 | AI | AI 서비스 상세 (LLM/RAG/Guardrail/GPU 탭) | `/ai/[id]` | ✅ |
+| 12-3 | AI | GPU 클러스터 뷰 (GPU 그리드 + OOM 경고) | `/ai/gpu` | ✅ |
+| 13-1 | Agent | Agent Fleet Console (3탭: Agent/Jobs/Plugins) | `/agents` | ✅ |
+| 13-3 | Agent | AITOP 진단 보고서 (86개 항목) | `/diagnostics` | ✅ |
+| 13-4 | 운영 | 알림 정책 + 인시던트 관리 + 채널 설정 | `/alerts` | ✅ |
+| 14-1 | 고도화 | 커스텀 대시보드 빌더 (Drag & Drop + 6위젯) | `/dashboards` | ✅ |
+| 14-2 | 고도화 | SLO 관리 (6 SLO, error budget, burn rate) | `/slo` | ✅ |
+| 14-3 | 고도화 | 비용 분석 (도넛 + 추이 + 13개 항목) | `/costs` | ✅ |
+| 14-4 | 고도화 | Investigation Notebook (MD/Query/Chart 셀) | `/notebooks` | ✅ |
+| 14-5 | 고도화 | Executive 대시보드 (6 KPI + 트렌드) | `/executive` | ✅ |
+| 14-6 | 고도화 | 멀티테넌트 관리 (6 테넌트 + White-label) | `/tenants` | ✅ |
+| 14-7 | 기반 | 국제화 i18n (ko/en/ja) | — | ✅ |
+| 14-8 | 기반 | 성능 최적화 + 접근성 (WCAG 2.1 AA) | — | ✅ |
+
+### Phase 15~16 Agent 연동 (구현 완료)
+
+| 기능 | 상세 | 상태 |
+|------|------|------|
+| Fleet UI 실데이터 바인딩 | `useFleet` 훅 — Collection Server API 우선, demo fallback | ✅ |
+| LIVE/DEMO 배지 | 실데이터/데모 모드 구분 표시 | ✅ |
+| 30초 폴링 | Heartbeat 반영 자동 갱신 | ✅ |
+| 원격 CLI (xterm.js) | 에이전트 상세 > 터미널 탭, RBAC + 감사 로그 | ✅ |
+| OTA 업데이트 UI | 업데이트 현황, Staged Rollout 진행률 표시 | ✅ |
+
+### 기술 스택 (구현 기준)
+
+| 기술 | 버전 | 비고 |
+|------|------|------|
+| Next.js | 16.2 | App Router |
+| React | 19.2 | React 19 신기능 활용 |
+| TypeScript | 5.x | 엄격 모드 |
+| Tailwind CSS | 4.x | CSS Variables 다크 테마 |
+| ECharts | 6.0 | scatter/heatmap/line/bar/gauge/pie/donut |
+| D3.js | 7.9 | 서비스 맵 force-directed 그래프 |
+| Zustand | 5.0 | auth-store, project-store, ui-store |
+| TanStack Query | 5.91 | API 데이터 페칭 + 캐싱 |
+| xterm.js | — | 원격 CLI 터미널 |
+| Lucide React | — | 아이콘 라이브러리 |
+
+> **다음 단계**: Phase 17 — 에이전트 실데이터 연동 UI 통합 테스트 (Mock → 실데이터 전환 검증).

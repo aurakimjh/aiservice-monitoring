@@ -1,9 +1,14 @@
 # 테스트 & 운영 검증 가이드 (TEST_GUIDE.md)
 
-> **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
+> **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: 처음 이 프로젝트를 검증하는 초보자, QA, SRE
-> **최종 업데이트**: 2026-03-05
+> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
+>
+> **관련 문서**:
+> - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 (이 문서 전에 참고)
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계
 
 이 문서는 **모니터링 솔루션 자체가 올바르게 동작하는지** 검증하는 가이드입니다.
 AI 서비스 코드가 없어도, 이 문서만 따라 하면 전체 파이프라인을 테스트할 수 있습니다.

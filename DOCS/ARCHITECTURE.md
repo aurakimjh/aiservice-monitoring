@@ -1,19 +1,18 @@
 # OpenTelemetry 아키텍처 설계
 
-> **문서 버전**: v1.1.0
+> **문서 버전**: v2.0.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-05
+> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (상용 솔루션 수준)
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Go, Collector, Fleet, CLI)
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 가이드
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 > - [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) — XLog/HeatMap 대시보드 상세 설계
->
-> **외부 참조**:
-> - AITOP_구현_차세대_방향성.MD — 에이전트 기반 수집 아키텍처 및 AI 진단 31개 항목 통합 설계
+> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석, 로드맵
 
 ---
 
@@ -1512,5 +1511,146 @@ $$
 
 ---
 
+## 11. AITOP Agent 통합 아키텍처 (Phase 15~16)
+
+> 이 섹션은 Phase 15~16에서 추가된 AITOP Agent 기반 수집 구조를 설명합니다.
+> 상세 설계는 [AGENT_DESIGN.md](./AGENT_DESIGN.md)를 참조하세요.
+
+### 11.1 전체 데이터 흐름
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          모니터링 대상 서버                                │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  AITOP Agent (Go 단일 바이너리)                                  │    │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │    │
+│  │  │ IT Collectors │  │ AI Collectors │  │ 공통 모듈             │  │    │
+│  │  │ ├─ OS        │  │ ├─ GPU       │  │ ├─ Config Manager    │  │    │
+│  │  │ ├─ WEB       │  │ ├─ LLM      │  │ ├─ Scheduler        │  │    │
+│  │  │ ├─ WAS       │  │ ├─ VectorDB │  │ ├─ Health Monitor   │  │    │
+│  │  │ └─ DB        │  │ ├─ Serving  │  │ ├─ Privilege Check  │  │    │
+│  │  │              │  │ └─ OTel     │  │ ├─ Sanitizer        │  │    │
+│  │  └──────────────┘  └──────────────┘  │ ├─ Local Buffer     │  │    │
+│  │                                       │ ├─ PTY Shell        │  │    │
+│  │                                       │ └─ OTA Updater      │  │    │
+│  │                                       └──────────────────────┘  │    │
+│  └────────────────────────┬────────────────────────────────────────┘    │
+│                           │ gRPC/HTTPS (mTLS)                          │
+│  ┌────────────────────────┴────────────────────────────────────────┐    │
+│  │  OTel Collector Agent (DaemonSet) — 실시간 메트릭/트레이스 수집    │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────┬──────────────────┬──────────────────────┘
+                               │                  │
+                  gRPC Stream  │                  │ OTLP
+                               ▼                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       AITOP Collection Server                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+│  │ gRPC Receiver │  │  Validation  │  │    Fleet     │  │  Event    │  │
+│  │ (Data 수신)   │  │   Gateway    │  │  Controller  │  │   Bus     │  │
+│  │              │  │ (PII 2차검증) │  │ (상태/OTA)    │  │ (진단트리) │  │
+│  └──────┬───────┘  └──────────────┘  └──────────────┘  └───────────┘  │
+│         │                                                              │
+│  ┌──────┴──────────────────────────────────────────────────────────┐   │
+│  │  저장소 계층                                                      │   │
+│  │  Prometheus (시계열) · S3/MinIO (Evidence) · PostgreSQL (상태)    │   │
+│  │  Loki (로그) · Tempo (트레이스) · 감사 로그 (터미널 세션)          │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │ REST API
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Frontend (Next.js 16)                               │
+│  26개 화면: Dashboard · Service Map · XLog · AI Analytics              │
+│  Fleet Console · Remote CLI (xterm.js) · Diagnostics · Incidents       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 AITOP Agent 수집 체계
+
+| 분류 | Collector | 수집 항목 | 수집 주기 |
+|------|-----------|----------|----------|
+| **IT** | OS Collector | CPU, Memory, Disk, Network, Process | 30초 |
+| **IT** | WEB Collector | Nginx/Apache 설정, 상태, SSL 만료일 | 5분 |
+| **IT** | WAS Collector | Tomcat/Spring Boot JVM, GC, Thread Dump | 5분 |
+| **IT** | DB Collector | PostgreSQL/MySQL/Oracle 파라미터, 커넥션, 슬로우 쿼리 | 5분 |
+| **AI** | GPU Collector | nvidia-smi VRAM/온도/전력/SM%/ECC | 30초 |
+| **AI** | LLM Collector | 모델 설정, Rate Limit, 토큰 사용량, 가드레일 | 5분 |
+| **AI** | VectorDB Collector | Qdrant/Milvus/Chroma 헬스, 인덱스, PII 탐지 | 5분 |
+| **AI** | Serving Collector | vLLM/Ollama/Triton 헬스, 배칭, KV Cache | 5분 |
+| **AI** | OTel Collector | Prometheus에서 11개 AI 메트릭 스냅샷 | 1분 |
+
+### 11.3 에이전트 운영 모드
+
+| 모드 | 설명 | 용도 |
+|------|------|------|
+| `full` | 상주 데몬 — 스케줄 수집 + Heartbeat + 원격 CLI | 프로덕션 상시 운영 |
+| `collect-only` | 1회 수집 → HTTPS 전송 → 종료 | 컨설턴트 점검, CI/CD |
+| `collect-export` | 1회 수집 → ZIP 파일 내보내기 | 오프라인/에어갭 환경 |
+
+### 11.4 Fleet Management
+
+- **Heartbeat**: 30초 간격 상태 보고 + 원격 명령 수신
+- **상태 머신**: `REGISTERED → APPROVED → HEALTHY → DEGRADED → OFFLINE`
+- **OTA 업데이트**: Canary(1~3대) → Staged(10%→50%→100%) → Full Rollout
+- **자동 롤백**: Health degradation 감지 시 이전 안정 버전 복원
+- **원격 CLI**: xterm.js + WebSocket → gRPC PTY 스트리밍, RBAC + 감사 로그
+
+### 11.5 OTel Collector ↔ AITOP Agent 역할 분담
+
+| 역할 | OTel Collector | AITOP Agent |
+|------|---------------|-------------|
+| **실시간 메트릭** | ✅ (Prometheus scrape/OTLP) | ❌ |
+| **분산 트레이스** | ✅ (OTLP 수신 + Tail Sampling) | ❌ |
+| **로그 수집** | ✅ (filelog receiver → Loki) | ❌ |
+| **인프라 진단** | ❌ | ✅ (설정 파싱, 상태 점검) |
+| **AI 시스템 진단** | ❌ | ✅ (모델/VectorDB/GPU 설정) |
+| **원격 CLI** | ❌ | ✅ (PTY 할당, 명령 실행) |
+| **OTA 업데이트** | ❌ | ✅ (자체 바이너리 교체) |
+
+---
+
+## 12. 프론트엔드 아키텍처 (Phase 10~14)
+
+> 상세 UI 설계는 [UI_DESIGN.md](./UI_DESIGN.md)를 참조하세요.
+
+### 12.1 기술 스택
+
+| 기술 | 버전 | 용도 |
+|------|------|------|
+| Next.js | 16.2 | App Router, SSR, 정적 최적화 |
+| React | 19.2 | UI 렌더링 |
+| TypeScript | 5.x | 타입 안전성 |
+| Tailwind CSS | 4.x | 스타일링 (CSS Variables 다크 테마) |
+| ECharts | 6.0 | 시계열 차트, 게이지, 히트맵, 도넛 |
+| D3.js | 7.9 | 서비스 맵 토폴로지 (force-directed) |
+| Zustand | 5.0 | 상태 관리 (auth, project, ui stores) |
+| xterm.js | — | 원격 CLI 터미널 |
+
+### 12.2 화면 구성 (26개 라우트)
+
+| 카테고리 | 화면 | 경로 |
+|---------|------|------|
+| **APM 코어** | 서비스 맵/목록 | `/services` |
+| | 서비스 상세 (7탭) | `/services/[id]` |
+| | XLog/HeatMap | `/traces` |
+| | 트레이스 워터폴 | `/traces/[traceId]` |
+| | 로그 탐색기 | `/logs` |
+| | 메트릭 탐색기 | `/metrics` |
+| **AI 네이티브** | AI 서비스 개요 | `/ai` |
+| | AI 서비스 상세 (LLM/RAG/Guardrail/GPU) | `/ai/[id]` |
+| | GPU 클러스터 뷰 | `/ai/gpu` |
+| **에이전트** | Fleet Console | `/agents` |
+| | 진단 보고서 (86개 항목) | `/diagnostics` |
+| **운영** | 알림 정책 + 인시던트 | `/alerts` |
+| | SLO 관리 | `/slo` |
+| | 비용 분석 | `/costs` |
+| **고도화** | 커스텀 대시보드 빌더 | `/dashboards` |
+| | Investigation Notebook | `/notebooks` |
+| | Executive 대시보드 | `/executive` |
+| | 멀티테넌트 관리 | `/tenants` |
+
+---
+
 *이 문서는 프로젝트 아키텍처 변경 시 업데이트합니다.*
-*관련 문서: [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [LOCAL_SETUP.md](./LOCAL_SETUP.md)*
+*관련 문서: [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [LOCAL_SETUP.md](./LOCAL_SETUP.md)*

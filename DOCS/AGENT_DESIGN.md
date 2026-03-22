@@ -1,12 +1,13 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.0.0
-> **작성일**: 2026-03-21
+> **문서 버전**: v1.1.0
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 완료 반영)
+> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료
 > **관련 문서**:
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계서
-> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의 및 수식
-> - AITOP_구현_차세대_방향성.MD — 에이전트 기반 수집 아키텍처 (외부 참조)
+> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석
 
 ---
 

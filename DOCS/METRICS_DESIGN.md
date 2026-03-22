@@ -1,18 +1,17 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v1.1.0
+> **문서 버전**: v2.0.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-05
+> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
 >
 > **관련 문서**:
-> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel Collector 파이프라인 및 배포 아키텍처
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (상용 솔루션 수준)
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Collector, Fleet, CLI)
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성
->
-> **외부 참조**:
-> - AITOP_구현_차세대_방향성.MD — AITOP 에이전트가 참조하는 OTel 표준 메트릭명 매핑 (ITEM0200~0230)
+> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석
 
 ---
 
@@ -1473,5 +1472,56 @@ abs(
 
 ---
 
+## 11. AITOP Agent 수집 메트릭 매핑 (Phase 15~16)
+
+> AITOP Agent는 OTel SDK 계측과 별도로, 인프라/AI 시스템의 **설정 및 상태를 진단 수집**합니다.
+> 수집된 데이터는 Evidence로 저장되며, 진단 엔진이 86개 항목(IT 55 + AI 31)으로 자동 판정합니다.
+> 상세 설계는 [AGENT_DESIGN.md](./AGENT_DESIGN.md)를 참조하세요.
+
+### 11.1 IT Collector 수집 항목
+
+| Collector | 수집 데이터 | 저장소 | UI 화면 |
+|-----------|-----------|--------|---------|
+| **OS Collector** | CPU 사용률, 메모리, 디스크 I/O, 네트워크 I/O, 프로세스 목록, 커널 파라미터 | Prometheus (시계열), S3 (스냅샷) | `/infra/[hostname]` |
+| **WEB Collector** | Nginx/Apache 설정 파싱, 상태 페이지, SSL 인증서 만료일, worker 설정 | S3 (Evidence) | `/infra/[hostname]` 미들웨어 탭 |
+| **WAS Collector** | Tomcat/Spring Boot JVM 설정, GC 로그 분석, Thread Dump (jcmd), 히프 사용량 | S3 (Evidence) | `/infra/[hostname]` 미들웨어 탭 |
+| **DB Collector** | PostgreSQL/MySQL/Oracle 파라미터, 커넥션 풀 상태, 슬로우 쿼리 Top-N | S3 (Evidence) | `/infra/[hostname]` 미들웨어 탭 |
+
+### 11.2 AI Collector 수집 항목
+
+| Collector | 수집 데이터 | AITOP 진단 항목 | 저장소 |
+|-----------|-----------|----------------|--------|
+| **GPU Collector** | nvidia-smi VRAM, 온도, 전력, SM%, ECC 에러, PCIe 대역폭 | ITEM0207~0208 (TA) | Prometheus, S3 |
+| **LLM Collector** | 모델 설정, Rate Limit, 토큰 사용량, 프롬프트 버전, 가드레일 설정 | ITEM0200~0204, 0209~0212 (AA) | S3 |
+| **VectorDB Collector** | Qdrant/Milvus/Chroma 헬스, 인덱스 상태, 임베딩/청킹 설정, PII 탐지 | ITEM0221~0223 (AA) | S3 |
+| **Serving Collector** | vLLM/Ollama/Triton 헬스, 배칭/양자화 설정, KV Cache, K8s GPU 리소스 | ITEM0217~0220, 0227~0229 (TA) | S3 |
+| **OTel Metrics Collector** | Prometheus에서 11개 AI 메트릭 스냅샷 (TTFT, TPS, 가드레일 등) | ITEM0230 (AA) | S3 |
+
+### 11.3 OTel 실시간 메트릭 vs Agent 진단 메트릭 비교
+
+| 관점 | OTel SDK 계측 (실시간) | AITOP Agent 수집 (진단) |
+|------|---------------------|----------------------|
+| **수집 대상** | 애플리케이션 런타임 메트릭 | 시스템 설정 및 상태 |
+| **수집 주기** | 15초 (Prometheus scrape) | 5분 (정기) 또는 온디맨드 |
+| **데이터 형태** | 시계열 (time series) | 스냅샷 (Evidence JSON) |
+| **저장소** | Prometheus → Thanos | S3/MinIO + PostgreSQL |
+| **용도** | 실시간 대시보드, 알림 | 진단 보고서, 교차 분석 |
+| **예시** | `llm.time_to_first_token` P95 = 1.2s | "vLLM max_num_seqs=256 설정" |
+
+### 11.4 진단 항목 구조 (86개)
+
+| 카테고리 | 항목 수 | 주요 내용 |
+|---------|--------|----------|
+| OS (IT) | 15 | CPU/메모리/디스크/네트워크 임계치, 커널 파라미터 |
+| WEB (IT) | 10 | Nginx worker, SSL 만료, 응답 코드 분포 |
+| WAS (IT) | 15 | JVM 히프, GC 패턴, Thread Pool, 커넥션 풀 |
+| DB (IT) | 15 | 슬로우 쿼리, 커넥션 사용률, 파라미터 최적화 |
+| GPU (AI) | 8 | VRAM 사용률, 온도, ECC 에러, SM Occupancy |
+| LLM (AI) | 10 | TTFT/TPS SLO 위반, Rate Limit, 프롬프트 관리 |
+| VectorDB (AI) | 7 | 인덱스 상태, 검색 품질, PII 노출 |
+| Guardrail (AI) | 6 | 차단율, 정책 커버리지, 레이턴시 기여도 |
+
+---
+
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
-*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [LOCAL_SETUP.md](./LOCAL_SETUP.md)*
+*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md)*

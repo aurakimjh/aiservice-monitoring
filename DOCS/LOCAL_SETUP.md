@@ -1,14 +1,16 @@
 # 로컬 개발 환경 구성 가이드 (LOCAL_SETUP.md)
 
-> **프로젝트**: OpenTelemetry 기반 AI 서비스 성능 모니터링 솔루션
+> **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-05
+> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 환경 설정 후 테스트 검증 가이드 (이 문서 다음에 참고)
-> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel 아키텍처 설계
+> - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처 설계
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Go)
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 지표 정의 및 수집 방안
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
 
 이 문서를 순서대로 따라 하면, **환경 설정에 소요되는 시간 없이** 첫날부터 코드를 작성하고 로컬에서 메트릭·트레이스를 확인할 수 있습니다.
 
