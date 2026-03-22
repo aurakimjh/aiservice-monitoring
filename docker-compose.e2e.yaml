@@ -1,0 +1,350 @@
+# AITOP Phase 7' — E2E 통합 테스트 스택
+# 전체 시스템: Frontend + Collection Server + Agent + PostgreSQL + MinIO
+#             + OTel Collector + Prometheus + Tempo + Loki
+#
+# 실행: docker compose -f docker-compose.e2e.yaml up -d --build
+# 중지: docker compose -f docker-compose.e2e.yaml down -v
+# 로그: docker compose -f docker-compose.e2e.yaml logs -f
+
+services:
+
+  # ═══════════════════════════════════════════════════════════
+  # 1. Collection Server — Agent 데이터 수신 + Fleet 관리 + JWT Auth
+  # ═══════════════════════════════════════════════════════════
+  collection-server:
+    build:
+      context: ./agent
+      dockerfile: ../infra/docker/Dockerfile.collection-server
+    container_name: aitop-collection-server
+    ports:
+      - "8080:8080"        # REST API + Auth
+      - "50051:50051"      # gRPC (Agent 통신)
+    environment:
+      - AITOP_LISTEN_ADDR=:8080
+      - AITOP_LOG_LEVEL=debug
+      - AITOP_S3_ENDPOINT=minio:9000
+      - AITOP_S3_BUCKET=aitop-evidence
+      - AITOP_S3_ACCESS_KEY=minioadmin
+      - AITOP_S3_SECRET_KEY=minioadmin
+      - AITOP_S3_USE_SSL=false
+      - AITOP_DB_URL=postgres://aitop:aitop@postgres:5432/aitop_collection?sslmode=disable
+      - AITOP_JWT_SECRET=e2e-test-jwt-secret-32chars-min!!
+      - AITOP_OTEL_ENDPOINT=http://otel-collector:4317
+      - AITOP_ENV=e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      aitop.role: "collection-server"
+      aitop.phase: "7prime"
+
+  # ═══════════════════════════════════════════════════════════
+  # 2. Frontend — Next.js 모니터링 UI (26개 화면)
+  # ═══════════════════════════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aitop-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
+      - NEXT_PUBLIC_WS_URL=http://localhost:8080
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    depends_on:
+      collection-server:
+        condition: service_healthy
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      aitop.role: "frontend"
+
+  # ═══════════════════════════════════════════════════════════
+  # 3. PostgreSQL — Agent/Job/Result/Diagnostic DB
+  # ═══════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: aitop-postgres-e2e
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: aitop_collection
+      POSTGRES_USER: aitop
+      POSTGRES_PASSWORD: aitop
+    volumes:
+      - ./agent/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - pgdata-e2e:/var/lib/postgresql/data
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitop -d aitop_collection"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    labels:
+      aitop.role: "database"
+
+  # ═══════════════════════════════════════════════════════════
+  # 4. MinIO — S3 호환 Evidence/Diagnostic 저장소
+  # ═══════════════════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: aitop-minio-e2e
+    ports:
+      - "9000:9000"        # S3 API
+      - "9001:9001"        # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data-e2e:/data
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    labels:
+      aitop.role: "object-storage"
+
+  # MinIO 초기 버킷 생성
+  minio-init:
+    image: minio/mc:latest
+    container_name: aitop-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb local/aitop-evidence --ignore-existing &&
+      mc mb local/aitop-terminal-logs --ignore-existing &&
+      mc mb local/aitop-diagnostics --ignore-existing &&
+      mc mb local/aitop-reports --ignore-existing &&
+      echo 'MinIO buckets initialized'
+      "
+    networks:
+      - aitop-e2e
+
+  # ═══════════════════════════════════════════════════════════
+  # 5. OTel Collector — Traces + Metrics + Logs 수집
+  #    Tail Sampling 포함 (E2E 검증용)
+  # ═══════════════════════════════════════════════════════════
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: aitop-otel-collector-e2e
+    ports:
+      - "4317:4317"        # OTLP gRPC
+      - "4318:4318"        # OTLP HTTP
+      - "13133:13133"      # Health check extension
+      - "8889:8889"        # Prometheus scrape
+    volumes:
+      - ./infra/docker/otelcol-e2e.yaml:/etc/otelcol/config.yaml:ro
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      aitop.role: "otel-collector"
+
+  # ═══════════════════════════════════════════════════════════
+  # 6. Prometheus — 메트릭 저장 + 쿼리
+  # ═══════════════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: aitop-prometheus-e2e
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/docker/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/docker/prometheus-rules.yaml:/etc/prometheus/rules.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      aitop.role: "metrics"
+
+  # ═══════════════════════════════════════════════════════════
+  # 7. Tempo — Distributed Tracing 저장소
+  # ═══════════════════════════════════════════════════════════
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: aitop-tempo-e2e
+    ports:
+      - "3200:3200"        # Tempo HTTP API
+      - "9411:9411"        # Zipkin 호환
+    volumes:
+      - ./infra/docker/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data-e2e:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      aitop.role: "tracing"
+
+  # ═══════════════════════════════════════════════════════════
+  # 8. Loki — 로그 집계 저장소
+  # ═══════════════════════════════════════════════════════════
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: aitop-loki-e2e
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/docker/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data-e2e:/loki
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      aitop.role: "logging"
+
+  # ═══════════════════════════════════════════════════════════
+  # 9. 테스트 대상 서버들 (Agent 수집 대상)
+  # ═══════════════════════════════════════════════════════════
+
+  # AI 서비스 (FastAPI + RAG Demo — OTel 계측 포함)
+  demo-rag-service:
+    build:
+      context: ./demo/rag-service
+    container_name: aitop-demo-rag
+    ports:
+      - "8000:8000"
+    environment:
+      - MOCK_MODE=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=demo-rag-service
+      - OTEL_RESOURCE_ATTRIBUTES=service.version=1.0.0,deployment.environment=e2e
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    networks:
+      - aitop-e2e
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      aitop.role: "target-ai-service"
+      aitop.monitored: "true"
+
+  # DB 서버 (모니터링 대상)
+  demo-db:
+    image: postgres:16-alpine
+    container_name: aitop-demo-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: demodb
+      POSTGRES_USER: demouser
+      POSTGRES_PASSWORD: demopass
+    networks:
+      - aitop-e2e
+    labels:
+      aitop.role: "target-database"
+      aitop.monitored: "true"
+
+  # Web 서버 (모니터링 대상)
+  demo-web:
+    image: nginx:alpine
+    container_name: aitop-demo-web
+    ports:
+      - "8081:80"
+    networks:
+      - aitop-e2e
+    labels:
+      aitop.role: "target-web"
+      aitop.monitored: "true"
+
+  # ═══════════════════════════════════════════════════════════
+  # 10. Locust 부하 테스트 실행기 (선택적 — profile로 활성화)
+  # ═══════════════════════════════════════════════════════════
+  locust:
+    image: locustio/locust:2.24.0
+    container_name: aitop-locust
+    profiles:
+      - load-test
+    ports:
+      - "8089:8089"        # Locust Web UI
+    volumes:
+      - ./locust:/mnt/locust:ro
+    command: >
+      -f /mnt/locust/locustfile.py
+      --config /mnt/locust/locust.conf
+      --host http://collection-server:8080
+    depends_on:
+      collection-server:
+        condition: service_healthy
+    networks:
+      - aitop-e2e
+    labels:
+      aitop.role: "load-tester"
+
+volumes:
+  pgdata-e2e:
+    driver: local
+  minio-data-e2e:
+    driver: local
+  tempo-data-e2e:
+    driver: local
+  loki-data-e2e:
+    driver: local
+
+networks:
+  aitop-e2e:
+    driver: bridge
+    name: aitop-e2e
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

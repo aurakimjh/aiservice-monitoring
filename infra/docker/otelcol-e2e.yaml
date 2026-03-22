@@ -1,0 +1,132 @@
+# OTel Collector — Phase 7' E2E 통합 테스트
+# Tail Sampling 포함 (보존율 검증용)
+# 로컬 otelcol-local.yaml 대비: Tail Sampling 정책 추가
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  zpages:
+    endpoint: 0.0.0.0:55679
+  file_storage:
+    directory: /var/otelcol/storage
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ["*"]
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  # Tail Sampling — Phase 7'-2 검증 대상
+  # 목표: 에러/고레이턴시 > 80% 보존, 정상 < 5% 샘플링
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 1000
+    policies:
+      # 에러 트레이스 100% 보존
+      - name: error-policy
+        type: status_code
+        status_code: {status_codes: [ERROR]}
+      # 고레이턴시 트레이스 보존 (>2초)
+      - name: high-latency-policy
+        type: latency
+        latency: {threshold_ms: 2000}
+      # 느린 쿼리 보존 (>1초)
+      - name: slow-query-policy
+        type: latency
+        latency: {threshold_ms: 1000}
+      # e2e 테스트 트레이스 100% 보존
+      - name: e2e-test-policy
+        type: string_attribute
+        string_attribute:
+          key: deployment.environment
+          values: ["e2e", "test"]
+      # 정상 트레이스 5% 확률 샘플링 (비용 절감)
+      - name: normal-probabilistic
+        type: probabilistic
+        probabilistic: {sampling_percentage: 5}
+
+  # 지표명 표준화
+  transform/normalize:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, "llm.time_to_first_token") where name == "vllm:time_to_first_token_seconds"
+          - set(name, "llm.tokens_per_second") where name == "vllm:generation_tokens_per_second"
+          - set(unit, "ms") where name == "llm.time_to_first_token"
+          - set(unit, "tok/s") where name == "llm.tokens_per_second"
+
+  # 배치 처리
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+exporters:
+  # Prometheus 스크레이프 엔드포인트
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "aiservice"
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Tempo (트레이스)
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+  # Loki (로그)
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
+
+  # 디버그 콘솔 (E2E 검증용)
+  debug:
+    verbosity: normal
+    sampling_initial: 2
+    sampling_thereafter: 50
+
+service:
+  extensions: [health_check, zpages, file_storage]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+  pipelines:
+    # 트레이스: Tail Sampling 적용
+    traces:
+      receivers:  [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters:  [otlp/tempo, debug]
+
+    # 메트릭: 전량 수집 (Tail Sampling 없음)
+    metrics:
+      receivers:  [otlp]
+      processors: [memory_limiter, transform/normalize, batch]
+      exporters:  [prometheus]
+
+    # 로그: 전량 수집
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [loki]

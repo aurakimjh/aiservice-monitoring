@@ -133,6 +133,78 @@ verify-all-no-docker:
 	chmod +x ../scripts/phase17-3/run-all.sh
 	../scripts/phase17-3/run-all.sh --no-docker --no-cleanup
 
+## ─── Phase 7': E2E 통합 검증 ─────────────────────────────────────────────────
+
+## e2e-up: E2E 전체 스택 기동 (Frontend + Collection Server + Agent + OTel + DB + S3)
+e2e-up:
+	docker compose -f ../docker-compose.e2e.yaml up -d --build
+	@echo "E2E stack starting. Wait ~60s for all services to be healthy."
+	@echo "Services: frontend(:3000) collection-server(:8080) prometheus(:9090) tempo(:3200) loki(:3100)"
+
+## e2e-down: E2E 스택 종료 및 볼륨 삭제
+e2e-down:
+	docker compose -f ../docker-compose.e2e.yaml down -v
+	@echo "E2E stack stopped and volumes removed."
+
+## e2e-logs: E2E 스택 실시간 로그
+e2e-logs:
+	docker compose -f ../docker-compose.e2e.yaml logs -f
+
+## e2e-ps: E2E 스택 컨테이너 상태 확인
+e2e-ps:
+	docker compose -f ../docker-compose.e2e.yaml ps
+
+## e2e-health: Phase 7'-1 — 전체 서비스 헬스체크
+e2e-health:
+	chmod +x ../scripts/e2e/healthcheck.sh
+	../scripts/e2e/healthcheck.sh
+
+## e2e-trace: Phase 7'-3 — Trace 연속성 검증 (5레이어 traceId + Baggage)
+e2e-trace:
+	chmod +x ../scripts/e2e/trace-continuity.sh
+	../scripts/e2e/trace-continuity.sh
+
+## e2e-security: Phase 7'-4 — 보안 감사 (OWASP Top 10 + PII + mTLS)
+e2e-security:
+	chmod +x ../scripts/e2e/security-audit.sh
+	../scripts/e2e/security-audit.sh
+
+## e2e-load: Phase 7'-2 — 부하 테스트 (Locust 4시나리오, 10분)
+e2e-load:
+	@mkdir -p ../reports
+	@command -v locust >/dev/null 2>&1 || (echo "ERROR: locust not installed. Run: pip install locust" && exit 1)
+	locust -f ../locust/locustfile.py \
+	       --config ../locust/locust.conf \
+	       --host http://localhost:8080 \
+	       --headless \
+	       --users 200 \
+	       --spawn-rate 10 \
+	       --run-time 10m \
+	       --html ../reports/e2e_load_report.html \
+	       --csv ../reports/e2e_load
+	@echo "Load test complete. Report: reports/e2e_load_report.html"
+
+## e2e-load-ui: Phase 7'-2 — Locust Web UI 모드로 부하 테스트 시작
+e2e-load-ui:
+	@command -v locust >/dev/null 2>&1 || (echo "ERROR: locust not installed. Run: pip install locust" && exit 1)
+	locust -f ../locust/locustfile.py \
+	       --host http://localhost:8080 \
+	       --web-host 0.0.0.0 \
+	       --web-port 8089
+	@echo "Locust UI: http://localhost:8089"
+
+## e2e-all: Phase 7' 전체 실행 (헬스체크 → Trace → 보안 → 부하)
+e2e-all: e2e-health e2e-trace e2e-security e2e-load
+	@echo ""
+	@echo "═══════════════════════════════════════════════"
+	@echo " Phase 7' E2E 통합 검증 완료"
+	@echo "═══════════════════════════════════════════════"
+	@echo " 7'-1 헬스체크:    scripts/e2e/healthcheck.sh"
+	@echo " 7'-2 부하 테스트: reports/e2e_load_report.html"
+	@echo " 7'-3 Trace 연속성: scripts/e2e/trace-continuity.sh"
+	@echo " 7'-4 보안 감사:   scripts/e2e/security-audit.sh"
+	@echo "═══════════════════════════════════════════════"
+
 ## help: Show this help
 help:
 	@echo "Available targets:"
