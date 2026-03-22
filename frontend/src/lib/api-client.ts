@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/auth-store';
 import type { LoginRequest, LoginResponse, User } from '@/types/auth';
-import type { FleetAgent, CollectionJob, AgentPlugin } from '@/types/monitoring';
+import type { FleetAgent, CollectionJob, AgentPlugin, AgentGroup, UpdateStatus, CollectionSchedule } from '@/types/monitoring';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080/api/v1';
 
@@ -156,6 +156,46 @@ export const fleetApi = {
 
   triggerCollect: (agentId: string) =>
     apiFetch<void>(`/fleet/agents/${agentId}/collect`, { method: 'POST' }),
+
+  // Group management
+  listGroups: () =>
+    apiFetch<{ items: AgentGroup[] }>('/fleet/groups'),
+
+  createGroup: (data: Omit<AgentGroup, 'id' | 'createdAt'>) =>
+    apiFetch<AgentGroup>('/fleet/groups', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateGroup: (id: string, data: Partial<Omit<AgentGroup, 'id' | 'createdAt'>>) =>
+    apiFetch<AgentGroup>(`/fleet/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteGroup: (id: string) =>
+    apiFetch<void>(`/fleet/groups/${id}`, { method: 'DELETE' }),
+
+  // OTA Update management
+  listUpdates: () =>
+    apiFetch<{ items: UpdateStatus[] }>('/fleet/updates'),
+
+  triggerUpdate: (agentIds: string[], targetVersion: string) =>
+    apiFetch<{ queued: number }>('/fleet/updates', {
+      method: 'POST',
+      body: JSON.stringify({ agentIds, targetVersion }),
+    }),
+
+  // Collection schedule management
+  listSchedules: () =>
+    apiFetch<{ items: CollectionSchedule[] }>('/fleet/schedules'),
+
+  saveSchedule: (data: Omit<CollectionSchedule, 'id'>) =>
+    apiFetch<CollectionSchedule>('/fleet/schedules', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateSchedule: (id: string, data: Partial<CollectionSchedule>) =>
+    apiFetch<CollectionSchedule>(`/fleet/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Plugin deployment
+  deployPlugin: (pluginName: string, targetType: 'all' | 'group' | 'agents', targetId?: string, agentIds?: string[]) =>
+    apiFetch<{ queued: number }>('/fleet/plugins/deploy', {
+      method: 'POST',
+      body: JSON.stringify({ pluginName, targetType, targetId, agentIds }),
+    }),
 };
 
 export { apiFetch };

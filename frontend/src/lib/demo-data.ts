@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1213,5 +1213,38 @@ export function getTenants(): Tenant[] {
     { id: 't-startup', name: 'ML Startup Inc', slug: 'mlstartup', plan: 'free', status: 'trial', primaryColor: '#BC8CFF', projectCount: 1, userCount: 3, hostCount: 4, monthlyUsage: 280, monthlyLimit: 500, dataRetentionDays: 7, createdAt: now - 86400_000 * 14, contactEmail: 'dev@mlstartup.io' },
     { id: 't-health', name: 'HealthAI Corp', slug: 'healthai', plan: 'enterprise', status: 'active', primaryColor: '#F778BA', projectCount: 2, userCount: 15, hostCount: 24, monthlyUsage: 6800, monthlyLimit: 12000, dataRetentionDays: 365, createdAt: now - 86400_000 * 60, contactEmail: 'platform@healthai.co.kr' },
     { id: 't-suspended', name: 'OldTech LLC', slug: 'oldtech', plan: 'pro', status: 'suspended', projectCount: 1, userCount: 5, hostCount: 8, monthlyUsage: 0, monthlyLimit: 8000, dataRetentionDays: 30, createdAt: now - 86400_000 * 200, contactEmail: 'admin@oldtech.com' },
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 16-4-4: Fleet 관리 콘솔 완성
+// ═══════════════════════════════════════════════════════════════
+
+export function getAgentGroups(): AgentGroup[] {
+  return [
+    { id: 'grp-gpu', name: 'GPU Servers', description: 'AI/LLM serving GPU nodes', agentIds: ['a-03', 'a-04'], tags: ['ai', 'gpu', 'production'], createdAt: new Date(Date.now() - 86400_000 * 30).toISOString() },
+    { id: 'grp-api', name: 'API Servers', description: 'Backend API nodes', agentIds: ['a-01', 'a-02'], tags: ['api', 'production'], createdAt: new Date(Date.now() - 86400_000 * 28).toISOString() },
+    { id: 'grp-db', name: 'Database Servers', description: 'PostgreSQL & Redis nodes', agentIds: ['a-05', 'a-06'], tags: ['db', 'production'], createdAt: new Date(Date.now() - 86400_000 * 25).toISOString() },
+    { id: 'grp-legacy', name: 'Legacy Hosts', description: 'AIX / old OS nodes', agentIds: [], tags: ['legacy', 'offline'], createdAt: new Date(Date.now() - 86400_000 * 10).toISOString() },
+  ];
+}
+
+export function getUpdateStatuses(): UpdateStatus[] {
+  const now = new Date().toISOString();
+  return [
+    { agentId: 'a-01', hostname: 'prod-api-01', currentVersion: '1.2.0', targetVersion: '1.2.0', phase: 'completed', progress: 100, startedAt: new Date(Date.now() - 3600_000).toISOString(), completedAt: new Date(Date.now() - 3540_000).toISOString() },
+    { agentId: 'a-02', hostname: 'prod-api-02', currentVersion: '1.2.0', targetVersion: '1.2.0', phase: 'completed', progress: 100, startedAt: new Date(Date.now() - 3600_000).toISOString(), completedAt: new Date(Date.now() - 3530_000).toISOString() },
+    { agentId: 'a-03', hostname: 'prod-gpu-01', currentVersion: '1.2.0', targetVersion: '1.2.0', phase: 'completed', progress: 100, startedAt: new Date(Date.now() - 3600_000).toISOString(), completedAt: new Date(Date.now() - 3510_000).toISOString() },
+    { agentId: 'a-04', hostname: 'prod-gpu-02', currentVersion: '1.1.9', targetVersion: '1.2.0', phase: 'pending', progress: 0 },
+    { agentId: 'a-05', hostname: 'prod-db-01', currentVersion: '1.2.0', targetVersion: '1.2.0', phase: 'completed', progress: 100, startedAt: new Date(Date.now() - 3600_000).toISOString(), completedAt: new Date(Date.now() - 3520_000).toISOString() },
+    { agentId: 'a-06', hostname: 'prod-redis-01', currentVersion: '1.1.9', targetVersion: '1.2.0', phase: 'downloading', progress: 42, startedAt: now },
+  ];
+}
+
+export function getCollectionSchedules(): CollectionSchedule[] {
+  return [
+    { id: 'sched-01', name: '전체 정기 수집', targetType: 'all', cron: '*/30 * * * *', enabled: true, lastRun: new Date(Date.now() - 180_000).toISOString(), nextRun: new Date(Date.now() + 1620_000).toISOString() },
+    { id: 'sched-02', name: 'GPU 그룹 집중 수집', targetType: 'group', targetId: 'grp-gpu', cron: '*/5 * * * *', enabled: true, lastRun: new Date(Date.now() - 60_000).toISOString(), nextRun: new Date(Date.now() + 240_000).toISOString() },
+    { id: 'sched-03', name: 'DB 야간 수집', targetType: 'group', targetId: 'grp-db', cron: '0 2 * * *', enabled: false, lastRun: new Date(Date.now() - 86400_000).toISOString(), nextRun: new Date(Date.now() + 72000_000).toISOString() },
   ];
 }

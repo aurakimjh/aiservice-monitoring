@@ -459,6 +459,43 @@ export interface AgentInfo {
   mode: 'full' | 'collect-only' | 'collect-export';
 }
 
+// Fleet Group Management
+export interface AgentGroup {
+  id: string;
+  name: string;
+  description: string;
+  agentIds: string[];
+  tags: string[];
+  createdAt: string;
+}
+
+// OTA Update Status
+export type UpdatePhase = 'pending' | 'downloading' | 'installing' | 'completed' | 'failed' | 'rolled_back';
+
+export interface UpdateStatus {
+  agentId: string;
+  hostname: string;
+  currentVersion: string;
+  targetVersion: string;
+  phase: UpdatePhase;
+  progress: number; // 0–100
+  startedAt?: string;
+  completedAt?: string;
+  errorMessage?: string;
+}
+
+// Collection Schedule
+export interface CollectionSchedule {
+  id: string;
+  name: string;
+  targetType: 'all' | 'group' | 'agent';
+  targetId?: string; // groupId or agentId when targetType != 'all'
+  cron: string; // e.g. "*/30 * * * *"
+  enabled: boolean;
+  lastRun?: string;
+  nextRun?: string;
+}
+
 // Fleet API response — AgentInfo + host context (returned by Collection Server)
 export interface FleetAgent {
   id: string;

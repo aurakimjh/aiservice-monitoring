@@ -26,6 +26,129 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
 
+// ── Fleet Group Registry ──────────────────────────────────────────────────
+
+type groupRecord struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	AgentIDs    []string  `json:"agentIds"`
+	Tags        []string  `json:"tags"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type groupRegistry struct {
+	mu     sync.RWMutex
+	groups map[string]*groupRecord
+	seq    int
+}
+
+func newGroupRegistry() *groupRegistry {
+	return &groupRegistry{groups: make(map[string]*groupRecord)}
+}
+
+func (g *groupRegistry) list() []*groupRecord {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make([]*groupRecord, 0, len(g.groups))
+	for _, v := range g.groups {
+		out = append(out, v)
+	}
+	return out
+}
+
+func (g *groupRegistry) create(name, desc string, agentIDs, tags []string) *groupRecord {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.seq++
+	rec := &groupRecord{
+		ID:          fmt.Sprintf("grp-%04d", g.seq),
+		Name:        name,
+		Description: desc,
+		AgentIDs:    agentIDs,
+		Tags:        tags,
+		CreatedAt:   time.Now().UTC(),
+	}
+	g.groups[rec.ID] = rec
+	return rec
+}
+
+func (g *groupRegistry) update(id, name, desc string, agentIDs, tags []string) (*groupRecord, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	rec, ok := g.groups[id]
+	if !ok {
+		return nil, false
+	}
+	if name != "" {
+		rec.Name = name
+	}
+	if desc != "" {
+		rec.Description = desc
+	}
+	if agentIDs != nil {
+		rec.AgentIDs = agentIDs
+	}
+	if tags != nil {
+		rec.Tags = tags
+	}
+	return rec, true
+}
+
+func (g *groupRegistry) delete(id string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	_, ok := g.groups[id]
+	delete(g.groups, id)
+	return ok
+}
+
+// ── Schedule Registry ─────────────────────────────────────────────────────
+
+type scheduleRecord struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	TargetType string `json:"targetType"`
+	TargetID   string `json:"targetId,omitempty"`
+	Cron       string `json:"cron"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type scheduleRegistry struct {
+	mu        sync.RWMutex
+	schedules map[string]*scheduleRecord
+	seq       int
+}
+
+func newScheduleRegistry() *scheduleRegistry {
+	return &scheduleRegistry{schedules: make(map[string]*scheduleRecord)}
+}
+
+func (s *scheduleRegistry) list() []*scheduleRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*scheduleRecord, 0, len(s.schedules))
+	for _, v := range s.schedules {
+		out = append(out, v)
+	}
+	return out
+}
+
+func (s *scheduleRegistry) upsert(id, name, targetType, targetID, cron string, enabled bool) *scheduleRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id == "" {
+		s.seq++
+		id = fmt.Sprintf("sched-%04d", s.seq)
+	}
+	rec := &scheduleRecord{
+		ID: id, Name: name, TargetType: targetType,
+		TargetID: targetID, Cron: cron, Enabled: enabled,
+	}
+	s.schedules[id] = rec
+	return rec
+}
+
 // agentRecord holds in-memory state for one registered agent.
 type agentRecord struct {
 	mu            sync.RWMutex
@@ -143,7 +266,9 @@ func main() {
 	slog.SetDefault(logger)
 
 	f := newFleet()
-	mux := buildMux(f, logger)
+	gr := newGroupRegistry()
+	sr := newScheduleRegistry()
+	mux := buildMux(f, gr, sr, logger)
 
 	srv := &http.Server{
 		Addr:         *addr,
@@ -173,7 +298,7 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, logger *slog.Logger) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── POST /api/v1/heartbeat ──────────────────────────────────────────────
@@ -275,6 +400,192 @@ func buildMux(f *fleet, logger *slog.Logger) http.Handler {
 			"status":   "queued",
 			"agent_id": agentID,
 		})
+	})
+
+	// ── Fleet Group endpoints (/api/v1/fleet/groups) ────────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/groups", func(w http.ResponseWriter, r *http.Request) {
+		items := gr.list()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/groups", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name        string   `json:"name"`
+			Description string   `json:"description"`
+			AgentIDs    []string `json:"agentIds"`
+			Tags        []string `json:"tags"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rec := gr.create(body.Name, body.Description, body.AgentIDs, body.Tags)
+		logger.Info("group created", "id", rec.ID, "name", rec.Name)
+		writeJSON(w, http.StatusCreated, rec)
+	})
+
+	mux.HandleFunc("PUT /api/v1/fleet/groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/fleet/groups/"):]
+		var body struct {
+			Name        string   `json:"name"`
+			Description string   `json:"description"`
+			AgentIDs    []string `json:"agentIds"`
+			Tags        []string `json:"tags"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rec, ok := gr.update(id, body.Name, body.Description, body.AgentIDs, body.Tags)
+		if !ok {
+			http.Error(w, "group not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, rec)
+	})
+
+	mux.HandleFunc("DELETE /api/v1/fleet/groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/fleet/groups/"):]
+		if !gr.delete(id) {
+			http.Error(w, "group not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// ── Fleet Agent endpoints (/api/v1/fleet/agents) ────────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/agents", func(w http.ResponseWriter, r *http.Request) {
+		agents := f.list()
+		out := make([]map[string]interface{}, 0, len(agents))
+		for _, a := range agents {
+			out = append(out, snapshot(a))
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": out, "total": len(out)})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/agents/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[len("/api/v1/fleet/agents/"):]
+		agentID, subPath := path, ""
+		for i, c := range path {
+			if c == '/' {
+				agentID = path[:i]
+				subPath = path[i+1:]
+				break
+			}
+		}
+		if subPath != "collect" {
+			http.Error(w, "unknown sub-path", http.StatusNotFound)
+			return
+		}
+		if _, ok := f.get(agentID); !ok {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+		logger.Info("manual collect triggered via fleet API", "agent_id", agentID)
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "agent_id": agentID})
+	})
+
+	// ── Fleet Jobs endpoint (/api/v1/fleet/jobs) ────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/jobs", func(w http.ResponseWriter, r *http.Request) {
+		// MVP: return empty list; real job tracking is future work
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}})
+	})
+
+	// ── Fleet Plugins endpoint (/api/v1/fleet/plugins) ──────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/plugins", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/plugins/deploy", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			PluginName string   `json:"pluginName"`
+			TargetType string   `json:"targetType"`
+			TargetID   string   `json:"targetId"`
+			AgentIDs   []string `json:"agentIds"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		logger.Info("plugin deploy queued", "plugin", body.PluginName, "target", body.TargetType)
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{"queued": 1})
+	})
+
+	// ── Fleet Updates endpoints (/api/v1/fleet/updates) ─────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/updates", func(w http.ResponseWriter, r *http.Request) {
+		agents := f.list()
+		items := make([]map[string]interface{}, 0, len(agents))
+		for _, a := range agents {
+			s := snapshot(a)
+			items = append(items, map[string]interface{}{
+				"agentId":        s["id"],
+				"hostname":       s["hostname"],
+				"currentVersion": s["agent_version"],
+				"targetVersion":  "1.2.0",
+				"phase":          "completed",
+				"progress":       100,
+			})
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/updates", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			AgentIDs      []string `json:"agentIds"`
+			TargetVersion string   `json:"targetVersion"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		logger.Info("OTA update queued", "agents", len(body.AgentIDs), "version", body.TargetVersion)
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{"queued": len(body.AgentIDs)})
+	})
+
+	// ── Fleet Schedules endpoints (/api/v1/fleet/schedules) ─────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/schedules", func(w http.ResponseWriter, r *http.Request) {
+		items := sr.list()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/schedules", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name       string `json:"name"`
+			TargetType string `json:"targetType"`
+			TargetID   string `json:"targetId"`
+			Cron       string `json:"cron"`
+			Enabled    bool   `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rec := sr.upsert("", body.Name, body.TargetType, body.TargetID, body.Cron, body.Enabled)
+		logger.Info("schedule created", "id", rec.ID, "cron", rec.Cron)
+		writeJSON(w, http.StatusCreated, rec)
+	})
+
+	mux.HandleFunc("PUT /api/v1/fleet/schedules/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/fleet/schedules/"):]
+		var body struct {
+			Name       string `json:"name"`
+			TargetType string `json:"targetType"`
+			TargetID   string `json:"targetId"`
+			Cron       string `json:"cron"`
+			Enabled    bool   `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rec := sr.upsert(id, body.Name, body.TargetType, body.TargetID, body.Cron, body.Enabled)
+		writeJSON(w, http.StatusOK, rec)
 	})
 
 	// ── GET /healthz ────────────────────────────────────────────────────────
