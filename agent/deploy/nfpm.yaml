@@ -1,0 +1,80 @@
+# nFPM configuration — DEB/RPM/APK 패키지 빌드
+# 빌드: nfpm package --config deploy/nfpm.yaml --target dist/ --packager deb
+#        nfpm package --config deploy/nfpm.yaml --target dist/ --packager rpm
+#
+# nfpm 설치: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name: aitop-agent
+arch: amd64
+platform: linux
+version: "${VERSION:-1.0.0}"
+release: "1"
+epoch: "0"
+section: monitoring
+priority: optional
+maintainer: "Aura Kim <aura.kimjh@gmail.com>"
+description: |
+  AITOP Agent — AI Service Monitoring Agent
+  Go 기반 경량 에이전트로 IT(OS/WEB/WAS/DB) 및 AI(GPU/LLM/VectorDB/Serving) 시스템을
+  자동 수집·진단하여 AITOP Collection Server로 전송합니다.
+vendor: "AITOP"
+homepage: "https://github.com/aurakimjh/aiservice-monitoring"
+license: "Apache-2.0"
+
+# 의존성
+depends:
+  - systemd
+recommends:
+  - nvidia-smi    # AI-GPU Collector (선택)
+
+# 파일 매핑
+contents:
+  # 바이너리
+  - src: ../../dist/aitop-agent
+    dst: /opt/aitop-agent/aitop-agent
+    file_info:
+      mode: 0755
+
+  # 설정 파일 (conffile — 업그레이드 시 보존)
+  - src: ../../agent/configs/agent.yaml
+    dst: /etc/aitop-agent/agent.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0640
+
+  # systemd 서비스
+  - src: ./systemd/aitop-agent.service
+    dst: /usr/lib/systemd/system/aitop-agent.service
+    file_info:
+      mode: 0644
+
+  # 데이터 디렉토리
+  - dst: /var/lib/aitop-agent
+    type: dir
+    file_info:
+      mode: 0750
+      owner: aitop
+      group: aitop
+
+  # 로그 디렉토리
+  - dst: /var/log/aitop-agent
+    type: dir
+    file_info:
+      mode: 0750
+      owner: aitop
+      group: aitop
+
+# 설치/제거 스크립트
+scripts:
+  preinstall: ./scripts/preinstall.sh
+  postinstall: ./scripts/postinstall.sh
+  preremove: ./scripts/preremove.sh
+
+# RPM 전용
+rpm:
+  group: Monitoring
+  compression: xz
+
+# DEB 전용
+deb:
+  compression: xz

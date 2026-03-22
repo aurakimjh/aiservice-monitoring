@@ -1,0 +1,253 @@
+// AITOP Collection Service — gRPC API 정의
+// Agent ↔ Collection Server 간 통신 프로토콜
+//
+// 빌드: protoc --go_out=. --go-grpc_out=. proto/*.proto
+
+syntax = "proto3";
+
+package aitop.collection.v1;
+
+option go_package = "github.com/aurakimjh/aiservice-monitoring/agent/pkg/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// ─── CollectionService ─────────────────────────────────────
+
+service CollectionService {
+  // 단일 수집 결과 전송
+  rpc SubmitResult(SubmitResultRequest) returns (SubmitResultResponse);
+
+  // 대량 수집 결과 스트리밍 전송 (버퍼 플러시 시)
+  rpc StreamResults(stream SubmitResultRequest) returns (StreamResultsResponse);
+
+  // 수집 결과 조회 (UI Backend 용)
+  rpc GetResult(GetResultRequest) returns (GetResultResponse);
+}
+
+message SubmitResultRequest {
+  string agent_id = 1;
+  string collector_id = 2;
+  string schema_name = 3;
+  CollectStatus status = 4;
+  bytes data = 5;                        // JSON-encoded evidence
+  repeated CollectError errors = 6;
+  int64 duration_ms = 7;
+  map<string, string> metadata = 8;
+  google.protobuf.Timestamp collected_at = 9;
+}
+
+message SubmitResultResponse {
+  string result_id = 1;
+  ReceiveStatus status = 2;
+  string message = 3;
+}
+
+message StreamResultsResponse {
+  int32 accepted = 1;
+  int32 rejected = 2;
+  int32 quarantined = 3;
+  repeated string rejected_ids = 4;
+}
+
+message GetResultRequest {
+  string result_id = 1;
+}
+
+message GetResultResponse {
+  string result_id = 1;
+  string agent_id = 2;
+  string collector_id = 3;
+  bytes data = 4;
+  google.protobuf.Timestamp collected_at = 5;
+}
+
+// ─── HeartbeatService ──────────────────────────────────────
+
+service HeartbeatService {
+  // 주기적 상태 보고 (30초 간격)
+  rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // 양방향 스트리밍 — 연결 유지 + 실시간 명령 수신
+  rpc HeartbeatStream(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+}
+
+message HeartbeatRequest {
+  string agent_id = 1;
+  string hostname = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  AgentStatus status = 4;
+  string agent_version = 5;
+  string os_type = 6;
+  string os_version = 7;
+  double cpu_percent = 8;
+  double memory_mb = 9;
+  repeated PluginInfo plugins = 10;
+  PrivilegeReport privilege_report = 11;
+}
+
+message HeartbeatResponse {
+  repeated RemoteCommand commands = 1;
+  ConfigUpdate config_update = 2;
+  UpdateInfo update_available = 3;
+}
+
+message PluginInfo {
+  string plugin_id = 1;
+  string version = 2;
+  string status = 3;                     // active, inactive, error
+  repeated string items_covered = 4;
+  bool auto_detected = 5;
+  google.protobuf.Timestamp last_collect = 6;
+}
+
+message PrivilegeReport {
+  string agent_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string run_as_user = 3;
+  repeated string run_as_groups = 4;
+  repeated PrivilegeCheck checks = 5;
+}
+
+message PrivilegeCheck {
+  string collector = 1;
+  string privilege = 2;
+  string status = 3;                     // GRANTED, DENIED, PARTIAL
+  string detail = 4;
+  repeated string affected_items = 5;
+}
+
+message RemoteCommand {
+  string id = 1;
+  string type = 2;                       // collect, restart, update, shell
+  string payload = 3;
+}
+
+message ConfigUpdate {
+  int32 version = 1;
+  map<string, string> schedule = 2;
+  map<string, bool> collectors = 3;
+}
+
+message UpdateInfo {
+  string version = 1;
+  string url = 2;
+  string checksum = 3;
+  string signature = 4;
+  string release_note = 5;
+}
+
+// ─── ConfigService ─────────────────────────────────────────
+
+service ConfigService {
+  // 에이전트 등록 (초기 연결 시)
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+
+  // 에이전트 설정 조회
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+
+  // 에이전트 인증서 갱신
+  rpc RenewCertificate(RenewCertRequest) returns (RenewCertResponse);
+}
+
+message RegisterAgentRequest {
+  string hostname = 1;
+  string os_type = 2;
+  string os_version = 3;
+  string agent_version = 4;
+  string project_token = 5;             // 프로젝트 인증 토큰
+  repeated string requested_collectors = 6;
+}
+
+message RegisterAgentResponse {
+  string agent_id = 1;
+  AgentStatus status = 2;
+  bytes client_cert = 3;                 // mTLS 클라이언트 인증서 (PEM)
+  bytes client_key = 4;                  // mTLS 클라이언트 키 (PEM)
+  bytes ca_cert = 5;                     // CA 인증서 (PEM)
+  ConfigUpdate initial_config = 6;
+}
+
+message GetConfigRequest {
+  string agent_id = 1;
+  int32 current_version = 2;
+}
+
+message GetConfigResponse {
+  bool changed = 1;
+  ConfigUpdate config = 2;
+}
+
+message RenewCertRequest {
+  string agent_id = 1;
+  bytes csr = 2;                         // Certificate Signing Request
+}
+
+message RenewCertResponse {
+  bytes client_cert = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// ─── TerminalService ───────────────────────────────────────
+
+service TerminalService {
+  // 원격 CLI 세션 (양방향 스트리밍)
+  rpc OpenSession(stream TerminalInput) returns (stream TerminalOutput);
+}
+
+message TerminalInput {
+  string session_id = 1;
+  oneof payload {
+    TerminalResize resize = 2;
+    bytes data = 3;                      // stdin 데이터
+    bool close = 4;
+  }
+}
+
+message TerminalOutput {
+  string session_id = 1;
+  bytes data = 2;                        // stdout/stderr 데이터
+  int32 exit_code = 3;
+  bool closed = 4;
+}
+
+message TerminalResize {
+  uint32 rows = 1;
+  uint32 cols = 2;
+}
+
+// ─── 공통 Enum ─────────────────────────────────────────────
+
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_REGISTERED = 1;
+  AGENT_STATUS_APPROVED = 2;
+  AGENT_STATUS_HEALTHY = 3;
+  AGENT_STATUS_DEGRADED = 4;
+  AGENT_STATUS_OFFLINE = 5;
+  AGENT_STATUS_UPGRADE_AVAILABLE = 6;
+  AGENT_STATUS_UPGRADE_IN_PROGRESS = 7;
+  AGENT_STATUS_QUARANTINED = 8;
+  AGENT_STATUS_RETIRED = 9;
+}
+
+enum CollectStatus {
+  COLLECT_STATUS_UNSPECIFIED = 0;
+  COLLECT_STATUS_SUCCESS = 1;
+  COLLECT_STATUS_PARTIAL = 2;
+  COLLECT_STATUS_FAILED = 3;
+  COLLECT_STATUS_SKIPPED = 4;
+}
+
+enum ReceiveStatus {
+  RECEIVE_STATUS_UNSPECIFIED = 0;
+  RECEIVE_STATUS_ACCEPTED = 1;
+  RECEIVE_STATUS_REJECTED = 2;
+  RECEIVE_STATUS_QUARANTINED = 3;
+}
+
+message CollectError {
+  string code = 1;                       // PERMISSION_DENIED, TIMEOUT 등
+  string collector = 2;
+  string message = 3;
+  string detail = 4;
+}

@@ -41,6 +41,24 @@ package: build-linux
 	cp -r deploy/* dist/
 	@echo "Package ready in dist/"
 
+## package-deb: Build DEB package (requires nfpm)
+package-deb: build-linux
+	@mkdir -p dist
+	cp bin/$(APP_NAME)-linux-amd64 dist/$(APP_NAME)
+	VERSION=$(VERSION) nfpm package --config deploy/nfpm.yaml --target dist/ --packager deb
+	@echo "DEB package built in dist/"
+
+## package-rpm: Build RPM package (requires nfpm)
+package-rpm: build-linux
+	@mkdir -p dist
+	cp bin/$(APP_NAME)-linux-amd64 dist/$(APP_NAME)
+	VERSION=$(VERSION) nfpm package --config deploy/nfpm.yaml --target dist/ --packager rpm
+	@echo "RPM package built in dist/"
+
+## package-all: Build DEB + RPM packages
+package-all: package-deb package-rpm
+	@echo "All packages built in dist/"
+
 ## test: Run all tests
 test:
 	go test -v -race -count=1 ./...
@@ -64,7 +82,7 @@ run-collect-only: build
 
 ## clean: Remove build artifacts
 clean:
-	rm -rf bin/ coverage.out coverage.html
+	rm -rf bin/ dist/ coverage.out coverage.html
 
 ## deps: Download and tidy dependencies
 deps:
