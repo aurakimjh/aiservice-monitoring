@@ -198,4 +198,183 @@ export const fleetApi = {
     }),
 };
 
+// ── Infrastructure API ──
+export const infraApi = {
+  listHosts: (projectId?: string) =>
+    apiFetch<{ items: Record<string, unknown>[]; total: number }>(
+      `/infra/hosts${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  getHost: (hostname: string) =>
+    apiFetch<Record<string, unknown>>(`/infra/hosts/${hostname}`),
+
+  getHostMetrics: (hostname: string, range?: string) =>
+    apiFetch<{ metrics: Record<string, unknown>[] }>(
+      `/infra/hosts/${hostname}/metrics${range ? `?range=${range}` : ''}`,
+    ),
+};
+
+// ── Services API (APM) ──
+export const servicesApi = {
+  listServices: (projectId?: string) =>
+    apiFetch<{ items: Record<string, unknown>[]; total: number }>(
+      `/services${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  getService: (serviceId: string) =>
+    apiFetch<Record<string, unknown>>(`/services/${serviceId}`),
+
+  getServiceEndpoints: (serviceId: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(`/services/${serviceId}/endpoints`),
+
+  getServiceDependencies: (serviceId: string) =>
+    apiFetch<{ upstream: Record<string, unknown>[]; downstream: Record<string, unknown>[] }>(
+      `/services/${serviceId}/dependencies`,
+    ),
+
+  getTopology: (projectId?: string) =>
+    apiFetch<{ nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }>(
+      `/services/topology${projectId ? `?project=${projectId}` : ''}`,
+    ),
+};
+
+// ── Traces API ──
+export const tracesApi = {
+  listTraces: (params?: { service?: string; status?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.service) qs.set('service', params.service);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return apiFetch<{ items: Record<string, unknown>[] }>(`/traces${q ? `?${q}` : ''}`);
+  },
+
+  getTrace: (traceId: string) =>
+    apiFetch<Record<string, unknown>>(`/traces/${traceId}`),
+
+  getXLogData: (params?: { service?: string; range?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.service) qs.set('service', params.service);
+    if (params?.range) qs.set('range', params.range);
+    const q = qs.toString();
+    return apiFetch<{ points: Record<string, unknown>[] }>(`/traces/xlog${q ? `?${q}` : ''}`);
+  },
+
+  getHeatMapData: (params?: { service?: string; range?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.service) qs.set('service', params.service);
+    if (params?.range) qs.set('range', params.range);
+    const q = qs.toString();
+    return apiFetch<{ buckets: Record<string, unknown>[][] }>(`/traces/heatmap${q ? `?${q}` : ''}`);
+  },
+};
+
+// ── AI Service API ──
+export const aiApi = {
+  listAIServices: (projectId?: string) =>
+    apiFetch<{ items: Record<string, unknown>[]; total: number }>(
+      `/ai/services${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  getAIService: (serviceId: string) =>
+    apiFetch<Record<string, unknown>>(`/ai/services/${serviceId}`),
+
+  getGPUCluster: (projectId?: string) =>
+    apiFetch<{ gpus: Record<string, unknown>[] }>(
+      `/ai/gpu${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  getLLMPerformance: (serviceId: string, range?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/ai/services/${serviceId}/llm${range ? `?range=${range}` : ''}`,
+    ),
+
+  getRAGPipeline: (serviceId: string) =>
+    apiFetch<Record<string, unknown>>(`/ai/services/${serviceId}/rag`),
+
+  getGuardrailData: (serviceId: string) =>
+    apiFetch<Record<string, unknown>>(`/ai/services/${serviceId}/guardrail`),
+};
+
+// ── Diagnostics API ──
+export const diagnosticsApi = {
+  listRuns: (agentId?: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(
+      `/diagnostics/runs${agentId ? `?agent=${agentId}` : ''}`,
+    ),
+
+  getRun: (diagnosticId: string) =>
+    apiFetch<Record<string, unknown>>(`/diagnostics/runs/${diagnosticId}`),
+
+  getItems: (diagnosticId: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(`/diagnostics/runs/${diagnosticId}/items`),
+
+  triggerDiagnostic: (agentId: string, scope?: string) =>
+    apiFetch<{ diagnostic_id: string }>('/diagnostics/trigger', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, scope: scope ?? 'full' }),
+    }),
+};
+
+// ── Alerts & Incidents API ──
+export const alertsApi = {
+  listPolicies: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/alerts/policies'),
+
+  listIncidents: (status?: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(
+      `/alerts/incidents${status ? `?status=${status}` : ''}`,
+    ),
+
+  getIncident: (incidentId: string) =>
+    apiFetch<Record<string, unknown>>(`/alerts/incidents/${incidentId}`),
+
+  acknowledgeIncident: (incidentId: string) =>
+    apiFetch<void>(`/alerts/incidents/${incidentId}/acknowledge`, { method: 'POST' }),
+
+  resolveIncident: (incidentId: string) =>
+    apiFetch<void>(`/alerts/incidents/${incidentId}/resolve`, { method: 'POST' }),
+
+  listChannels: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/alerts/channels'),
+};
+
+// ── Metrics API ──
+export const metricsApi = {
+  query: (promql: string, range?: string) =>
+    apiFetch<{ data: Record<string, unknown> }>(
+      `/metrics/query?query=${encodeURIComponent(promql)}${range ? `&range=${range}` : ''}`,
+    ),
+
+  catalog: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/metrics/catalog'),
+};
+
+// ── Logs API ──
+export const logsApi = {
+  search: (params: { query?: string; service?: string; level?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.query) qs.set('query', params.query);
+    if (params.service) qs.set('service', params.service);
+    if (params.level) qs.set('level', params.level);
+    if (params.limit) qs.set('limit', String(params.limit));
+    return apiFetch<{ items: Record<string, unknown>[] }>(`/logs?${qs.toString()}`);
+  },
+
+  patterns: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/logs/patterns'),
+};
+
+// ── SLO API ──
+export const sloApi = {
+  list: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/slo'),
+};
+
+// ── Cost API ──
+export const costApi = {
+  getBreakdown: (range?: string) =>
+    apiFetch<Record<string, unknown>>(`/costs/breakdown${range ? `?range=${range}` : ''}`),
+};
+
 export { apiFetch };

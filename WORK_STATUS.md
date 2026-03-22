@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-22 (Session 21 — Phase 15 잔여 완료: gRPC Proto + PostgreSQL + Validation + EventBus + S3 + 패키지)
+> **최종 업데이트**: 2026-03-22 (Session 22 — Phase 17 UI 통합 테스트 인프라 구축)
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
 ---
@@ -62,7 +62,7 @@ Phase 16: Agent GA (G)         [██████████] 100%  ✅  (IT C
 ═══════════════════════════════════════════════════════════════════════
   UI 통합 테스트 (Phase 17) — 에이전트 연동 후 UI E2E 검증
 ═══════════════════════════════════════════════════════════════════════
-Phase 17: UI 통합 테스트        [░░░░░░░░░░]   0%  📋  (에이전트 실데이터 연동 + E2E 테스트 + 성능 검증)
+Phase 17: UI 통합 테스트        [████░░░░░░]  40%  🔄  (테스트 환경 + API 훅 + E2E 5시나리오 + 계약 테스트 완료, 실데이터 검증 대기)
 ```
 
 ---
@@ -1707,20 +1707,20 @@ npm run build && npx next start -p 3001   # 프로덕션 모드 (http://localhos
 
 ---
 
-## Phase 17: UI 통합 테스트 — 에이전트 실데이터 검증 📋
+## Phase 17: UI 통합 테스트 — 에이전트 실데이터 검증 🔄
 
 > **예상 기간**: 4주
-> **전제**: Phase 15~16 에이전트 개발 완료 후 진행
+> **전제**: Phase 15~16 에이전트 개발 완료 ✅
 > **목표**: 에이전트 수집 실데이터로 UI 전체 화면 동작 검증
 
 ### 17-1. 테스트 환경 구성 — 1주차
 
 | # | 작업 | 상세 | 상태 |
 |---|------|------|------|
-| 17-1-1 | 테스트 서버 구성 | Docker Compose로 테스트 대상 서버 구성 (API서버 + GPU서버 + DB서버) | 📋 |
-| 17-1-2 | 에이전트 설치 및 등록 | 3대 테스트 서버에 에이전트 설치, Collection Server 등록 확인 | 📋 |
-| 17-1-3 | 데이터 파이프라인 검증 | Agent → Collection Server → S3/Prometheus → Backend API → UI 전체 경로 확인 | 📋 |
-| 17-1-4 | Mock → 실데이터 전환 | UI 데모 데이터를 에이전트 실수집 데이터로 교체, API 바인딩 | 📋 |
+| 17-1-1 | 테스트 서버 구성 | `docker-compose.test.yaml` — Collection Server + PostgreSQL + MinIO + OTel + 테스트 서버 3대 (API/DB/WEB) | ✅ |
+| 17-1-2 | 에이전트 설치 및 등록 | 3대 테스트 서버에 에이전트 설치, Collection Server 등록 확인 | 📋 🔧 |
+| 17-1-3 | 데이터 파이프라인 검증 | Agent → Collection Server → S3/Prometheus → Backend API → UI 전체 경로 확인 | 📋 🔧 |
+| 17-1-4 | Mock → 실데이터 전환 | `api-client.ts` 전체 API 모듈 확장 (infra/services/traces/ai/diagnostics/alerts/metrics/logs/slo/cost) + `use-api.ts` 범용 훅 | ✅ |
 
 ### 17-2. 인프라 뷰 검증 — 1~2주차
 
@@ -1768,8 +1768,8 @@ npm run build && npx next start -p 3001   # 프로덕션 모드 (http://localhos
 
 | # | 작업 | 상세 | 상태 |
 |---|------|------|------|
-| 17-6-1 | Playwright E2E 시나리오 | 5개 핵심 User Flow 자동화 (아래 참조) | 📋 |
-| 17-6-2 | API 계약 테스트 | Collection Server ↔ Agent gRPC 계약, Backend REST API 스키마 검증 | 📋 |
+| 17-6-1 | Playwright E2E 시나리오 | `e2e/` 5개 시나리오 작성 + `playwright.config.ts` 설정 완료 | ✅ |
+| 17-6-2 | API 계약 테스트 | `test/api_contract_test.go` — Validation 9개 + EventBus 4개 + Registry 5개 + Storage 2개 = 20개 테스트 PASS | ✅ |
 | 17-6-3 | 부하 테스트 | 에이전트 50대 동시 수집 → Collection Server 처리량 검증 | 📋 |
 | 17-6-4 | UI 성능 측정 | Lighthouse Performance ≥ 80, 시계열 차트 10K점 < 100ms 렌더링 | 📋 |
 | 17-6-5 | 메모리 릭 테스트 | 24시간 연속 운행 후 에이전트 메모리 50MB 이하, UI 메모리 200MB 이하 | 📋 |
@@ -1878,6 +1878,41 @@ npm run build && npx next start -p 3001   # 프로덕션 모드 (http://localhos
 - [x] **테스트 작성**: LLM 11개, VectorDB 11개, OTel 9개 = **총 31개 테스트 PASS**
 - [x] **`go build ./...` 성공** 확인
 - [x] **`WORK_STATUS.md`** 업데이트 — Phase 15-1/15-2/15-3 완료 반영
+
+---
+
+## Session 22 완료 내역 ✅
+
+> **날짜**: 2026-03-22 (Session 22)
+> **작업 범위**: Phase 17 UI 통합 테스트 인프라 구축
+
+### 완료된 작업
+
+- [x] **17-1-1: `infra/docker/docker-compose.test.yaml`** — 통합 테스트 환경 (신규)
+  - Collection Server + PostgreSQL 16 + MinIO (S3) + OTel Collector + Prometheus + Tempo + Loki
+  - 테스트 대상 서버 3대: RAG API 서버 + PostgreSQL DB + Nginx WEB
+  - MinIO 초기화 (aitop-evidence, aitop-terminal-logs, aitop-diagnostics 버킷)
+  - `infra/docker/nginx-test.conf` — WEB Collector 테스트용 Nginx 설정
+- [x] **17-1-4: Frontend API 서비스 훅 확장** — Mock → 실데이터 전환 인프라
+  - `api-client.ts` — 10개 API 모듈 추가 (infraApi, servicesApi, tracesApi, aiApi, diagnosticsApi, alertsApi, metricsApi, logsApi, sloApi, costApi)
+  - `hooks/use-api.ts` — 범용 useApi/useMultiApi 훅 (실데이터 우선 + demo fallback + 30초 폴링)
+- [x] **17-6-1: Playwright E2E 테스트** — 5개 시나리오 + 설정 (신규)
+  - `playwright.config.ts` — Chromium, trace/screenshot/video on failure
+  - `e2e/helpers.ts` — loginAsDemo, navigateTo, assertPageLoaded 유틸
+  - `e2e/01-sre-incident-response.spec.ts` — SRE 장애 대응 (Executive → Services → Traces → Logs → Alerts)
+  - `e2e/02-ai-engineer-tuning.spec.ts` — AI 성능 튜닝 (AI → AI Detail → GPU → Diagnostics)
+  - `e2e/03-consultant-inspection.spec.ts` — 컨설턴트 점검 (Projects → Agents → Diagnostics → SLO → Costs)
+  - `e2e/04-agent-management.spec.ts` — 에이전트 관리 (Fleet Console 3탭 → Host 상세)
+  - `e2e/05-navigation-and-i18n.spec.ts` — 26개 라우트 전체 접근 + 404 처리
+- [x] **17-6-2: API 계약 테스트** — `agent/test/api_contract_test.go` (신규)
+  - Validation Gateway: 9개 (accept, reject×4, oversized, unknown collector, PII, mismatch)
+  - Event Bus: 4개 (publish/subscribe, subscribeAll, history, historyByType)
+  - Agent Registry: 5개 (register new/existing, heartbeat, markOffline, list)
+  - S3 Storage: 2개 (evidenceKey, terminalLogKey)
+  - Models 직렬화: 1개 (Heartbeat JSON roundtrip)
+  - **총 20개 테스트 PASS** ✅
+- [x] **빌드 검증**: `go build ./...` ✅ + `go test ./test/` 20 PASS ✅ + `npm run build` 26 라우트 ✅
+- [x] **`tsconfig.json`** — e2e, playwright.config.ts를 exclude에 추가 (빌드 충돌 방지)
 
 ---
 
