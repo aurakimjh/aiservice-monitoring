@@ -25,6 +25,8 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/privilege"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/sanitizer"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/scheduler"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/statemachine"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/transport"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
@@ -124,8 +126,43 @@ func main() {
 	}
 	healthMon := health.NewMonitor(agentID)
 
+	// ── state machine ─────────────────────────────────────────────────────────
+	sm := statemachine.New(logger)
+	// Automatically advance to approved when the server URL is configured.
+	if cfg.Server.URL != "" {
+		_ = sm.Transition("approve")
+	}
+
 	// ── sanitizer ────────────────────────────────────────────────────────────
 	san := sanitizer.New()
+
+	// ── transport (heartbeat + HTTP collect) ───────────────────────────────────
+	var heartbeatSender *transport.HeartbeatSender
+	var httpClient *transport.HTTPClient
+	if cfg.Server.URL != "" {
+		heartbeatSender = transport.NewHeartbeatSender(cfg.Server.URL, cfg.Server.ProjectToken, logger)
+		httpClient = transport.NewHTTPClient(cfg.Server.URL, cfg.Server.ProjectToken, logger)
+
+		// Wire state machine to heartbeat acknowledgements/misses.
+		go heartbeatSender.Run(ctx, func() *models.Heartbeat {
+			plugins := buildPluginStatus(registry)
+			hb := healthMon.BuildHeartbeat(plugins, privReport)
+			hb.Status = sm.State()
+			return hb
+		})
+
+		// Process remote commands from server.
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case cmd := <-heartbeatSender.CommandCh:
+					handleRemoteCommand(ctx, cmd, registry, buf, san, logger)
+				}
+			}
+		}()
+	}
 
 	// ── build collection job ──────────────────────────────────────────────────
 	collectCfg := models.CollectConfig{
@@ -148,20 +185,18 @@ func main() {
 				logger.Warn("sanitize failed, using raw data", "collector", r.CollectorID, "error", err)
 				sanitized = raw
 			}
-			// Transport is not yet implemented (Phase 15-4).
-			// All results are buffered for now and will be flushed once
-			// the transport layer is available.
 			if err := buf.Store(r.CollectorID, sanitized); err != nil {
 				logger.Error("buffer store failed", "collector", r.CollectorID, "error", err)
 			}
 		}
 
 		// Log self metrics alongside each collection run.
-		sm := healthMon.GetSelfMetrics()
+		smMetrics := healthMon.GetSelfMetrics()
 		logger.Info("agent health",
-			"heap_mb", sm.HeapAllocMB,
-			"goroutines", sm.NumGoroutines,
-			"uptime_s", sm.UptimeSeconds,
+			"heap_mb", smMetrics.HeapAllocMB,
+			"goroutines", smMetrics.NumGoroutines,
+			"uptime_s", smMetrics.UptimeSeconds,
+			"agent_state", sm.State(),
 		)
 
 		if n, err := buf.PendingCount(); err == nil && n > 0 {
@@ -169,37 +204,19 @@ func main() {
 		}
 	}
 
-	// ── scheduler ─────────────────────────────────────────────────────────────
-	sched := scheduler.New(logger)
-
-	if err := sched.Register("collect", cfg.Schedule.Default, runCollect); err != nil {
-		logger.Error("failed to register collect job", "error", err)
-		os.Exit(1)
-	}
-
-	if cfg.Agent.Mode == models.ModeFull {
-		// In full mode, also schedule a periodic buffer-flush attempt.
-		// The flush no-ops while transport is not yet wired up (sendFn always errors).
-		flushJob := func(ctx context.Context) {
-			_ = buf.Flush(ctx, func(collectorID string, data []byte) error {
-				// Stub: transport not yet implemented.
-				return fmt.Errorf("transport not available")
-			})
-			// Prune items sent more than 7 days ago.
-			if err := buf.Prune(7 * 24 * time.Hour); err != nil {
-				logger.Warn("buffer prune failed", "error", err)
-			}
-		}
-		if err := sched.Register("flush", cfg.Schedule.Metrics, flushJob); err != nil {
-			logger.Error("failed to register flush job", "error", err)
-			os.Exit(1)
-		}
-	}
-
 	// ── collect-only / collect-export: run once then exit ─────────────────────
 	if cfg.Agent.Mode == models.ModeCollectOnly || cfg.Agent.Mode == models.ModeCollectExport {
 		logger.Info("running in one-shot mode", "mode", cfg.Agent.Mode)
 		runCollect(ctx)
+
+		if cfg.Agent.Mode == models.ModeCollectOnly && httpClient != nil {
+			// Flush all buffered results to the server via HTTPS.
+			logger.Info("flushing collected data to server", "url", cfg.Server.URL)
+			_ = buf.Flush(ctx, func(collectorID string, data []byte) error {
+				return httpClient.SendCollectResult(ctx, collectorID, data)
+			})
+		}
+
 		if cfg.Agent.Mode == models.ModeCollectExport {
 			// Export pending items to stdout as NDJSON.
 			items, err := buf.Pending()
@@ -217,6 +234,39 @@ func main() {
 		return
 	}
 
+	// ── scheduler ─────────────────────────────────────────────────────────────
+	sched := scheduler.New(logger)
+
+	if err := sched.Register("collect", cfg.Schedule.Default, runCollect); err != nil {
+		logger.Error("failed to register collect job", "error", err)
+		os.Exit(1)
+	}
+
+	if cfg.Agent.Mode == models.ModeFull {
+		// In full mode, schedule periodic buffer-flush with HTTP transport when available.
+		flushJob := func(ctx context.Context) {
+			var sendFn func(collectorID string, data []byte) error
+			if httpClient != nil {
+				sendFn = func(collectorID string, data []byte) error {
+					return httpClient.SendCollectResult(ctx, collectorID, data)
+				}
+			} else {
+				sendFn = func(_ string, _ []byte) error {
+					return fmt.Errorf("transport not available")
+				}
+			}
+			_ = buf.Flush(ctx, sendFn)
+			// Prune items sent more than 7 days ago.
+			if err := buf.Prune(7 * 24 * time.Hour); err != nil {
+				logger.Warn("buffer prune failed", "error", err)
+			}
+		}
+		if err := sched.Register("flush", cfg.Schedule.Metrics, flushJob); err != nil {
+			logger.Error("failed to register flush job", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	// ── start scheduler (full / resident mode) ────────────────────────────────
 	sched.Start(ctx)
 	logger.Info("scheduler started", "jobs", sched.Jobs())
@@ -226,6 +276,57 @@ func main() {
 	logger.Info("shutdown signal received, stopping agent…")
 	sched.Stop()
 	logger.Info("aitop-agent stopped")
+}
+
+// buildPluginStatus builds a snapshot of registered collector statuses.
+func buildPluginStatus(registry *core.Registry) []models.PluginStatus {
+	ids := registry.List()
+	plugins := make([]models.PluginStatus, 0, len(ids))
+	for _, id := range ids {
+		if c, ok := registry.Get(id); ok {
+			plugins = append(plugins, models.PluginStatus{
+				PluginID: id,
+				Version:  c.Version(),
+				Status:   "active",
+			})
+		}
+	}
+	return plugins
+}
+
+// handleRemoteCommand dispatches a RemoteCommand from the collection server.
+func handleRemoteCommand(
+	ctx context.Context,
+	cmd models.RemoteCommand,
+	registry *core.Registry,
+	buf *buffer.Buffer,
+	san *sanitizer.Sanitizer,
+	logger *slog.Logger,
+) {
+	logger.Info("executing remote command", "id", cmd.ID, "type", cmd.Type)
+	switch cmd.Type {
+	case "collect":
+		collectCfg := models.CollectConfig{
+			Hostname: func() string { h, _ := os.Hostname(); return h }(),
+		}
+		results := registry.CollectAll(ctx, collectCfg)
+		for _, r := range results {
+			if r.Status == models.StatusSkipped {
+				continue
+			}
+			raw, err := json.Marshal(r)
+			if err != nil {
+				continue
+			}
+			sanitized, _ := san.SanitizeJSON(raw)
+			if sanitized == nil {
+				sanitized = raw
+			}
+			_ = buf.Store(r.CollectorID, sanitized)
+		}
+	default:
+		logger.Warn("unknown remote command type", "type", cmd.Type)
+	}
 }
 
 // defaultConfig returns a minimal Config with sensible defaults for when the

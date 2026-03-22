@@ -1,0 +1,35 @@
+[Unit]
+Description=AITOP Monitoring Agent
+Documentation=https://github.com/aurakimjh/aiservice-monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aitop
+Group=aitop
+WorkingDirectory=/opt/aitop-agent
+ExecStart=/opt/aitop-agent/aitop-agent --config /etc/aitop-agent/agent.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+# Resource limits (경량 에이전트 목표: idle CPU <1%, 메모리 <50MB)
+MemoryMax=200M
+CPUQuota=20%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/aitop-agent /var/log/aitop-agent
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aitop-agent
+
+[Install]
+WantedBy=multi-user.target

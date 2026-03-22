@@ -9,7 +9,7 @@ LDFLAGS := -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.Versio
            -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.BuildDate=$(BUILD_DATE) \
            -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.GoVersion=$(GO_VERSION)
 
-.PHONY: build build-linux build-windows test clean run lint
+.PHONY: build build-linux build-windows build-collection-server test clean run lint package
 
 ## build: Build for current platform
 build:
@@ -27,8 +27,19 @@ build-linux-arm64:
 build-windows:
 	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -s -w" -o bin/$(APP_NAME)-windows-amd64.exe ./cmd/aitop-agent
 
-## build-all: Build for all target platforms
-build-all: build-linux build-linux-arm64 build-windows
+## build-collection-server: Build the collection server binary
+build-collection-server:
+	go build -ldflags "$(LDFLAGS)" -o bin/collection-server ./cmd/collection-server
+
+## build-all: Build for all target platforms (agent + collection-server)
+build-all: build-linux build-linux-arm64 build-windows build-collection-server
+
+## package: Build Linux amd64 agent and copy deploy files into dist/
+package: build-linux
+	@mkdir -p dist
+	cp bin/$(APP_NAME)-linux-amd64 dist/$(APP_NAME)
+	cp -r deploy/* dist/
+	@echo "Package ready in dist/"
 
 ## test: Run all tests
 test:
