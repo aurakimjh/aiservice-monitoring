@@ -1616,24 +1616,27 @@ npm run build && npx next start -p 3001   # 프로덕션 모드 (http://localhos
 
 ### 15-3. Collection Server MVP — 3~4주차
 
-| # | 작업 | 상세 | 상태 |
-|---|------|------|------|
-| 15-3-1 | gRPC 서비스 정의 (Proto) | `CollectionService`, `HeartbeatService`, `ConfigService` proto 파일 | 📋 |
-| 15-3-2 | Data Receiver | gRPC 스트리밍 수신, S3/MinIO 저장 | 📋 |
-| 15-3-3 | Agent Registry | 에이전트 등록/인증 API, mTLS 인증서 발급 흐름 | 📋 |
-| 15-3-4 | Validation Gateway | 수신 데이터 검증 (스키마, 필수 필드, PII 2차 검증) | 📋 |
-| 15-3-5 | PostgreSQL 스키마 | `agents`, `agent_plugins`, `collection_jobs` 테이블 마이그레이션 | 📋 |
-| 15-3-6 | Event Bus 연동 | 수집 완료 이벤트 발행 → 진단 트리거 (Kafka 또는 내부 이벤트) | 📋 |
-
-### 15-4. Heartbeat + Fleet 기본 — 4~5주차
+> **현황**: REST API 기반 MVP 구현 완료. gRPC/PostgreSQL/Event Bus는 Phase 17(Backend API 고도화)에서 진행 예정.
+> **구현 파일**: `agent/cmd/collection-server/main.go`
 
 | # | 작업 | 상세 | 상태 |
 |---|------|------|------|
-| 15-4-1 | Heartbeat 프로토콜 | 30초 간격 상태 보고, 원격 명령 반환 | 📋 |
-| 15-4-2 | 에이전트 상태 머신 | registered → approved → healthy → degraded → offline 전환 로직 | 📋 |
-| 15-4-3 | Fleet 기본 REST API | `GET /agents`, `GET /agents/{id}`, `POST /agents/{id}/collect` | 📋 |
+| 15-3-1 | gRPC 서비스 정의 (Proto) | `CollectionService`, `HeartbeatService`, `ConfigService` proto 파일 | 📋 → Phase 17 |
+| 15-3-2 | Data Receiver | REST API 수신 구현 (`POST /api/v1/collect/`). gRPC 스트리밍 + S3 저장은 미구현 | ⚠️ MVP만 |
+| 15-3-3 | Agent Registry | 인메모리 Fleet Registry 구현. mTLS 인증서 발급은 미구현 | ⚠️ MVP만 |
+| 15-3-4 | Validation Gateway | Sanitizer(PII 마스킹) 구현. JSON 스키마 검증은 미구현 | ⚠️ MVP만 |
+| 15-3-5 | PostgreSQL 스키마 | 인메모리 저장만 구현. DB 마이그레이션 미구현 | 📋 → Phase 17 |
+| 15-3-6 | Event Bus 연동 | 수집 완료 이벤트 발행 미구현 (Kafka 또는 내부 이벤트) | 📋 → Phase 17 |
+
+### 15-4. Heartbeat + Fleet 기본 — 4~5주차 ✅
+
+| # | 작업 | 상세 | 상태 |
+|---|------|------|------|
+| 15-4-1 | Heartbeat 프로토콜 | `transport/heartbeat.go` — 30초 간격 상태 보고 + 원격 명령 반환 | ✅ |
+| 15-4-2 | 에이전트 상태 머신 | `statemachine/state_machine.go` — registered → approved → healthy → degraded → offline + upgrade/quarantined/retired 전환 | ✅ |
+| 15-4-3 | Fleet 기본 REST API | `collection-server/main.go` — `GET /api/v1/agents`, `GET /agents/{id}`, `POST /agents/{id}/collect` | ✅ |
 | 15-4-4 | Fleet UI 연동 | 기존 Phase 13 Agent Fleet 화면에 실데이터 바인딩 | ✅ |
-| 15-4-5 | 권한 리포트 API | `GET /agents/{id}/privileges` — 에이전트 권한 상태 조회 | 📋 |
+| 15-4-5 | 권한 리포트 API | `collection-server/main.go` — `GET /api/v1/agents/{id}/privileges` | ✅ |
 
 ### 15-3 (=15-5). AI Collector 구현 — Phase 15-3 ✅
 
@@ -1648,9 +1651,9 @@ npm run build && npx next start -p 3001   # 프로덕션 모드 (http://localhos
 | 15-5-5 | AI OTel Metrics Collector | `ai/otel/otel_collector.go` — Prometheus에서 11개 AI 메트릭 스냅샷 수집 | ✅ |
 | 15-5-6 | AI Collector 등록 헬퍼 | `ai/register.go` — RegisterAll() 함수로 5개 AI Collector 일괄 등록 | ✅ |
 | 15-5-7 | 테스트 작성 | LLM/VectorDB/OTel 단위 테스트 31개 — 전체 PASS | ✅ |
-| 15-5-8 | Prometheus Remote Write | 시계열 메트릭(CPU/MEM/GPU 등) → Prometheus 전송 연동 | 📋 |
-| 15-5-9 | collect-only 모드 | `--mode=collect-only` 1회 실행 수집 → HTTPS 전송 → 종료 | 📋 |
-| 15-5-10 | Agent 설치 패키지 | DEB/RPM 패키지 빌드, systemd 서비스 파일, 설치 스크립트 | 📋 |
+| 15-5-8 | Prometheus Remote Write | `transport/prometheus.go` — gzip 압축 + remote_write 텍스트 exposition | ✅ |
+| 15-5-9 | collect-only 모드 | `main.go` — `ModeCollectOnly` 1회 수집→전송→종료, `ModeCollectExport` ZIP 내보내기 | ✅ |
+| 15-5-10 | Agent 설치 패키지 | `deploy/install.sh` + `deploy/systemd/aitop-agent.service` 구현. DEB/RPM 빌드 파이프라인은 미구현 | ⚠️ 부분 |
 
 ---
 
