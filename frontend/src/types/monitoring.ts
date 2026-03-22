@@ -459,6 +459,20 @@ export interface AgentInfo {
   mode: 'full' | 'collect-only' | 'collect-export';
 }
 
+// Fleet API response — AgentInfo + host context (returned by Collection Server)
+export interface FleetAgent {
+  id: string;
+  hostId: string;
+  hostname: string;
+  os: string;
+  version: string;
+  status: 'healthy' | 'degraded' | 'offline' | 'upgrading';
+  mode: 'full' | 'collect-only' | 'collect-export';
+  plugins: PluginInfo[];
+  lastHeartbeat: string; // ISO string
+  lastCollection: string; // ISO string
+}
+
 export interface PluginInfo {
   id: string;
   name: string;

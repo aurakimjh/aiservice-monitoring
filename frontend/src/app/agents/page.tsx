@@ -4,14 +4,13 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge } from '@/components/ui';
+import { Card, Tabs, Badge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
 import { useProjectStore } from '@/stores/project-store';
-import { getProjectHosts, getCollectionJobs, getAgentPlugins } from '@/lib/demo-data';
+import { useFleet } from '@/hooks/use-fleet';
 import { getRelativeTime } from '@/lib/utils';
 import {
   Cpu,
-  Activity,
   Package,
   Clock,
   RefreshCw,
@@ -19,6 +18,8 @@ import {
   CheckCircle2,
   Loader2,
   XCircle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
 const VIEW_TABS = [
@@ -35,20 +36,16 @@ const JOB_TYPE_LABELS: Record<string, string> = {
 
 export default function AgentsPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
-  const jobs = useMemo(() => getCollectionJobs(), []);
-  const plugins = useMemo(() => getAgentPlugins(), []);
+  const { agents, jobs, plugins, loading, isLive, refresh } = useFleet(currentProjectId ?? undefined);
 
   const [activeTab, setActiveTab] = useState('agents');
 
-  // Agent stats from hosts with agent info
-  const agents = useMemo(() => hosts.filter((h) => h.agent), [hosts]);
   const stats = useMemo(() => {
     const total = agents.length;
-    const healthy = agents.filter((h) => h.agent?.status === 'healthy').length;
-    const degraded = agents.filter((h) => h.agent?.status === 'degraded').length;
-    const offline = agents.filter((h) => h.agent?.status === 'offline').length;
-    const needsUpdate = agents.filter((h) => h.agent && h.agent.version !== '1.2.0').length;
+    const healthy = agents.filter((a) => a.status === 'healthy').length;
+    const degraded = agents.filter((a) => a.status === 'degraded').length;
+    const offline = agents.filter((a) => a.status === 'offline').length;
+    const needsUpdate = agents.filter((a) => a.version !== '1.2.0').length;
     return { total, healthy, degraded, offline, needsUpdate };
   }, [agents]);
 
@@ -59,7 +56,29 @@ export default function AgentsPage() {
         { label: 'Agent Fleet', icon: <Cpu size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Agent Fleet Console</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Agent Fleet Console</h1>
+        <div className="flex items-center gap-2">
+          {/* Live / Demo 표시 */}
+          <span className={cn(
+            'flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full',
+            isLive
+              ? 'bg-[var(--status-healthy)]/15 text-[var(--status-healthy)]'
+              : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]',
+          )}>
+            {isLive ? <Wifi size={10} /> : <WifiOff size={10} />}
+            {isLive ? 'LIVE' : 'DEMO'}
+          </span>
+          <button
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -90,14 +109,19 @@ export default function AgentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {agents.map((host) => {
-                  const agent = host.agent!;
+                {loading && agents.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                      <Loader2 size={16} className="inline animate-spin mr-2" />Loading agents…
+                    </td>
+                  </tr>
+                ) : agents.map((agent) => {
                   const isOutdated = agent.version !== '1.2.0';
                   return (
-                    <tr key={host.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                    <tr key={agent.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
                       <td className="px-4 py-2.5">
-                        <Link href={`/infra/${host.hostname}`} className="font-medium text-[var(--accent-primary)] hover:underline font-mono">
-                          {host.hostname}
+                        <Link href={`/infra/${agent.hostname}`} className="font-medium text-[var(--accent-primary)] hover:underline font-mono">
+                          {agent.hostname}
                         </Link>
                       </td>
                       <td className="px-4 py-2.5">
@@ -111,9 +135,13 @@ export default function AgentsPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5">
-                        <StatusIndicator status={agent.status === 'healthy' ? 'healthy' : agent.status === 'degraded' ? 'warning' : 'critical'} label={agent.status} size="sm" />
+                        <StatusIndicator
+                          status={agent.status === 'healthy' ? 'healthy' : agent.status === 'degraded' ? 'warning' : 'critical'}
+                          label={agent.status}
+                          size="sm"
+                        />
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{host.os}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{agent.os}</td>
                       <td className="px-4 py-2.5">
                         <Badge>{agent.mode}</Badge>
                       </td>
