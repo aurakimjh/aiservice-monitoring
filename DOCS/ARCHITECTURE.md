@@ -88,6 +88,13 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 
 ## 1. 전체 아키텍처 개요
 
+> **📌 이 섹션에서 배울 내용**
+> - 시스템의 전체 지도 — 세 개의 레이어(계측 → 수집 → 저장/시각화)가 어떻게 연결되는지
+> - 어떤 컴포넌트가 어떤 역할을 하는지
+> - 데이터가 발생해서 대시보드에 표시되기까지의 전체 흐름
+>
+> **💡 한 줄 요약**: "AI 서비스 코드에 탐지기를 달고(계측) → 중앙 허브에서 수집/변환하고(Collector) → 전용 DB에 저장 후 Grafana로 시각화한다"
+
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     AI Service Observability Platform                         ║
@@ -141,6 +148,33 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
+### 레이어 설명 (그림 이해 가이드)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ 레이어 1: 계측 (Instrumentation)                              │
+│  — AI 서비스 코드에 "측정 장치"를 심는 단계                     │
+│  — Python, Node.js, Go 각 언어의 SDK가 Span/Metric을 생성     │
+│  — 비유: 자동차에 각종 센서 장착                               │
+└──────────────────────┬───────────────────────────────────────┘
+                       │ OTLP (텔레메트리 전송 프로토콜)
+                       ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 레이어 2: 수집 (Collection)                                   │
+│  — OTel Collector가 데이터를 받아 처리하는 단계                 │
+│  — Agent(수집 전담) → Gateway(처리/샘플링 전담) 이중 구조       │
+│  — 비유: 중앙 우체국 — 편지를 모아서 분류·배송                  │
+└──────────────────────┬───────────────────────────────────────┘
+                       │ Prometheus/OTLP/Loki 프로토콜
+                       ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 레이어 3: 저장/시각화 (Storage & Visualization)               │
+│  — 각 데이터 유형별 전문 저장소 + Grafana 단일 대시보드          │
+│  — Prometheus(숫자), Tempo(추적), Loki(로그)                  │
+│  — 비유: 도서관 — 자료를 분류·보관하고 열람 제공                │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ### 설계 원칙
 
 | 원칙 | 구현 방식 |
@@ -155,9 +189,33 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 
 ## 2. 데이터 흐름 설계 (폴리글랏 환경)
 
+> **📌 이 섹션에서 배울 내용**
+> - 폴리글랏(Polyglot) 환경 — Python, Node.js, Go 여러 언어가 공존하는 시스템에서 OTel SDK를 초기화하는 방법
+> - 언어가 달라도 동일한 Trace ID로 연결되는 원리 (W3C TraceContext 헤더)
+> - 각 언어별 SDK 초기화 코드 패턴 및 중요 설정값
+>
+> **💡 왜 여러 언어를 지원해야 하나요?**
+>
+> 실제 AI 서비스는 한 가지 언어로만 만들어지지 않습니다:
+> - **Python** — AI/ML 생태계의 표준 (LangChain, vLLM, PyTorch 등)
+> - **Node.js** — 빠른 I/O, 웹 프론트엔드 (Next.js, React)
+> - **Go** — 고성능 인프라 서비스 (Ollama, 커스텀 프록시)
+>
+> 각 언어의 OTel SDK 설정이 달라도 **동일한 traceparent 헤더**를 HTTP 요청에 실어 보내면,
+> 서로 다른 서비스의 처리 과정이 하나의 Trace로 합쳐집니다.
+>
+> ```
+> [브라우저] → [Next.js] → [FastAPI] → [vLLM]
+>     같은 trace_id: aabbccdd...  ←── 헤더 하나로 모두 연결
+> ```
+
 ### 2.1 언어별 SDK 초기화 패턴
 
 #### Python (FastAPI / LangChain / vLLM)
+
+> **이 코드가 하는 일**: Python 서비스가 시작될 때 딱 한 번 호출하는 초기화 함수입니다.
+> 이 함수를 호출하면 이후 FastAPI, httpx, Redis 등의 모든 요청이 **자동으로** 계측됩니다.
+> `setup_otel("guardrails-service")` 처럼 서비스 이름만 넘기면 됩니다.
 
 ```python
 # sdk-instrumentation/python/otel_setup.py
@@ -293,6 +351,10 @@ def _enrich_server_span(span, scope):
 
 #### Node.js (Next.js / Frontend)
 
+> **이 코드가 하는 일**: Node.js 서비스 실행 시 가장 먼저 로드하는 OTel 설정 파일입니다.
+> `-r ./otel-setup.js` 플래그로 서비스 코드보다 먼저 실행하면,
+> HTTP 요청/응답, fetch 호출 등이 **코드 수정 없이** 자동으로 계측됩니다.
+
 ```javascript
 // sdk-instrumentation/nodejs/otel-setup.js
 'use strict';
@@ -367,6 +429,10 @@ module.exports = sdk;
 ---
 
 #### Go (Ollama / Weaviate / 커스텀 서비스)
+
+> **이 코드가 하는 일**: Go 서비스의 `main()` 함수에서 한 번 호출하는 OTel 초기화 코드입니다.
+> Python/Node.js와 달리 Go는 자동 계측이 제한적이라 직접 코드에 Span을 추가해야 합니다.
+> `shutdown` 함수는 서비스 종료 시 반드시 호출해야 수집 중인 데이터가 유실되지 않습니다.
 
 ```go
 // sdk-instrumentation/go/otel_setup.go
@@ -478,6 +544,11 @@ func Setup(ctx context.Context, cfg OtelConfig) (shutdown func(context.Context) 
 
 ### 2.2 서비스 간 데이터 흐름 시퀀스
 
+> **초보자 가이드**: 아래 그림에서 각 화살표는 HTTP 요청입니다.
+> 모든 요청 헤더에는 `traceparent: 00-{동일한 trace_id}-{span_id}-01` 값이 붙습니다.
+> 이 값 덕분에 "브라우저에서 vLLM까지" 하나의 Trace로 연결됩니다.
+> 오른쪽의 `[OTel Collector]`는 각 서비스에서 보내는 Span 데이터를 실시간 수신합니다.
+
 ```
 사용자 브라우저
     │  HTTP POST /chat  (traceparent: 00-aabbcc...-01)
@@ -515,7 +586,42 @@ vLLM (Python/C++)                                               │
 
 ## 3. OTel Collector 파이프라인 설계
 
+> **📌 이 섹션에서 배울 내용**
+> - OTel Collector의 내부 구조 — Receiver(수신) → Processor(처리) → Exporter(배송) 3단 파이프라인
+> - 각 컴포넌트의 역할과 설정 방법
+> - 실제 YAML 설정 파일의 의미
+>
+> **💡 왜 Receiver → Processor → Exporter 구조인가요?**
+>
+> 이 구조는 공항의 **보안 검색대**에 비유할 수 있습니다:
+>
+> ```
+> 승객 탑승      →   보안 검색     →   탑승구 배정
+> (Receiver)        (Processor)       (Exporter)
+>
+> 데이터 수신    →   변환/필터링   →   저장소로 전달
+> ┌───────────┐     ┌───────────┐     ┌───────────┐
+> │ OTLP 수신 │ ──▶ │ 배치 처리 │ ──▶ │Prometheus │
+> │ Prometheus│     │ K8s 태그  │     │Tempo      │
+> │ hostmetrics│    │ 샘플링    │     │Loki       │
+> └───────────┘     └───────────┘     └───────────┘
+> ```
+>
+> 이 분리 구조의 장점:
+> - **확장성**: Receiver/Exporter를 각각 교체해도 Processor는 재사용
+> - **유연성**: 동일 데이터를 여러 Exporter로 동시에 전송 가능
+> - **안정성**: Processor에서 문제가 생겨도 수신은 계속됨
+
 ### 3.1 Receivers
+
+> **Receiver란?** 외부에서 데이터를 **받아들이는** 입구입니다.
+> 각 서비스의 OTel SDK, Prometheus Exporter, 호스트 시스템 등 다양한 소스에서 데이터를 수집합니다.
+>
+> 아래 설정에서 핵심:
+> - `otlp`: SDK에서 직접 보내는 트레이스/메트릭/로그 수신 (가장 중요)
+> - `prometheus`: DCGM(GPU), Node Exporter 같이 Prometheus 형식으로 노출된 메트릭 수집
+> - `hostmetrics`: CPU, 메모리, 디스크 등 서버 자원 자동 수집
+> - `jaeger`: 기존 Jaeger 계측 코드를 마이그레이션 없이 수용 (호환성)
 
 ```yaml
 # collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (receivers 섹션)
@@ -616,6 +722,15 @@ receivers:
 ---
 
 ### 3.2 Processors
+
+> **Processor란?** 수신한 데이터를 **변환/필터링/강화**하는 중간 단계입니다.
+> 여러 Processor를 순서대로 연결해서 파이프라인을 구성합니다.
+>
+> 아래 설정에서 중요한 Processor들:
+> - `memory_limiter` — **가장 먼저** 적용. 메모리가 임계치를 넘으면 데이터를 버려서 Collector OOM(메모리 초과) 방지
+> - `batch` — 네트워크 요청을 묶어서 전송. 512개 Span을 모아서 한 번에 전송 = 네트워크 비용 절감
+> - `k8sattributes` — Pod 이름, 네임스페이스 등 K8s 메타데이터를 Span에 자동 태깅
+> - `tail_sampling` — 섹션 4에서 자세히 설명. 비용 절감을 위한 지능형 샘플링
 
 ```yaml
 # collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (processors 섹션)
@@ -776,6 +891,25 @@ processors:
 
 ### 3.3 Exporters
 
+> **Exporter란?** 처리된 데이터를 **최종 목적지로 배송**하는 출구입니다.
+> 하나의 데이터를 여러 Exporter로 동시에 보낼 수 있습니다 (섹션 3.4의 pipeline 설정 참고).
+>
+> 각 Exporter가 어떤 저장소로 데이터를 보내는지:
+>
+> ```
+> ┌────────────────────────────────────────────────────┐
+> │            Exporter 목적지 매핑                     │
+> ├─────────────────┬──────────────────────────────────┤
+> │ prometheus      │ → Prometheus (메트릭 숫자 저장)   │
+> │ otlp/tempo      │ → Grafana Tempo (트레이스 저장)   │
+> │ loki            │ → Grafana Loki (로그 저장)        │
+> │ awss3           │ → S3/MinIO (장기 아카이브)        │
+> │ debug           │ → 터미널 출력 (개발 환경만)        │
+> └─────────────────┴──────────────────────────────────┘
+> ```
+>
+> **WAL(Write-Ahead Log)이란?** `file_storage` 타입의 큐를 설정하면, Collector가 재시작되어도 전송되지 않은 데이터가 디스크에 남아 다시 전송됩니다. 데이터 유실 방지의 핵심입니다.
+
 ```yaml
 # collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (exporters 섹션)
 exporters:
@@ -859,6 +993,17 @@ exporters:
 
 ### 3.4 Pipeline 조합 (Service 섹션)
 
+> **Pipeline이란?** Receiver + Processor + Exporter를 **연결하는 배선**입니다.
+> `traces/agent`, `metrics/main` 같이 이름을 붙여 여러 파이프라인을 독립적으로 운영합니다.
+>
+> 아래 설정을 읽는 방법:
+> ```yaml
+> traces/agent:            # 파이프라인 이름 (데이터타입/용도)
+>   receivers:  [otlp]     # 이 Receiver에서 데이터를 받아
+>   processors: [batch]    # 이 Processor들을 순서대로 거쳐
+>   exporters:  [otlp/gateway]  # 이 Exporter로 내보낸다
+> ```
+
 ```yaml
 # collector/config/otelcol-gateway.yaml (또는 otelcol-agent.yaml) (service 섹션)
 service:
@@ -924,6 +1069,34 @@ extensions:
 
 ## 4. Tail-based Sampling 파이프라인
 
+> **📌 이 섹션에서 배울 내용**
+> - Sampling(샘플링)이란 무엇인지, 왜 필요한지
+> - Head-based vs Tail-based 차이
+> - AITOP의 샘플링 정책 10가지와 예상 비용 절감 효과
+>
+> **💡 배경 지식: Sampling이란?**
+>
+> 1,000 TPS(초당 요청)의 AI 서비스에서 모든 트레이스를 저장하면 하루에 수백 GB가 쌓입니다.
+> 그 중 대부분은 "정상 동작" — 저장해봐야 볼 일이 없습니다.
+>
+> **Sampling = "중요한 것만 골라서 저장"**
+>
+> ```
+> 전체 트레이스 100% 수신
+>      │
+>      ├── 에러 발생?  → 무조건 저장 (100%)  ← 문제 원인 파악에 필수
+>      ├── 응답이 느림? → 무조건 저장 (100%)  ← 성능 문제 분석에 필수
+>      ├── 엔터프라이즈 고객? → 저장 (100%)   ← SLA(서비스 수준 계약) 준수
+>      └── 정상 요청?  → 5%만 저장            ← 통계 기준선 유지용
+> ```
+>
+> **💡 왜 Head-based가 아닌 Tail-based인가요?**
+>
+> - **Head-based** (앞에서 결정): 요청 시작 시점에 "저장할지 말지" 결정. 빠르지만 "나중에 에러가 날지" 알 수 없어서 에러 트레이스를 놓칠 수 있음
+> - **Tail-based** (끝에서 결정): 요청이 완전히 끝난 후 "에러였나? 느렸나?" 확인 후 결정. 느리지만 **중요한 트레이스를 하나도 놓치지 않음**
+>
+> 이 프로젝트는 `decision_wait: 10s` — 요청 완료 후 10초 대기하며 모든 Span을 모은 다음 판단합니다.
+
 ### 4.1 의사결정 흐름
 
 ```
@@ -979,19 +1152,49 @@ $$
 
 ## 5. Context Propagation 상세 설계
 
+> **📌 이 섹션에서 배울 내용**
+> - Context Propagation(컨텍스트 전파)이란 무엇인지
+> - W3C TraceContext 헤더 형식과 의미
+> - Baggage를 통해 비즈니스 정보를 하위 서비스까지 전달하는 방법
+>
+> **💡 왜 Context Propagation이 필요한가요?**
+>
+> 사용자 요청 하나가 여러 서비스를 거칩니다:
+> ```
+> [브라우저] → [Next.js] → [FastAPI] → [LangChain] → [vLLM]
+> ```
+>
+> 각 서비스는 독립된 프로세스라서, 아무 설정 없이는 서로 다른 Trace를 만듭니다.
+> Context Propagation은 **"이 요청이 연결되어 있다"는 정보를 HTTP 헤더에 담아 전달**하는 기법입니다.
+>
+> ```
+> [Next.js]                              [FastAPI]
+>  traceparent:                           traceparent 헤더 읽음
+>  "00-aabb...-0011...-01"  ──HTTP──▶    → 동일 Trace ID 사용
+>                                        → 새 child Span 생성
+> ```
+>
+> 결과: Grafana에서 "이 사용자 요청의 전체 여정"을 한 화면에서 볼 수 있음
+
 ### 5.1 W3C TraceContext 헤더 구조
 
 ```
 traceparent: 00-{trace-id}-{parent-id}-{flags}
              ↑   ↑           ↑           ↑
           version 128bit    64bit      sampling flag
-                  trace_id  span_id    (01=sampled)
+          (항상 00)trace_id  span_id    (01=저장함)
+
+실제 예시:
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                └─────────────────────────────┘ └──────────────┘ └┘
+                         Trace ID (전체 여정)    현재 Span ID     저장
 
 tracestate: vendor1=value1,vendor2=value2
             (벤더별 추가 컨텍스트 — 옵션)
 
 baggage: user.tier=enterprise,request.priority=high
          (비즈니스 컨텍스트 전파 — 하위 서비스에서도 접근 가능)
+         ← 이 값은 LangChain, vLLM 등 모든 하위 서비스에서 읽을 수 있음
 ```
 
 ### 5.2 레이어 간 전파 매트릭스
@@ -1083,6 +1286,35 @@ async def find_broken_traces(start_time: str, end_time: str):
 
 ## 6. 고가용성 Collector 배포 패턴
 
+> **📌 이 섹션에서 배울 내용**
+> - 왜 Collector를 두 계층(Agent + Gateway)으로 분리하는지
+> - DaemonSet(노드당 1개)과 Deployment(중앙 복수 인스턴스)의 차이
+> - 부하 분산과 데이터 유실 방지 전략
+>
+> **💡 왜 Agent와 Gateway를 분리하나요?**
+>
+> 하나의 Collector에 모든 기능을 넣으면 어떤 문제가 생길까요?
+>
+> ```
+> 문제 시나리오:
+> AI 서비스 → Collector(모든 역할) → 저장소
+>
+> Tail Sampling이 트레이스 50,000개를 10초간 메모리에 보관 중...
+> → 갑자기 트래픽 급증 → Collector 메모리 부족 → OOM 강제 종료
+> → 그동안 받은 텔레메트리 데이터 전부 유실 ❌
+> ```
+>
+> **분리 해결책:**
+> ```
+> AI 서비스 → Agent Collector (경량, 수집 전담)
+>                │  데이터 전달
+>                ▼
+>         Gateway Collector (고사양, 샘플링/변환 전담)
+>
+> Agent가 죽어도 Gateway가, Gateway가 죽어도 Agent가 버퍼링
+> → 이중 안전망
+> ```
+
 ### 6.1 이중 Collector 아키텍처
 
 ```
@@ -1136,6 +1368,42 @@ exporters:
 ---
 
 ## 7. 로컬 개발 환경 (Docker Compose)
+
+> **📌 이 섹션에서 배울 내용**
+> - 로컬에서 전체 모니터링 스택을 Docker로 띄우는 방법
+> - 각 서비스의 역할과 접속 주소
+> - Docker Compose 설정 파일 읽는 방법
+>
+> **💡 왜 이렇게 많은 서비스가 필요한가요?**
+>
+> 각 서비스는 한 가지 일에 특화되어 있습니다:
+>
+> ```
+> ┌────────────────────────────────────────────────────────────────┐
+> │  서비스          │  역할              │  비유                   │
+> ├─────────────────┼──────────────────┼─────────────────────────┤
+> │  otel-collector  │  데이터 수집/라우팅 │  중앙 우체국            │
+> │  prometheus      │  숫자(메트릭) 저장 │  엑셀 스프레드시트      │
+> │  grafana tempo   │  추적(트레이스) 저장│  GPS 경로 기록         │
+> │  grafana loki    │  로그 저장        │  일기장                 │
+> │  grafana         │  통합 시각화      │  계기판                 │
+> │  jaeger          │  트레이스 빠른 확인 │  간이 조회 도구        │
+> └─────────────────┴──────────────────┴─────────────────────────┘
+> ```
+>
+> 프로덕션에서는 이 서비스들이 각각 별도 서버에서 클러스터로 운영됩니다.
+> 로컬에서는 Docker Compose로 한 머신에서 모두 실행합니다.
+>
+> **Docker Compose 설정 파일 읽는 방법:**
+> ```yaml
+> services:
+>   otel-collector:          # 서비스 이름 (컨테이너 내부 호스트명으로도 사용)
+>     image: otel/...        # 사용할 Docker 이미지
+>     volumes:               # 로컬 파일 ↔ 컨테이너 내부 파일 연결
+>     ports:                 # 로컬 포트 : 컨테이너 포트 매핑
+>     healthcheck:           # 서비스 정상 여부 자동 확인
+>     networks: [monitoring] # 서비스 간 통신용 내부 네트워크
+> ```
 
 ```yaml
 # infra/docker/docker-compose.yaml
@@ -1239,7 +1507,38 @@ services:
 
 ## 8. 프로덕션 배포 (Kubernetes)
 
+> **📌 이 섹션에서 배울 내용**
+> - Kubernetes(K8s) 환경에서 OTel Collector를 배포하는 방법
+> - DaemonSet vs Deployment 배포 전략 차이
+> - RBAC(접근 권한) 설정이 필요한 이유
+>
+> **💡 Kubernetes(K8s)란? (완전 초보자 안내)**
+>
+> K8s는 **여러 서버(노드)에서 컨테이너를 자동 관리**하는 시스템입니다.
+> Docker Compose가 한 대 서버에서 쓴다면, K8s는 수십~수백 대에서 씁니다.
+>
+> 이 섹션에서 나오는 K8s 개념:
+>
+> | 용어 | 의미 | 비유 |
+> |------|------|------|
+> | **Namespace** | 리소스의 논리적 격리 공간 | 회사 내 부서 |
+> | **DaemonSet** | 모든 노드에 하나씩 자동 배포 | 각 층마다 화재 감지기 |
+> | **Deployment** | 지정한 수의 복제본 유지 | N명 교대 근무 |
+> | **HPA** | 부하에 따라 Pod 수 자동 조절 | 수요에 맞춰 직원 자동 채용/해고 |
+> | **RBAC** | 역할 기반 접근 권한 | 직원 보안 등급 |
+> | **ConfigMap** | 설정 파일을 K8s에 저장 | 환경 변수 관리 |
+>
+> **왜 Agent Collector를 DaemonSet으로 배포하나요?**
+>
+> OTel Agent Collector는 각 노드(서버)의 로컬 데이터(hostmetrics, 로컬 Pod 텔레메트리)를 수집합니다.
+> DaemonSet은 "새 노드가 추가되면 자동으로 Agent가 배포"됩니다 — 수동 설치 불필요.
+
 ### 8.1 네임스페이스 및 RBAC
+
+> **왜 RBAC가 필요한가요?**
+> OTel Collector Agent는 K8s API에서 Pod 이름, 네임스페이스 등 메타데이터를 읽어야 합니다.
+> 하지만 아무 Pod나 K8s API를 읽으면 보안 문제가 됩니다.
+> RBAC로 "OTel Collector ServiceAccount에게만 필요한 권한(노드/Pod 조회)을 부여"합니다.
 
 ```yaml
 # infra/kubernetes/namespace-rbac.yaml
@@ -1461,6 +1760,26 @@ spec:
 ---
 
 ## 9. 데이터 보존 및 비용 전략
+
+> **📌 이 섹션에서 배울 내용**
+> - Hot/Warm/Cold 3계층 스토리지 전략
+> - 데이터 유형별 보존 기간 정책
+> - 실제 비용 추정치 (1,000 RPS 기준)
+>
+> **💡 왜 데이터를 다 저장하지 않나요?**
+>
+> 1,000 RPS AI 서비스에서 샘플링 없이 모든 트레이스를 저장하면:
+> - 하루 트레이스 데이터 ≈ 수백 GB
+> - 월 저장 비용 ≈ 수천 달러
+>
+> Hot → Warm → Cold 계층 전략:
+> ```
+> Hot Storage (빠른 SSD, 비쌈)    →  최근 7~30일  →  실시간 조회용
+> Warm Storage (적당한 비용)       →  30~90일     →  중기 분석용
+> Cold Archive (S3, 저렴함)        →  90일~1년+   →  감사/규제 대응용
+> ```
+>
+> AI 핵심 메트릭(TTFT/TPS/GPU)은 **서비스 품질 추이 분석**을 위해 영구 보존합니다.
 
 ### 9.1 계층별 데이터 보존 정책
 

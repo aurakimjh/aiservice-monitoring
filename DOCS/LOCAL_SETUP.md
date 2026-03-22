@@ -99,6 +99,24 @@ pip install fastapi         # 그 주방에만 재료를 설치합니다
 
 ## 1. 사전 요구사항 체크리스트
 
+> **📌 이 섹션에서 배울 내용**
+> - 이 프로젝트를 실행하기 위해 필요한 도구들
+> - 각 도구가 왜 필요한지
+> - 설치 여부 확인 방법
+>
+> **💡 왜 이렇게 많은 도구가 필요한가요?**
+>
+> 이 프로젝트는 3개 언어(Python, Node.js, Go)와 Docker 인프라로 구성됩니다:
+> ```
+> Git       → 코드 버전 관리 (필수 기본)
+> Python    → AI/ML 서비스, 테스트 스크립트
+> Node.js   → 프론트엔드 (Next.js)
+> Go        → 고성능 수집기 (AITOP Agent)
+> Docker    → 모니터링 인프라 (Prometheus, Grafana 등) 실행
+> ```
+>
+> 한 번만 설치하면 이후 `docker compose up` 하나로 전체 환경이 올라옵니다.
+
 시작 전, 아래 항목이 모두 설치되어 있는지 확인합니다.
 
 | 도구 | 최소 버전 | 확인 명령어 | 설치 링크 |
@@ -117,6 +135,11 @@ pip install fastapi         # 그 주방에만 재료를 설치합니다
 
 ## 2. 공통 런타임 설치
 
+> **📌 이 섹션에서 배울 내용**
+> - Python, Node.js, Go 세 가지 런타임 설치 방법
+> - 가상환경/버전 관리자를 사용하는 이유
+> - 각 언어별 OTel SDK 의존성 설치
+
 ### 2-1. Python 3.10+ 및 가상환경(venv)
 
 #### 설치 확인
@@ -131,6 +154,13 @@ python3 --version
 #### 프로젝트 가상환경 생성
 
 **모든 Python 서비스는 반드시 독립된 가상환경에서 실행합니다.** 전역 Python 환경을 오염시키지 않기 위함입니다.
+
+> **💡 왜 가상환경이 필요한가요?**
+> 시스템 전체에 설치된 Python에 직접 패키지를 설치하면:
+> - 프로젝트 A가 `fastapi==0.100`, 프로젝트 B가 `fastapi==0.95` 필요 → 충돌 ❌
+> - 한 번 꼬이면 시스템 Python 환경 전체가 망가질 수 있음 ❌
+>
+> 가상환경을 사용하면 프로젝트마다 독립된 Python 환경 = 충돌 없음 ✅
 
 ```bash
 # 프로젝트 루트로 이동
@@ -183,6 +213,14 @@ pip freeze > requirements.txt
 
 Node.js는 **nvm(Node Version Manager)** 으로 설치하면 프로젝트별 버전 전환이 쉽습니다.
 
+> **💡 왜 직접 설치하지 않고 nvm을 쓰나요?**
+> Node.js는 버전에 따라 API가 달라져 프로젝트 간 충돌이 자주 납니다.
+> nvm은 Python의 venv처럼 **여러 Node.js 버전을 공존**시키고 프로젝트별로 전환합니다.
+> ```bash
+> nvm use 18   # 이 터미널에서만 Node.js 18 사용
+> nvm use 20   # 이 터미널에서만 Node.js 20 사용
+> ```
+
 #### nvm 설치 (Windows: nvm-windows)
 
 1. https://github.com/coreybutler/nvm-windows/releases 에서 `nvm-setup.exe` 다운로드
@@ -231,6 +269,11 @@ npm install \
 ---
 
 ### 2-3. Go SDK
+
+> **💡 Go는 왜 필요한가요?**
+> AITOP Agent(모니터링 데이터 수집기)가 Go로 작성되어 있습니다.
+> Go는 단일 바이너리로 컴파일되어 배포가 간편하고, C/C++ 수준의 성능을 냅니다.
+> 에이전트 코드를 빌드하거나 Go SDK 계측 코드를 개발할 때 필요합니다.
 
 #### Go 설치 확인
 
@@ -286,6 +329,23 @@ go mod tidy
 ---
 
 ## 3. 로컬 인프라 (Docker Compose)
+
+> **📌 이 섹션에서 배울 내용**
+> - Docker Compose로 모니터링 스택 6개 서비스를 한 번에 실행하는 방법
+> - 각 서비스의 접속 주소와 역할
+> - 스택 시작/중지/초기화 명령어
+>
+> **💡 왜 로컬에 모니터링 스택이 필요한가요?**
+>
+> SDK 코드를 작성하면서 "내가 만든 Span이 실제로 Grafana에 나타나는지" 바로 확인해야 합니다.
+> 프로덕션 서버를 쓰면 다른 팀원의 작업과 섞이고, 인터넷 연결도 필요합니다.
+> 로컬 Docker 스택은 **내 코드가 만든 텔레메트리만 혼자 확인**할 수 있는 격리된 환경입니다.
+>
+> ```
+> 내 코드 → 로컬 OTel Collector → 로컬 Grafana
+>           (localhost:4317)        (localhost:3000)
+>           ← 인터넷 불필요, 혼자만의 모니터링 환경 →
+> ```
 
 개발 중에는 로컬에 경량 모니터링 스택을 띄워서 **실시간으로 메트릭과 트레이스를 확인**합니다.
 
@@ -357,9 +417,28 @@ docker compose -f infra/docker/docker-compose.yaml down -v
 
 ## 4. 환경 변수 관리 (.env)
 
+> **📌 이 섹션에서 배울 내용**
+> - 환경 변수란 무엇이고 왜 쓰는지
+> - `.env` 파일을 Git에 올리면 안 되는 이유
+> - `.env.example`로 팀원과 안전하게 공유하는 방법
+
 ### 핵심 원칙
 
 - **`.env` 파일은 절대 Git에 커밋하지 않습니다** (`.gitignore`에 이미 포함됨)
+
+> **💡 왜 `.env`를 Git에 올리면 절대 안 되나요?**
+>
+> `.env` 파일에는 API 키, 비밀번호 등 민감 정보가 들어 있습니다.
+> Git에 한 번 올라가면 히스토리에 영원히 남고, 누군가 이 저장소를 보면 바로 탈취됩니다.
+>
+> 실제 사고 사례: GitHub에 AWS API 키가 실수로 올라간 후 5분 만에 자동 크롤러가 감지해
+> 수십만 달러의 AWS 요금이 청구된 사례가 있습니다.
+>
+> **올바른 방법**:
+> ```
+> .env.example  → Git에 올림 (실제 값 없는 "샘플 양식")
+> .env          → Git에 절대 올리지 않음 (실제 비밀 값)
+> ```
 - API 키, 토큰 등 비밀 값은 `.env`에만 저장하고 코드에 하드코딩 금지
 - 팀원에게는 `.env.example`을 통해 필요한 변수 목록만 공유
 
@@ -460,6 +539,23 @@ require('dotenv').config();
 ---
 
 ## 5. VS Code 설정
+
+> **📌 이 섹션에서 배울 내용**
+> - 이 프로젝트에 최적화된 VS Code 확장(Extension) 목록
+> - 자동 포맷팅, 린터, 디버거 설정
+> - 원클릭 디버그 실행 구성 (launch.json)
+>
+> **💡 왜 IDE 설정이 중요한가요?**
+>
+> 설정 없이 코딩하면:
+> - 코드 오타/에러를 저장할 때까지 모름
+> - 팀원마다 코드 스타일이 달라서 PR 리뷰 때 불필요한 diff 발생
+> - 디버거 없이 `print()`로만 디버깅 → 매우 비효율적
+>
+> 올바른 IDE 설정으로:
+> - 입력 즉시 에러 표시 (Error Lens)
+> - 저장 시 자동 포맷팅 (Black, Prettier)
+> - `F5` 한 번으로 디버거 실행
 
 ### 5-1. 필수 확장(Extensions)
 
@@ -765,6 +861,11 @@ mkdir -p /c/workspace/aiservice-monitoring/.vscode
 
 ## 6. JetBrains IDE 설정
 
+> **📌 이 섹션에서 배울 내용**
+> - IntelliJ/PyCharm/GoLand에서 Python, Go, Node.js를 동시에 사용하는 설정
+> - Run/Debug Configuration으로 원클릭 실행 구성
+> - EnvFile 플러그인으로 `.env` 자동 로드
+
 IntelliJ IDEA / PyCharm / GoLand 사용자를 위한 설정입니다. 프로젝트 성격에 따라 IDE를 선택합니다:
 
 - **PyCharm Professional**: Python 전담 개발 시 권장
@@ -933,6 +1034,20 @@ NODE_ENV=development
 
 ## 7. Git 및 GitHub 연동
 
+> **📌 이 섹션에서 배울 내용**
+> - Git 초기 설정 (이름, 이메일, 줄바꿈 문자)
+> - SSH 키 생성 및 GitHub 등록 — 비밀번호 없이 안전하게 연결
+> - 저장소 클론과 브랜치 전략
+>
+> **💡 SSH 키 방식 vs HTTPS 방식**
+>
+> ```
+> HTTPS 방식: git push 할 때마다 비밀번호/토큰 입력 필요 (번거로움)
+> SSH 방식:   SSH 키 한 번 등록 후 → 비밀번호 없이 자동 인증 (편리함 + 더 안전)
+> ```
+>
+> 이 프로젝트는 SSH 방식을 권장합니다.
+
 ### 7-1. 로컬 Git Config 설정
 
 ```bash
@@ -1018,13 +1133,18 @@ git config user.email
 
 ### 7-4. 프로젝트 레이아웃과 Git 브랜치 전략
 
+> **💡 Monorepo(모노레포)란?**
+> 여러 서비스(Python, Node.js, Go)의 코드를 **하나의 저장소에** 관리하는 방식입니다.
+> 각 서비스를 별도 저장소로 관리하면 서로 다른 저장소 간 의존성 변경 추적이 어려워집니다.
+> 이 프로젝트는 모노레포로 "SDK 코드 변경 + Collector 설정 변경 + 대시보드 변경"을 하나의 PR로 관리합니다.
+
 ```
 aiservice-monitoring/               ← 단일 저장소 (Monorepo)
 ├── sdk-instrumentation/
 │   ├── python/                     ← Python 에이전트·LLM 계측
 │   ├── nodejs/                     ← Next.js 프론트엔드 계측
 │   └── go/                         ← Go 수집기·프록시 계측
-├── collector/config/               ← OTel Collector 설정
+├── collector/config/               ← OTel Collector 설정 YAML
 ├── infra/
 │   ├── docker/                     ← 로컬 개발 Docker Compose
 │   └── kubernetes/                 ← K8s 프로덕션 매니페스트
@@ -1032,6 +1152,12 @@ aiservice-monitoring/               ← 단일 저장소 (Monorepo)
 ├── scripts/                        ← 검증·부하 테스트 스크립트
 └── helm/                           ← Helm 패키지 (운영 배포)
 ```
+
+> **각 디렉토리가 처음에는 낯설 수 있습니다. 처음 합류한다면 이 순서로 탐색하세요:**
+> 1. `sdk-instrumentation/python/` — 가장 먼저. Python 계측 코드의 핵심
+> 2. `collector/config/` — OTel Collector YAML 설정
+> 3. `infra/docker/` — 로컬 실행 환경
+> 4. `dashboards/grafana/` — 결과물 시각화
 
 #### 권장 브랜치 전략
 
@@ -1061,6 +1187,24 @@ git push -u origin feat/my-new-feature
 ---
 
 ## 8. 첫 실행 검증 체크리스트
+
+> **📌 이 섹션에서 배울 내용**
+> - 설정 완료 후 5단계 검증 절차
+> - 각 단계에서 기대하는 정상 출력
+> - 모두 ✅가 뜨면 로컬 환경 설정 완료
+>
+> **💡 왜 이 순서로 검증하나요?**
+>
+> 의존 관계가 있기 때문에 순서가 중요합니다:
+> ```
+> Step 1: 인프라 스택 먼저 기동 (Collector가 없으면 SDK 데이터 받을 곳이 없음)
+>   ↓
+> Step 2: SDK로 테스트 Span 발생
+>   ↓
+> Step 3: Jaeger UI에서 트레이스 확인 (Grafana보다 빠른 확인)
+>   ↓
+> Step 4~5: 고급 검증 (Alert, Context Propagation)
+> ```
 
 모든 설정을 완료한 후, 아래 순서로 검증합니다.
 
@@ -1112,6 +1256,20 @@ python scripts/validate-traces.py
 ---
 
 ## 9. 자주 발생하는 문제 (Troubleshooting)
+
+> **📌 이 섹션에서 배울 내용**
+> - 가장 자주 발생하는 4가지 문제와 해결법
+> - 문제 원인을 파악하는 디버깅 순서
+>
+> **💡 문제 해결 기본 순서**
+>
+> 무엇이 잘못됐는지 모를 때:
+> ```
+> 1. docker compose ps          → 서비스 상태 확인
+> 2. docker compose logs [서비스명]  → 에러 메시지 확인
+> 3. 브라우저에서 직접 접속 시도   → 포트 충돌 여부 확인
+> 4. 구글에 에러 메시지 검색       → 대부분 이미 해결책이 있음
+> ```
 
 ### OTel Collector가 시작되지 않는 경우
 
