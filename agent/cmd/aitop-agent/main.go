@@ -17,16 +17,18 @@ import (
 	"time"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/buffer"
-	gpucol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/ai/gpu"
-	oscol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/os"
+	aicol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/ai"
+	itcol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/it"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/config"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/core"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/health"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/privilege"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/sanitizer"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/scheduler"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/shell"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/statemachine"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/transport"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/updater"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
@@ -80,10 +82,21 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// ── agent ID ──────────────────────────────────────────────────────────────
+	agentID := cfg.Agent.ID
+	if agentID == "" {
+		hostname, _ := os.Hostname()
+		agentID = "agent-" + hostname
+	}
+
 	// ── collector registry ────────────────────────────────────────────────────
 	registry := core.NewRegistry(logger)
-	registry.Register(oscol.New())
-	registry.Register(gpucol.New())
+
+	// Register IT collectors (OS, WEB, WAS, DB)
+	itcol.RegisterAll(registry)
+
+	// Register AI collectors (LLM, VectorDB, Serving, OTel, GPU)
+	aicol.RegisterAll(registry)
 
 	// ── privilege pre-flight check ────────────────────────────────────────────
 	privChecker := privilege.NewChecker(logger)
@@ -119,11 +132,6 @@ func main() {
 	defer buf.Close()
 
 	// ── health monitor ────────────────────────────────────────────────────────
-	agentID := cfg.Agent.ID
-	if agentID == "" {
-		hostname, _ := os.Hostname()
-		agentID = "agent-" + hostname
-	}
 	healthMon := health.NewMonitor(agentID)
 
 	// ── state machine ─────────────────────────────────────────────────────────
@@ -135,6 +143,36 @@ func main() {
 
 	// ── sanitizer ────────────────────────────────────────────────────────────
 	san := sanitizer.New()
+
+	// ── remote shell manager ──────────────────────────────────────────────────
+	var shellMgr *shell.Manager
+	if cfg.RemoteShell.Enabled {
+		shellMgr = shell.NewManager(agentID, cfg.RemoteShell, logger)
+		logger.Info("remote shell service enabled",
+			"max_sessions", cfg.RemoteShell.MaxSessions,
+			"audit", cfg.RemoteShell.AuditEnabled,
+		)
+	}
+
+	// ── OTA updater ───────────────────────────────────────────────────────────
+	var otaUpdater *updater.Manager
+	if cfg.Server.URL != "" && cfg.Agent.Mode == models.ModeFull {
+		otaCfg := updater.Config{
+			ServerURL:  cfg.Server.URL,
+			AgentToken: cfg.Server.ProjectToken,
+			AgentID:    agentID,
+			HealthFn: func() bool {
+				metrics := healthMon.GetSelfMetrics()
+				return metrics.HeapAllocMB < 200 && sm.State() != "error"
+			},
+		}
+		if mgr, err := updater.New(otaCfg, logger); err != nil {
+			logger.Warn("OTA updater init failed", "error", err)
+		} else {
+			otaUpdater = mgr
+			logger.Info("OTA updater initialised")
+		}
+	}
 
 	// ── transport (heartbeat + HTTP collect) ───────────────────────────────────
 	var heartbeatSender *transport.HeartbeatSender
@@ -158,7 +196,7 @@ func main() {
 				case <-ctx.Done():
 					return
 				case cmd := <-heartbeatSender.CommandCh:
-					handleRemoteCommand(ctx, cmd, registry, buf, san, logger)
+					handleRemoteCommand(ctx, cmd, registry, buf, san, shellMgr, logger)
 				}
 			}
 		}()
@@ -243,7 +281,7 @@ func main() {
 	}
 
 	if cfg.Agent.Mode == models.ModeFull {
-		// In full mode, schedule periodic buffer-flush with HTTP transport when available.
+		// Periodic buffer flush
 		flushJob := func(ctx context.Context) {
 			var sendFn func(collectorID string, data []byte) error
 			if httpClient != nil {
@@ -265,6 +303,18 @@ func main() {
 			logger.Error("failed to register flush job", "error", err)
 			os.Exit(1)
 		}
+
+		// OTA update check — daily at 03:00
+		if otaUpdater != nil {
+			otaJob := func(ctx context.Context) {
+				if err := otaUpdater.CheckAndUpdate(ctx); err != nil {
+					logger.Error("OTA update check failed", "error", err)
+				}
+			}
+			if err := sched.Register("ota", "0 3 * * *", otaJob); err != nil {
+				logger.Warn("failed to register OTA update job", "error", err)
+			}
+		}
 	}
 
 	// ── start scheduler (full / resident mode) ────────────────────────────────
@@ -275,6 +325,14 @@ func main() {
 	<-ctx.Done()
 	logger.Info("shutdown signal received, stopping agent…")
 	sched.Stop()
+
+	// Gracefully close shell sessions
+	if shellMgr != nil {
+		for _, si := range shellMgr.ListSessions() {
+			shellMgr.CloseSession(si.ID)
+		}
+	}
+
 	logger.Info("aitop-agent stopped")
 }
 
@@ -301,6 +359,7 @@ func handleRemoteCommand(
 	registry *core.Registry,
 	buf *buffer.Buffer,
 	san *sanitizer.Sanitizer,
+	shellMgr *shell.Manager,
 	logger *slog.Logger,
 ) {
 	logger.Info("executing remote command", "id", cmd.ID, "type", cmd.Type)
@@ -324,13 +383,60 @@ func handleRemoteCommand(
 			}
 			_ = buf.Store(r.CollectorID, sanitized)
 		}
+
+	case "terminal.open":
+		if shellMgr == nil {
+			logger.Warn("remote shell not enabled, ignoring terminal.open")
+			return
+		}
+		sessionID := shell.SessionID(cmd.ID)
+		// Payload JSON: {"user_id":"alice","role":"sre"}
+		var params map[string]string
+		if cmd.Payload != "" {
+			_ = json.Unmarshal([]byte(cmd.Payload), &params)
+		}
+		if params == nil {
+			params = map[string]string{}
+		}
+		userID := params["user_id"]
+		role := params["role"]
+		if role == "" {
+			role = "sre"
+		}
+		sess, outCh, err := shellMgr.OpenSession(ctx, sessionID, userID, role)
+		if err != nil {
+			logger.Error("failed to open terminal session", "error", err)
+			return
+		}
+		_ = sess
+		// Drain output (in real deployment: forward via gRPC/WebSocket to backend)
+		go func() {
+			for ev := range outCh {
+				logger.Debug("terminal output", "session", ev.SessionID, "bytes", len(ev.Data))
+			}
+		}()
+
+	case "terminal.input":
+		if shellMgr == nil {
+			return
+		}
+		sessionID := shell.SessionID(cmd.ID)
+		// Payload is raw input data (base64 or plaintext)
+		if err := shellMgr.SendInput(shell.InputEvent{SessionID: sessionID, Data: []byte(cmd.Payload)}); err != nil {
+			logger.Warn("terminal input failed", "session", sessionID, "error", err)
+		}
+
+	case "terminal.close":
+		if shellMgr != nil {
+			shellMgr.CloseSession(shell.SessionID(cmd.ID))
+		}
+
 	default:
 		logger.Warn("unknown remote command type", "type", cmd.Type)
 	}
 }
 
-// defaultConfig returns a minimal Config with sensible defaults for when the
-// configuration file is missing or cannot be parsed.
+// defaultConfig returns a minimal Config with sensible defaults.
 func defaultConfig() *config.Config {
 	return &config.Config{
 		Agent: config.AgentConfig{
@@ -345,6 +451,13 @@ func defaultConfig() *config.Config {
 		},
 		Logging: config.LoggingConfig{
 			Level: "info",
+		},
+		RemoteShell: config.RemoteShellConfig{
+			Enabled:      false,
+			MaxSessions:  3,
+			IdleTimeout:  600,
+			MaxDuration:  3600,
+			AuditEnabled: true,
 		},
 	}
 }
