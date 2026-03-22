@@ -1,0 +1,38 @@
+# Dockerfile.collection-server
+# AITOP Collection Server — multi-stage build
+#
+# Build context: ../../agent  (i.e., the agent/ directory)
+# docker build -f ../infra/docker/Dockerfile.collection-server -t aitop-collection-server .
+
+# ── Stage 1: build ──────────────────────────────────────────────────────────
+FROM golang:1.24-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" \
+    -o collection-server \
+    ./cmd/collection-server
+
+# ── Stage 2: runtime ────────────────────────────────────────────────────────
+FROM alpine:3.20
+
+RUN apk add --no-cache curl ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /build/collection-server .
+
+EXPOSE 8080 50051
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["./collection-server"]
