@@ -22,6 +22,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
@@ -265,14 +268,30 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
+	// Initialize subsystems
+	jwtMgr := auth.NewJWTManager(auth.JWTConfig{})
+	bus := eventbus.New(1000)
+	validator := validation.NewGateway()
+
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	mux := buildMux(f, gr, sr, logger)
+	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator)
+
+	// Apply middleware: CORS → JWT Auth
+	corsMiddleware := auth.CORS("*")
+	authMiddleware := auth.Middleware(jwtMgr, []string{
+		"POST /api/v1/auth/login",
+		"/api/v1/auth/login",
+		"POST /api/v1/auth/refresh",
+		"/api/v1/auth/refresh",
+	})
+
+	handler := corsMiddleware(authMiddleware(mux))
 
 	srv := &http.Server{
 		Addr:         *addr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -298,8 +317,113 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway) http.Handler {
 	mux := http.NewServeMux()
+
+	// ── Auth endpoints ────────────────────────────────────────────────────────
+
+	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"message":"invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		user := auth.FindDemoUser(body.Email, body.Password)
+		if user == nil {
+			http.Error(w, `{"message":"invalid email or password"}`, http.StatusUnauthorized)
+			return
+		}
+
+		accessToken, expiresAt, err := jwtMgr.GenerateAccessToken(user.ID, user.Email, user.Name, user.Role, user.OrgID)
+		if err != nil {
+			http.Error(w, `{"message":"token generation failed"}`, http.StatusInternalServerError)
+			return
+		}
+		refreshToken, err := jwtMgr.GenerateRefreshToken(user.ID)
+		if err != nil {
+			http.Error(w, `{"message":"token generation failed"}`, http.StatusInternalServerError)
+			return
+		}
+
+		logger.Info("user login", "email", user.Email, "role", user.Role)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":               user.ID,
+				"email":            user.Email,
+				"name":             user.Name,
+				"role":             user.Role,
+				"organizationId":   user.OrgID,
+				"organizationName": user.OrgName,
+			},
+			"tokens": map[string]interface{}{
+				"accessToken":  accessToken,
+				"refreshToken": refreshToken,
+				"expiresAt":    expiresAt,
+			},
+		})
+	})
+
+	mux.HandleFunc("POST /api/v1/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RefreshToken string `json:"refreshToken"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"message":"invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		claims, err := jwtMgr.Verify(body.RefreshToken)
+		if err != nil {
+			http.Error(w, `{"message":"invalid refresh token"}`, http.StatusUnauthorized)
+			return
+		}
+
+		// Find the user to regenerate full claims
+		var user *auth.DemoUser
+		for _, u := range auth.DemoUsers {
+			if u.ID == claims.UserID {
+				user = &u
+				break
+			}
+		}
+		if user == nil {
+			http.Error(w, `{"message":"user not found"}`, http.StatusUnauthorized)
+			return
+		}
+
+		accessToken, expiresAt, _ := jwtMgr.GenerateAccessToken(user.ID, user.Email, user.Name, user.Role, user.OrgID)
+		refreshToken, _ := jwtMgr.GenerateRefreshToken(user.ID)
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"accessToken":  accessToken,
+			"refreshToken": refreshToken,
+			"expiresAt":    expiresAt,
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		claims := auth.GetClaims(r)
+		if claims == nil {
+			http.Error(w, `{"message":"not authenticated"}`, http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"id":               claims.UserID,
+			"email":            claims.Email,
+			"name":             claims.Name,
+			"role":             claims.Role,
+			"organizationId":   claims.OrganizationID,
+			"organizationName": "AITOP",
+		})
+	})
+
+	mux.HandleFunc("POST /api/v1/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
 
 	// ── POST /api/v1/heartbeat ──────────────────────────────────────────────
 	mux.HandleFunc("POST /api/v1/heartbeat", func(w http.ResponseWriter, r *http.Request) {
@@ -321,9 +445,53 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 
 	// ── POST /api/v1/collect/{collector_id} ────────────────────────────────
 	mux.HandleFunc("POST /api/v1/collect/", func(w http.ResponseWriter, r *http.Request) {
-		// Accept any payload for MVP; just acknowledge receipt.
-		logger.Info("collect result received", "path", r.URL.Path)
-		writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
+		collectorID := r.URL.Path[len("/api/v1/collect/"):]
+
+		// Read body (limited to 10MB)
+		body := http.MaxBytesReader(w, r.Body, 10*1024*1024)
+		data := make([]byte, 0, 4096)
+		buf := make([]byte, 4096)
+		for {
+			n, err := body.Read(buf)
+			data = append(data, buf[:n]...)
+			if err != nil {
+				break
+			}
+		}
+
+		// Validate
+		result, sanitized := validator.Validate(data)
+		if result.Status == validation.StatusRejected {
+			logger.Warn("collect rejected", "collector", collectorID, "errors", result.Errors)
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"status": "rejected",
+				"errors": result.Errors,
+			})
+			return
+		}
+
+		agentID := r.Header.Get("X-Agent-ID")
+		logger.Info("collect result received",
+			"collector", collectorID,
+			"agent_id", agentID,
+			"sanitized", result.Sanitized,
+			"size", len(sanitized),
+		)
+
+		// Publish event
+		bus.Publish(eventbus.Event{
+			Type:    eventbus.EventCollectCompleted,
+			AgentID: agentID,
+			Data: map[string]interface{}{
+				"collector_id": collectorID,
+				"sanitized":    result.Sanitized,
+			},
+		})
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status":   string(result.Status),
+			"warnings": result.Warnings,
+		})
 	})
 
 	// ── GET /api/v1/agents ─────────────────────────────────────────────────
@@ -588,10 +756,12 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
-	// ── GET /healthz ────────────────────────────────────────────────────────
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	// ── Health endpoints ─────────────────────────────────────────────────────
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version.Full()})
-	})
+	}
+	mux.HandleFunc("GET /healthz", healthHandler)
+	mux.HandleFunc("GET /health", healthHandler)
 
 	return mux
 }
