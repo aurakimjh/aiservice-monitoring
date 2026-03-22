@@ -1,5 +1,6 @@
 import { useAuthStore } from '@/stores/auth-store';
 import type { LoginRequest, LoginResponse, User } from '@/types/auth';
+import type { FleetAgent, CollectionJob, AgentPlugin } from '@/types/monitoring';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080/api/v1';
 
@@ -137,5 +138,24 @@ export async function demoLogin(email: string, password: string): Promise<LoginR
     },
   };
 }
+
+// ── Fleet API (Collection Server — /api/v1/fleet) ──
+export const fleetApi = {
+  listAgents: (projectId?: string) =>
+    apiFetch<{ items: FleetAgent[]; total: number }>(
+      `/fleet/agents${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  listJobs: (projectId?: string) =>
+    apiFetch<{ items: CollectionJob[] }>(
+      `/fleet/jobs${projectId ? `?project=${projectId}` : ''}`,
+    ),
+
+  listPlugins: () =>
+    apiFetch<{ items: AgentPlugin[] }>('/fleet/plugins'),
+
+  triggerCollect: (agentId: string) =>
+    apiFetch<void>(`/fleet/agents/${agentId}/collect`, { method: 'POST' }),
+};
 
 export { apiFetch };
