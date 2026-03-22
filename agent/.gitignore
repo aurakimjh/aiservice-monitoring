@@ -29,6 +29,6 @@ Thumbs.db
 *.db-wal
 *.db-shm
 
-# Binary
-aitop-agent
-aitop-agent.exe
+# Binary (only match files at root level, not cmd/aitop-agent/ directory)
+/aitop-agent
+/aitop-agent.exe
