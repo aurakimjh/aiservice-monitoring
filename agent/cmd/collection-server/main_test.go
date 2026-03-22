@@ -13,6 +13,7 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/ws"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 )
 
@@ -22,10 +23,12 @@ func newTestServer(t *testing.T) (*httptest.Server, *fleet) {
 	jwtMgr := auth.NewJWTManager(auth.JWTConfig{})
 	bus := eventbus.New(100)
 	validator := validation.NewGateway()
+	wsHub := ws.NewHub(logger, bus)
+	t.Cleanup(wsHub.Close)
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	srv := httptest.NewServer(buildMux(f, gr, sr, logger, jwtMgr, bus, validator))
+	srv := httptest.NewServer(buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub))
 	t.Cleanup(srv.Close)
 	return srv, f
 }

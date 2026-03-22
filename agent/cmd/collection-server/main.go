@@ -25,6 +25,7 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/ws"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
@@ -272,11 +273,13 @@ func main() {
 	jwtMgr := auth.NewJWTManager(auth.JWTConfig{})
 	bus := eventbus.New(1000)
 	validator := validation.NewGateway()
+	wsHub := ws.NewHub(logger, bus)
+	defer wsHub.Close()
 
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator)
+	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -317,7 +320,7 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
@@ -755,6 +758,12 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		rec := sr.upsert(id, body.Name, body.TargetType, body.TargetID, body.Cron, body.Enabled)
 		writeJSON(w, http.StatusOK, rec)
 	})
+
+	// ── SSE (Server-Sent Events) real-time stream ───────────────────────────
+	// Frontend connects: new EventSource('/api/v1/events?channel=fleet&channel=collect')
+	if wsHub != nil {
+		mux.HandleFunc("GET /api/v1/events", wsHub.SSEHandler())
+	}
 
 	// ── Health endpoints ─────────────────────────────────────────────────────
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
