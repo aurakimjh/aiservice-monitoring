@@ -1,7 +1,7 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.1.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 완료 반영)
+> **문서 버전**: v1.2.0
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-23 (Session 31 — SDK 자동 인식, 중앙 설정 관리, 설정 반영 수준, 원격 재기동 추가)
 > **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료
 > **관련 문서**:
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
@@ -18,6 +18,10 @@
 3. [Collector 체계 — 데이터 수집 설계](#3-collector-체계--데이터-수집-설계)
 4. [권한 관리 및 실행 결과 응답](#4-권한-관리-및-실행-결과-응답)
 5. [중앙 에이전트 관리 (Fleet Management)](#5-중앙-에이전트-관리-fleet-management)
+   - 5.5 [SDK / 에이전트 자동 인식](#55-sdk--에이전트-자동-인식)
+   - 5.6 [중앙 설정 관리 — UI에서 agent.yaml 원격 편집](#56-중앙-설정-관리--ui에서-agentyaml-원격-편집)
+   - 5.7 [설정 반영 수준 체계](#57-설정-반영-수준-체계)
+   - 5.8 [원격 재기동](#58-원격-재기동)
 6. [원격 CLI / 터미널 구현](#6-원격-cli--터미널-구현)
 7. [수집 데이터 저장 전략](#7-수집-데이터-저장-전략)
 8. [UI 화면 연동 — 에이전트 수집 데이터 기반 동작](#8-ui-화면-연동--에이전트-수집-데이터-기반-동작)
@@ -776,6 +780,241 @@ Organization (AITOP)
   - 원격 수집 즉시 실행
 ```
 
+### 5.5 SDK / 에이전트 자동 인식
+
+에이전트 설치 또는 계측 SDK 추가 시 UI가 자동으로 인지하고 표시한다.
+
+#### 자동 인식 흐름
+
+```
+[에이전트 설치 시]
+  에이전트 기동 → Collection Server에 Register 요청
+    → Agent Registry에 등록 (UUID 발급)
+    → Fleet 콘솔에 즉시 표시 (30초 이내, Heartbeat 기반)
+    → 신규 에이전트 배지 "🆕 NEW" 표시 (24시간)
+
+[SDK 계측 추가 시]
+  앱 재기동 → OTel SDK가 OTLP/gRPC로 첫 데이터 전송
+    → Collection Server가 service.name 속성으로 서비스 자동 탐지
+    → 인프라 뷰 / 서비스 맵에 자동 노드 추가
+    → "🆕 SDK 감지됨" 배지 + 알림 발송 (설정 가능)
+
+[언어/SDK 자동 판별]
+  OTel span의 telemetry.sdk.language 속성 기반:
+    java       → ☕ Java Agent 아이콘
+    dotnet     → 🔷 .NET CLR Profiler 아이콘
+    python     → 🐍 Python SDK 아이콘
+    nodejs     → 🟩 Node.js SDK 아이콘
+    go         → 🐹 Go SDK 아이콘
+    (미탐지)   → ❓ Unknown 아이콘 + 수동 지정 유도
+```
+
+#### 에이전트 자동 인식 — Heartbeat 기반
+
+| 이벤트 | 트리거 | UI 반응 |
+|--------|--------|---------|
+| 에이전트 최초 등록 | Register gRPC 호출 | Fleet 목록에 즉시 추가, "🆕 NEW" 배지 |
+| 플러그인 신규 활성화 | Heartbeat `plugins` 필드 변경 | 플러그인 목록 자동 갱신, 수집 항목 추가 |
+| AI 환경 자동 탐지 | Heartbeat `ai_detected: true` | AI 탭 자동 활성화, AI 메트릭 수집 시작 |
+| SDK 첫 데이터 수신 | OTel OTLP 첫 요청 | 서비스 맵에 신규 노드 추가 |
+| 에이전트 오프라인 | Heartbeat 3분 무응답 | 🔴 오프라인 표시, 알림 발송 |
+
+### 5.6 중앙 설정 관리 — UI에서 agent.yaml 원격 편집
+
+UI에서 에이전트의 `agent.yaml` 설정을 원격으로 열람·편집하고, 저장 즉시 에이전트에 반영한다.
+
+#### 설계 원칙
+
+1. **설정파일에 없는 기본값도 표시**: UI는 스키마 전체를 기반으로 렌더링하며, 에이전트에 설정이 없는 항목도 기본값(default)으로 표시하고 편집 가능하게 한다.
+2. **설정 반영 수준 표시**: 각 설정 항목 옆에 반영 수준 아이콘(🟢/🟡/🔴)을 표시한다 (§5.7 참조).
+3. **저장 시 즉시 배포**: 편집 후 저장하면 Collection Server가 설정을 저장하고, 에이전트가 다음 Heartbeat 또는 즉시 폴링 시 가져간다.
+4. **설정 이력 관리**: 편집 이력을 저장하여 이전 버전으로 롤백 가능.
+
+#### 설정 배포 흐름
+
+```
+[UI 편집 → 에이전트 반영 흐름]
+
+UI 설정 편집기
+  → 저장 버튼 클릭
+  → Backend: PUT /api/v1/agents/{agentId}/config
+      ├── 설정 스키마 유효성 검증
+      ├── DB에 새 설정 버전 저장 (revision N+1)
+      └── 에이전트가 다음 Heartbeat 시 ConfigUpdate 수신
+
+에이전트 측:
+  Heartbeat Response에 ConfigUpdate 포함
+  └── 🟢 Hot Reload 항목: 즉시 메모리 내 반영 (재기동 없음)
+  └── 🟡 Agent Restart 항목: UI에서 재기동 버튼 클릭 후 반영
+  └── 🔴 App Restart 항목: "수동 재기동 필요" 경고만 표시
+
+[설정 폴링 주기]
+  기본: Heartbeat(30초)에 포함
+  긴급 반영: POST /api/v1/agents/{agentId}/config/reload → 즉시 폴링 트리거
+```
+
+#### 설정 스키마 레지스트리
+
+Collection Server는 에이전트 버전별 `config-schema.json`을 보유한다. UI는 이 스키마를 기반으로:
+- 모든 설정 항목(기본값 포함) 렌더링
+- 항목별 타입 (boolean/string/int/duration) 기반 입력 컴포넌트 선택
+- 항목별 반영 수준 아이콘 표시
+- 유효성 오류(타입 불일치, 범위 초과) 실시간 피드백
+
+### 5.7 설정 반영 수준 체계
+
+각 설정 항목은 변경 후 반영에 필요한 수준을 3단계로 분류한다.
+
+| 수준 | 아이콘 | 명칭 | 설명 | 예시 |
+|------|--------|------|------|------|
+| **Hot Reload** | 🟢 | 운영 중 즉시 반영 | 에이전트가 Heartbeat 폴링 시 자동 적용. 재기동 불필요. | 수집 주기, 로그 레벨, 슬로우 쿼리 임계치 |
+| **Agent Restart** | 🟡 | 에이전트 재기동 필요 | 에이전트 프로세스 재시작 후 반영. UI에서 원격 재기동 가능. | 서버 URL, 인증 토큰, gRPC 포트 |
+| **App Restart** | 🔴 | 애플리케이션 재기동 필요 | 대상 애플리케이션 재기동 필요. 원격 제어 불가 — 수동 안내만 표시. | Java `-javaagent` 경로, .NET CLR Profiler 활성화, 포트 바인딩 |
+
+#### UI 동작 규칙
+
+```
+편집된 항목에 따른 UI 동작:
+
+🟢 Hot Reload 항목만 변경 시:
+  → 저장 즉시 반영
+  → "✅ 설정이 적용되었습니다 (Hot Reload)" 토스트
+
+🟡 Agent Restart 항목 포함 시:
+  → 저장 후 "이 설정은 에이전트 재기동이 필요합니다" 배너 표시
+  → [🔄 에이전트 재기동] 버튼 제공
+  → 재기동 완료 후 설정 반영 확인
+
+🔴 App Restart 항목 포함 시:
+  → 저장 전 경고 모달: "⚠️ 이 설정은 애플리케이션 재기동이 필요합니다.
+     UI에서 원격으로 재기동할 수 없으며, 서버 관리자가 직접 재기동해야 합니다."
+  → 저장 후 "⚠️ 수동 재기동 필요" 배너 지속 표시 (재기동 확인 전까지)
+```
+
+#### agent.yaml 설정 항목별 반영 수준
+
+```yaml
+# 각 항목 옆 주석: [🟢 Hot] [🟡 AgentRestart] [🔴 AppRestart]
+
+server:
+  url: "https://collection-server:8443"   # 🟡 AgentRestart — gRPC 연결 재수립 필요
+  token: "aitop-agent-token-..."          # 🟡 AgentRestart — 인증 재수립 필요
+  tls_verify: true                        # 🟡 AgentRestart
+
+agent:
+  project_id: "proj-001"                  # 🟡 AgentRestart
+  host_group: "결제 서비스 그룹"            # 🟢 Hot — 메타데이터만 변경
+  tags: {env: prod, region: kr-central}   # 🟢 Hot
+
+collectors:
+  os:
+    enabled: true                         # 🟡 AgentRestart — Collector 스레드 재초기화
+    interval: "60s"                       # 🟢 Hot — 스케줄러 즉시 업데이트
+  web:
+    enabled: true                         # 🟡 AgentRestart
+    interval: "6h"                        # 🟢 Hot
+  was:
+    enabled: true                         # 🟡 AgentRestart
+    interval: "6h"                        # 🟢 Hot
+  db:
+    enabled: true                         # 🟡 AgentRestart
+    interval: "6h"                        # 🟢 Hot
+    host: "10.0.0.10"                     # 🟡 AgentRestart
+    port: 5432                            # 🟡 AgentRestart
+    user: "aitop_readonly"                # 🟡 AgentRestart
+    password_env: "AITOP_DB_PASSWORD"     # 🟡 AgentRestart
+  ai_llm:
+    enabled: auto                         # 🟡 AgentRestart
+  ai_gpu:
+    enabled: auto                         # 🟡 AgentRestart
+  ai_vectordb:
+    enabled: auto                         # 🟡 AgentRestart
+  otel_metrics:
+    enabled: false                        # 🟡 AgentRestart
+    prometheus_url: "http://localhost:9090"# 🟡 AgentRestart
+
+# Java/CLR 계측 설정 — 대상 앱 재기동 필요
+java_agent:
+  enabled: false                          # 🔴 AppRestart — JVM -javaagent 플래그 변경 필요
+  jar_path: "/opt/aitop/aitop-agent.jar"  # 🔴 AppRestart
+
+dotnet_profiler:
+  enabled: false                          # 🔴 AppRestart — CORECLR_ENABLE_PROFILING 환경변수 변경 필요
+  profiler_path: "/opt/aitop/aitop.so"   # 🔴 AppRestart
+
+remote_shell:
+  enabled: true                           # 🟡 AgentRestart
+  allowed_roles: ["admin", "sre"]         # 🟢 Hot
+  max_sessions: 3                         # 🟢 Hot
+  idle_timeout: 600                       # 🟢 Hot
+  blocked_commands: [...]                 # 🟢 Hot
+
+buffer:
+  path: "/var/lib/aitop-agent/buffer.db"  # 🟡 AgentRestart
+  max_size_mb: 500                        # 🟢 Hot
+
+logging:
+  level: "info"                           # 🟢 Hot — 즉시 로그 레벨 변경
+  path: "/var/log/aitop-agent/agent.log"  # 🟡 AgentRestart
+  max_size_mb: 100                        # 🟢 Hot
+  max_backups: 5                          # 🟢 Hot
+```
+
+### 5.8 원격 재기동
+
+UI에서 에이전트 프로세스를 안전하게 원격 재기동할 수 있다.
+
+#### 에이전트 재기동 (🟡 Agent Restart)
+
+```
+재기동 흐름:
+
+1. UI: [🔄 에이전트 재기동] 버튼 클릭
+2. Backend: POST /api/v1/agents/{agentId}/restart
+3. Collection Server → 에이전트 Heartbeat Response에 RESTART_COMMAND 삽입
+4. 에이전트:
+   a. 현재 수집 작업 안전하게 완료 (graceful shutdown, 최대 30초 대기)
+   b. 버퍼 flush → Collection Server 전송
+   c. 프로세스 재시작 (systemd/launchd/Windows Service 기반)
+5. 재기동 후 Heartbeat 재개 → UI에서 🟢 정상 확인
+6. UI: "✅ 에이전트가 재기동되었습니다" 알림
+
+오류 처리:
+  - 5분 내 Heartbeat 없으면 → "⚠️ 재기동 실패 — 수동 확인 필요" 경고
+  - 재기동 중 수집 손실 없음 (버퍼 flush 보장)
+```
+
+#### 애플리케이션 재기동 (🔴 App Restart — 원격 제어 불가)
+
+```
+🔴 AppRestart 항목 변경 시 UI 안내:
+
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️  애플리케이션 재기동이 필요합니다                         │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  변경된 설정:                                             │
+│  • java_agent.enabled: false → true                     │
+│  • java_agent.jar_path: /opt/aitop/aitop-agent.jar      │
+│                                                          │
+│  이 설정은 JVM 시작 시 적용되므로 애플리케이션을            │
+│  재기동해야 합니다. UI에서 원격으로 재기동할 수 없습니다.   │
+│                                                          │
+│  적용 절차:                                              │
+│  1. 서버 관리자에게 아래 JVM 옵션 추가를 요청하세요:        │
+│     -javaagent:/opt/aitop/aitop-agent.jar               │
+│  2. 애플리케이션을 재기동하세요.                           │
+│  3. 재기동 후 AITOP UI에서 SDK 탐지를 확인하세요.          │
+│                                                          │
+│  [📋 설정 복사]  [✕ 닫기]                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+| 재기동 유형 | UI 지원 여부 | 방법 |
+|------------|------------|------|
+| 🟡 에이전트 재기동 | ✅ 원격 지원 | UI [재기동] 버튼 → gRPC RESTART_COMMAND |
+| 🔴 애플리케이션 재기동 | ❌ 원격 불가 | UI 안내문 + 절차 표시만 제공 |
+
 ---
 
 ## 6. 원격 CLI / 터미널 구현
@@ -1439,25 +1678,43 @@ logging:
 
 ```
 /api/v1/fleet
-├── POST   /agents/register          # 에이전트 등록
-├── GET    /agents                    # 에이전트 목록 (필터: project, status, os)
-├── GET    /agents/{agentId}          # 에이전트 상세
-├── PATCH  /agents/{agentId}          # 에이전트 설정 변경
-├── DELETE /agents/{agentId}          # 에이전트 삭제 (retire)
-├── POST   /agents/{agentId}/collect  # 즉시 수집 트리거
-├── GET    /agents/{agentId}/privileges # 권한 리포트 조회
+├── POST   /agents/register                       # 에이전트 등록
+├── GET    /agents                                # 에이전트 목록 (필터: project, status, os, group)
+├── GET    /agents/{agentId}                      # 에이전트 상세
+├── PATCH  /agents/{agentId}                      # 에이전트 메타 변경 (그룹 할당 포함)
+├── DELETE /agents/{agentId}                      # 에이전트 삭제 (retire)
+├── POST   /agents/{agentId}/collect              # 즉시 수집 트리거
+├── GET    /agents/{agentId}/privileges           # 권한 리포트 조회
 │
-├── GET    /plugins                   # 플러그인 목록
-├── POST   /plugins/deploy            # 플러그인 배포 (그룹 단위)
+├── GET    /agents/{agentId}/config               # 에이전트 현재 설정 조회 (기본값 포함 전체 스키마)
+├── PUT    /agents/{agentId}/config               # 에이전트 설정 저장 (신규 revision 생성)
+├── POST   /agents/{agentId}/config/reload        # 설정 즉시 폴링 트리거 (Hot Reload)
+├── GET    /agents/{agentId}/config/history       # 설정 변경 이력 목록
+├── POST   /agents/{agentId}/config/rollback      # 특정 revision으로 설정 롤백
+├── POST   /agents/{agentId}/restart              # 에이전트 원격 재기동 (🟡 AgentRestart)
 │
-├── GET    /jobs                      # 수집 작업 목록
-├── GET    /jobs/{jobId}              # 수집 작업 상세 (진행률, 오류)
+├── GET    /groups                                # 서버 그룹 목록 (프로젝트별)
+├── POST   /groups                                # 새 그룹 생성
+├── GET    /groups/{groupId}                      # 그룹 상세 (소속 에이전트 목록, KPI)
+├── PUT    /groups/{groupId}                      # 그룹 정보 수정
+├── DELETE /groups/{groupId}                      # 그룹 삭제
+├── POST   /groups/{groupId}/agents               # 그룹에 에이전트 할당
+├── DELETE /groups/{groupId}/agents/{agentId}     # 그룹에서 에이전트 제거
+├── GET    /groups/{groupId}/dashboard            # 그룹 대시보드 데이터 (KPI + 서버 목록 + 헬스)
 │
-├── POST   /updates/rollout           # OTA 업데이트 배포 시작
-├── GET    /updates/status            # 업데이트 진행 상태
-├── POST   /updates/rollback          # 롤백 실행
+├── GET    /config/schema                         # 에이전트 설정 스키마 (버전별, 반영수준 포함)
 │
-└── WS     /agents/{agentId}/terminal # 원격 터미널 WebSocket
+├── GET    /plugins                               # 플러그인 목록
+├── POST   /plugins/deploy                        # 플러그인 배포 (그룹 단위)
+│
+├── GET    /jobs                                  # 수집 작업 목록
+├── GET    /jobs/{jobId}                          # 수집 작업 상세 (진행률, 오류)
+│
+├── POST   /updates/rollout                       # OTA 업데이트 배포 시작
+├── GET    /updates/status                        # 업데이트 진행 상태
+├── POST   /updates/rollback                      # 롤백 실행
+│
+└── WS     /agents/{agentId}/terminal             # 원격 터미널 WebSocket
 ```
 
 ### 11.2 gRPC 서비스 정의
@@ -1495,9 +1752,28 @@ service UpdateService {
 }
 
 service ConfigService {
-  // 에이전트 → 서버: 최신 설정 가져오기
+  // 에이전트 → 서버: 최신 설정 가져오기 (Heartbeat Response에 포함되거나 직접 호출)
   rpc GetConfig(ConfigRequest) returns (ConfigResponse);
 }
+
+// HeartbeatResponse 확장 — 재기동 명령 추가
+// message HeartbeatResponse (기존 정의 확장):
+//   repeated RemoteCommand commands = 1;  // RESTART_AGENT 명령 포함 가능
+//   ConfigUpdate config_update = 2;       // 변경된 설정 (reload_level 포함)
+//   UpdateNotification update_available = 3;
+//
+// message ConfigUpdate {
+//   string revision = 1;                  // 설정 revision ID
+//   bytes config_yaml = 2;               // 전체 설정 YAML
+//   repeated string hot_reload_keys = 3; // 🟢 즉시 반영 가능한 키 목록
+//   repeated string restart_keys = 4;    // 🟡 재기동 필요 키 목록
+// }
+//
+// enum RemoteCommandType {
+//   COLLECT_NOW = 0;
+//   RESTART_AGENT = 1;  // 🟡 에이전트 재기동
+//   // 🔴 App Restart는 원격 명령 없음 — UI 안내만 제공
+// }
 ```
 
 ---

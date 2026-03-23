@@ -1,7 +1,7 @@
 # Java / .NET SDK 지원 및 메소드 프로파일링 통합 설계
 
-> **문서 버전**: v1.0.0
-> **작성일**: 2026-03-23 (Session 28)
+> **문서 버전**: v1.1.0
+> **작성일**: 2026-03-23 (Session 28) | **최종 업데이트**: 2026-03-23 (Session 31 — 설정 항목별 반영 수준 태그 추가)
 > **상태**: 설계 완료, 구현 대기 (Phase 24 예정)
 >
 > **관련 문서**:
@@ -1616,16 +1616,43 @@ Java + Python LLM 통합 시나리오의 완전한 프로파일링 표시:
 
 ### 9.4 설정 레퍼런스
 
-| 설정 키 (Java) | 환경변수 (.NET) | 기본값 | 설명 |
-|----------------|----------------|--------|------|
-| `aitop.profiling.enabled` | `AITOP_PROFILING_ENABLED` | `true` | 메소드 프로파일링 활성화 |
-| `aitop.profiling.threshold.ms` | `AITOP_PROFILING_THRESHOLD_MS` | `5` | 메소드 수집 임계치 (ms) |
-| `aitop.jdbc.slow-query.threshold-ms` | `AITOP_DB_SLOW_THRESHOLD_MS` | `100` | 슬로우 쿼리 임계치 (ms) |
-| `aitop.jdbc.capture-bindings` | `AITOP_DB_CAPTURE_BINDINGS` | `true` | SQL 바인딩 파라미터 수집 |
-| `aitop.http.slow-call.threshold-ms` | `AITOP_HTTP_SLOW_THRESHOLD_MS` | `1000` | 슬로우 HTTP 호출 임계치 (ms) |
-| `aitop.http.llm-service-pattern` | `AITOP_HTTP_LLM_PATTERN` | `llm\|predict\|inference` | LLM 서비스 감지 패턴 |
-| `aitop.fileio.slow-call.threshold-ms` | `AITOP_FILEIO_SLOW_THRESHOLD_MS` | `50` | 슬로우 파일 I/O 임계치 (ms) |
-| `aitop.fileio.capture-path` | `AITOP_FILEIO_CAPTURE_PATH` | `true` | 파일 경로 수집 여부 |
+> **반영 수준 (Reload Level)** 범례:
+> - 🟢 **Hot Reload** — 저장 즉시 반영 (에이전트/앱 재기동 불필요). UI에서 변경하면 에이전트 폴링 시 자동 적용.
+> - 🟡 **Agent Restart** — 에이전트 재기동 후 반영. UI에서 [🔄 에이전트 재기동] 버튼으로 원격 재기동 가능.
+> - 🔴 **App Restart** — 대상 애플리케이션(JVM/CLR) 재기동 필요. JVM 시작 인수 또는 CLR 환경변수이므로 원격 제어 불가. UI는 "수동 재기동 필요" 안내만 표시.
+
+| 설정 키 (Java) | 환경변수 (.NET) | 기본값 | 반영 수준 | 설명 |
+|----------------|----------------|--------|-----------|------|
+| `-javaagent:/path/aitop-agent.jar` | `CORECLR_ENABLE_PROFILING=1` | (없음) | 🔴 App Restart | Java Agent / CLR Profiler 활성화 — JVM/CLR 시작 시에만 적용 가능 |
+| `AITOP_AGENT_JAR_PATH` | `CORECLR_PROFILER_PATH` | (없음) | 🔴 App Restart | 에이전트 JAR / CLR Profiler DLL 경로 |
+| `AITOP_SERVER_URL` | `AITOP_SERVER_URL` | (없음) | 🔴 App Restart | Collection Server 주소 — 에이전트 초기화 시 설정됨 |
+| `AITOP_PROJECT_TOKEN` | `AITOP_PROJECT_TOKEN` | (없음) | 🔴 App Restart | 프로젝트 인증 토큰 — JVM 시작 시 로드 |
+| `aitop.profiling.enabled` | `AITOP_PROFILING_ENABLED` | `true` | 🟢 Hot Reload | 메소드 프로파일링 활성화/비활성화 (운영 중 동적 토글 가능) |
+| `aitop.profiling.threshold.ms` | `AITOP_PROFILING_THRESHOLD_MS` | `5` | 🟢 Hot Reload | 메소드 수집 임계치 (ms) — 낮출수록 오버헤드 증가 |
+| `aitop.jdbc.slow-query.threshold-ms` | `AITOP_DB_SLOW_THRESHOLD_MS` | `100` | 🟢 Hot Reload | 슬로우 쿼리 임계치 (ms) |
+| `aitop.jdbc.capture-bindings` | `AITOP_DB_CAPTURE_BINDINGS` | `true` | 🟢 Hot Reload | SQL 바인딩 파라미터 수집 |
+| `aitop.jdbc.mask-columns` | `AITOP_DB_MASK_COLUMNS` | `password,token,email` | 🟢 Hot Reload | PII 자동 마스킹 컬럼 목록 |
+| `aitop.http.slow-call.threshold-ms` | `AITOP_HTTP_SLOW_THRESHOLD_MS` | `1000` | 🟢 Hot Reload | 슬로우 HTTP 호출 임계치 (ms) |
+| `aitop.http.llm-service-pattern` | `AITOP_HTTP_LLM_PATTERN` | `llm\|predict\|inference` | 🟢 Hot Reload | LLM 서비스 감지 패턴 (정규식) |
+| `aitop.http.capture-request-body` | `AITOP_HTTP_CAPTURE_BODY` | `false` | 🟢 Hot Reload | HTTP 요청 바디 캡처 (LLM 프롬프트 수집 시 활성화) |
+| `aitop.fileio.slow-call.threshold-ms` | `AITOP_FILEIO_SLOW_THRESHOLD_MS` | `50` | 🟢 Hot Reload | 슬로우 파일 I/O 임계치 (ms) |
+| `aitop.fileio.capture-path` | `AITOP_FILEIO_CAPTURE_PATH` | `true` | 🟢 Hot Reload | 파일 경로 수집 여부 |
+| `aitop.sampling.rate` | `AITOP_SAMPLING_RATE` | `1.0` | 🟢 Hot Reload | 트레이스 샘플링 비율 (0.0~1.0) |
+| `aitop.batch.interval-ms` | `AITOP_BATCH_INTERVAL_MS` | `5000` | 🟢 Hot Reload | 데이터 배치 전송 주기 (ms) |
+| `aitop.log.level` | `AITOP_LOG_LEVEL` | `INFO` | 🟢 Hot Reload | 에이전트 로그 레벨 |
+| `aitop.instrumentation.packages` | `AITOP_INSTRUMENT_PACKAGES` | (자동) | 🟡 Agent Restart | 계측 대상 패키지 범위 지정 — 새 패키지 추가 시 재기동 |
+
+#### 반영 수준별 적용 절차 요약
+
+| 수준 | Java 예시 항목 | .NET 예시 항목 | 적용 방법 |
+|------|----------------|----------------|-----------|
+| 🔴 App Restart | `-javaagent` JVM 옵션, `AITOP_SERVER_URL` | `CORECLR_ENABLE_PROFILING`, `CORECLR_PROFILER_PATH` | 애플리케이션 재기동. UI에서 안내문만 표시. |
+| 🟡 Agent Restart | `aitop.instrumentation.packages` | `AITOP_INSTRUMENT_PACKAGES` | UI에서 [🔄 에이전트 재기동] 버튼 클릭. |
+| 🟢 Hot Reload | `aitop.profiling.enabled`, 임계치, 로그 레벨 | `AITOP_PROFILING_ENABLED`, 임계치, 로그 레벨 | UI에서 저장 즉시 반영. 재기동 불필요. |
+
+> **⚠️ 주의**: 🔴 App Restart 항목은 JVM 또는 CLR이 시작될 때 단 한 번만 읽는 값입니다.
+> 런타임 중 환경변수를 변경하거나 설정파일을 수정해도 재기동 전까지 적용되지 않습니다.
+> UI는 이 항목 변경 시 "애플리케이션 재기동이 필요합니다. 서버 관리자에게 문의하세요." 경고를 표시합니다.
 
 ### 9.5 파일 I/O 호출 프로파일링
 
