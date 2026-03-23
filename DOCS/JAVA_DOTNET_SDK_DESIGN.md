@@ -65,6 +65,7 @@ APM 시장의 현실을 보면 명확합니다:
 6. [AI 서비스 융합 시나리오](#6-ai-서비스-융합-시나리오)
 7. [수집 메트릭 확장](#7-수집-메트릭-확장)
 8. [구현 로드맵](#8-구현-로드맵)
+9. [DB 호출 & 외부 HTTP 호출 프로파일링 상세](#9-db-호출--외부-http-호출-프로파일링-상세)
 
 ---
 
@@ -328,7 +329,155 @@ public class SqlBindingCapture {
 }
 ```
 
-### 2.5 JVM 메트릭 수집
+### 2.5 DB 호출 프로파일링 — 슬로우 쿼리 자동 감지
+
+> 섹션 2.4의 SQL 바인딩 캡처에 더해, AITOP은 JDBC 계층에서 **슬로우 쿼리 자동 감지**와 **N+1 패턴 경고**를 제공합니다.
+
+```java
+// sdk-instrumentation/java/src/main/java/io/aitop/jdbc/SlowQueryDetector.java
+package io.aitop.jdbc;
+
+/**
+ * JDBC 슬로우 쿼리 감지기.
+ * 임계치(기본 100ms) 초과 쿼리를 자동으로 XLog에 ⚠️ 표시하고
+ * 슬로우 쿼리 집계 메트릭에 카운팅한다.
+ */
+public class SlowQueryDetector {
+
+    // 슬로우 쿼리 임계치 (기본 100ms, 설정 가능)
+    private static final long SLOW_THRESHOLD_MS =
+        Long.getLong("aitop.jdbc.slow-query.threshold-ms", 100L);
+
+    // 단일 트랜잭션 내 쿼리 횟수 추적 (N+1 감지용)
+    private static final ThreadLocal<QueryCounter> txQueryCounter =
+        ThreadLocal.withInitial(QueryCounter::new);
+
+    public static void onQueryComplete(Span span, String sql, long durationMs,
+                                       int rowsAffected) {
+        // 쿼리 횟수 누적
+        QueryCounter counter = txQueryCounter.get();
+        counter.increment(sql);
+
+        // 슬로우 쿼리 감지
+        if (durationMs >= SLOW_THRESHOLD_MS) {
+            span.setAttribute("aitop.sql.slow", true);
+            span.setAttribute("aitop.sql.slow_threshold_ms", SLOW_THRESHOLD_MS);
+            // XLog 표시용 이벤트
+            span.addEvent("slow_query_detected", Attributes.of(
+                AttributeKey.longKey("duration_ms"), durationMs,
+                AttributeKey.stringKey("sql.preview"),
+                    sql.length() > 200 ? sql.substring(0, 200) + "..." : sql
+            ));
+        }
+
+        // N+1 쿼리 패턴 감지: 동일 쿼리가 10회 이상 반복
+        if (counter.getCount(sql) >= 10) {
+            span.setAttribute("aitop.sql.n_plus_one_suspected", true);
+            span.setAttribute("aitop.sql.repeat_count", counter.getCount(sql));
+        }
+
+        span.setAttribute("db.rows_affected", rowsAffected);
+        span.setAttribute("aitop.sql.duration_ms", durationMs);
+    }
+}
+```
+
+**슬로우 쿼리 XLog 표시**:
+```
+메소드 콜 트리 내 슬로우 쿼리 강조 표시
+──────────────────────────────────────────────────────────────────
+▼ OrderService.processOrder()                           ■■■■ 380ms
+  ▶ OrderDAO.getItems()                                 ■■■ 320ms
+    [🔴 SQL ⚠️ SLOW 320ms]                              ← 슬로우 표시
+    SELECT oi.*, p.name, p.price
+    FROM order_items oi JOIN products p ON oi.product_id = p.id
+    WHERE oi.order_id=?  →  바인딩: ["ORD-9921"]
+    rows: 47  |  임계치(100ms) 초과 → 인덱스 점검 권고
+──────────────────────────────────────────────────────────────────
+```
+
+### 2.6 외부 HTTP/소켓 호출 프로파일링 (Java)
+
+OTel Java Agent는 Apache HttpClient, OkHttp, `java.net.HttpURLConnection`을 자동 계측합니다. AITOP은 여기에 **콜 트리 인라인 표시**와 **타임아웃/실패 감지**를 추가합니다.
+
+```java
+// sdk-instrumentation/java/src/main/java/io/aitop/http/HttpClientProfiler.java
+package io.aitop.http;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributeKey;
+
+/**
+ * 외부 HTTP 호출 프로파일링 확장.
+ * OTel Java Agent의 HttpClient 계측에 AITOP 특화 정보를 추가한다.
+ *
+ * 추가 정보:
+ * - 응답 본문 크기 (aitop.http.response_size_bytes)
+ * - 슬로우 외부 호출 감지 (기본 1000ms)
+ * - Python LLM 서비스 호출 여부 자동 감지 (aitop.http.is_llm_call)
+ * - Trace Context W3C 헤더 자동 삽입 (OTel 기본 제공)
+ */
+public class HttpClientProfiler {
+
+    private static final long SLOW_HTTP_THRESHOLD_MS =
+        Long.getLong("aitop.http.slow-call.threshold-ms", 1000L);
+
+    // Python LLM 서비스 패턴 (설정 가능)
+    private static final String LLM_SERVICE_PATTERN =
+        System.getProperty("aitop.http.llm-service-pattern",
+            "llm|predict|inference|generate|completion");
+
+    public static void onHttpComplete(Span span, String url, String method,
+                                      int statusCode, long durationMs,
+                                      long responseSizeBytes) {
+        span.setAttribute("aitop.http.url", url);
+        span.setAttribute("aitop.http.method", method);
+        span.setAttribute("aitop.http.status_code", statusCode);
+        span.setAttribute("aitop.http.duration_ms", durationMs);
+        span.setAttribute("aitop.http.response_size_bytes", responseSizeBytes);
+
+        // 슬로우 외부 호출 감지
+        if (durationMs >= SLOW_HTTP_THRESHOLD_MS) {
+            span.setAttribute("aitop.http.slow", true);
+            span.addEvent("slow_http_call_detected", Attributes.of(
+                AttributeKey.longKey("duration_ms"), durationMs,
+                AttributeKey.stringKey("url"), url
+            ));
+        }
+
+        // LLM 서비스 호출 감지 → XLog에서 특별 아이콘 표시
+        boolean isLlmCall = url.matches(".*(" + LLM_SERVICE_PATTERN + ").*");
+        span.setAttribute("aitop.http.is_llm_call", isLlmCall);
+
+        // 5xx 에러: 외부 서비스 장애 마킹
+        if (statusCode >= 500) {
+            span.setAttribute("aitop.http.downstream_error", true);
+            span.setAttribute("error", true);
+        }
+    }
+}
+```
+
+**콜 트리 내 외부 호출 인라인 표시**:
+```
+▼ MLService.predict()                              ■■■■■■■■■ 198ms
+  ▶ FeatureExtractor.run()                         ■■ 45ms
+  ▶ ModelInference.call()                ■■■■■■■ 150ms
+    [🌐 HTTP] POST http://python-llm/predict
+              상태코드: 200  응답시간: 150ms  크기: 2.1KB
+              → LLM 서비스 감지됨  Trace 연결 [▶]
+
+  ▶ PaymentService.charge()              ■ 15ms
+    [🌐 HTTP] POST https://payment.api/charge
+              상태코드: 200  응답시간: 15ms
+
+  ▶ NotificationService.send()           ■ 8ms
+    [🌐 HTTP] POST https://notify.svc/push
+              상태코드: 503  ⚠️ 외부 서비스 오류!
+```
+
+### 2.7 JVM 메트릭 수집
 
 ```java
 // sdk-instrumentation/java/src/main/java/io/aitop/metrics/JvmMetricsCollector.java
@@ -550,7 +699,189 @@ public class AitopProfilingMiddleware
 // app.UseMiddleware<AitopProfilingMiddleware>();
 ```
 
-### 3.4 CLR 메트릭 수집
+### 3.4 DB 호출 프로파일링 — ADO.NET / EF Core (.NET)
+
+.NET에서는 `System.Data.Common.DbCommand`와 Entity Framework Core의 `DbContext.SaveChanges()`를 훅하여 DB 호출을 메소드 콜 트리에 인라인으로 표시합니다.
+
+```csharp
+// sdk-instrumentation/dotnet/src/Aitop.Instrumentation/DbCommandProfiler.cs
+using System.Data.Common;
+using System.Diagnostics;
+using OpenTelemetry.Trace;
+
+namespace Aitop.Instrumentation;
+
+/// <summary>
+/// ADO.NET DbCommand 프로파일링.
+/// OTel .NET의 기본 DB 계측에 AITOP 특화 정보를 추가한다.
+///
+/// 추가 정보:
+/// - SQL 바인딩 파라미터 (aitop.db.bindings)
+/// - 슬로우 쿼리 감지 (기본 100ms)
+/// - 영향받은 행 수 (aitop.db.rows_affected)
+/// - N+1 패턴 감지
+/// </summary>
+public static class DbCommandProfiler
+{
+    private static readonly long SlowThresholdMs =
+        long.TryParse(Environment.GetEnvironmentVariable("AITOP_DB_SLOW_THRESHOLD_MS"),
+            out long t) ? t : 100L;
+
+    // 트랜잭션 내 쿼리 카운터 (N+1 감지용)
+    [ThreadStatic]
+    private static Dictionary<string, int>? _queryCounter;
+
+    public static void OnCommandComplete(Activity? activity, DbCommand command,
+                                          long durationMs, int rowsAffected)
+    {
+        if (activity == null) return;
+
+        var sql = command.CommandText;
+
+        // 바인딩 파라미터 캡처
+        var bindings = CaptureBindings(command);
+        if (bindings.Length > 0)
+            activity.SetTag("aitop.db.bindings", bindings);
+
+        activity.SetTag("aitop.db.duration_ms", durationMs);
+        activity.SetTag("aitop.db.rows_affected", rowsAffected);
+
+        // 슬로우 쿼리 감지
+        if (durationMs >= SlowThresholdMs)
+        {
+            activity.SetTag("aitop.db.slow", true);
+            activity.AddEvent(new ActivityEvent("slow_query_detected",
+                tags: new ActivityTagsCollection
+                {
+                    ["duration_ms"] = durationMs,
+                    ["sql.preview"] = sql.Length > 200 ? sql[..200] + "..." : sql
+                }));
+        }
+
+        // N+1 감지
+        _queryCounter ??= new Dictionary<string, int>();
+        var key = NormalizeSql(sql);
+        _queryCounter.TryGetValue(key, out int count);
+        _queryCounter[key] = count + 1;
+        if (_queryCounter[key] >= 10)
+            activity.SetTag("aitop.db.n_plus_one_suspected", true);
+    }
+
+    private static string CaptureBindings(DbCommand command)
+    {
+        if (command.Parameters.Count == 0) return "";
+
+        var parts = new List<string>();
+        foreach (DbParameter p in command.Parameters)
+        {
+            var val = IsPii(p.ParameterName) ? "****" : p.Value?.ToString() ?? "null";
+            if (val.Length > 100) val = val[..100] + "...";
+            parts.Add($"{p.ParameterName}={val}");
+        }
+        return string.Join(", ", parts);
+    }
+
+    private static bool IsPii(string name) =>
+        new[] { "password", "passwd", "email", "phone", "ssn", "token", "secret" }
+            .Any(p => name.Contains(p, StringComparison.OrdinalIgnoreCase));
+
+    private static string NormalizeSql(string sql) =>
+        System.Text.RegularExpressions.Regex.Replace(sql, @"'[^']*'|\d+", "?");
+}
+```
+
+### 3.5 외부 HTTP/소켓 호출 프로파일링 (.NET)
+
+OTel .NET은 `System.Net.Http.HttpClient`를 자동 계측합니다. AITOP은 여기에 콜 트리 인라인 표시와 LLM 서비스 감지를 추가합니다.
+
+```csharp
+// sdk-instrumentation/dotnet/src/Aitop.Instrumentation/HttpClientProfiler.cs
+using System.Diagnostics;
+using System.Net.Http;
+
+namespace Aitop.Instrumentation;
+
+/// <summary>
+/// HttpClient 외부 호출 프로파일링 확장.
+/// OTel .NET 기본 HttpClient 계측에 AITOP 콜 트리 인라인 표시 정보를 추가한다.
+/// </summary>
+public static class HttpClientProfiler
+{
+    private static readonly long SlowThresholdMs =
+        long.TryParse(Environment.GetEnvironmentVariable("AITOP_HTTP_SLOW_THRESHOLD_MS"),
+            out long t) ? t : 1000L;
+
+    private static readonly string LlmServicePattern =
+        Environment.GetEnvironmentVariable("AITOP_HTTP_LLM_PATTERN")
+            ?? "llm|predict|inference|generate|completion";
+
+    public static void OnRequestComplete(Activity? activity, HttpRequestMessage request,
+                                          HttpResponseMessage? response,
+                                          long durationMs, long responseSizeBytes)
+    {
+        if (activity == null) return;
+
+        var url = request.RequestUri?.ToString() ?? "";
+        var method = request.Method.Method;
+        var statusCode = (int?)response?.StatusCode ?? 0;
+
+        activity.SetTag("aitop.http.url", url);
+        activity.SetTag("aitop.http.method", method);
+        activity.SetTag("aitop.http.status_code", statusCode);
+        activity.SetTag("aitop.http.duration_ms", durationMs);
+        activity.SetTag("aitop.http.response_size_bytes", responseSizeBytes);
+
+        // 슬로우 외부 호출 감지
+        if (durationMs >= SlowThresholdMs)
+        {
+            activity.SetTag("aitop.http.slow", true);
+            activity.AddEvent(new ActivityEvent("slow_http_call_detected",
+                tags: new ActivityTagsCollection
+                {
+                    ["duration_ms"] = durationMs,
+                    ["url"] = url
+                }));
+        }
+
+        // LLM 서비스 호출 감지 → XLog에서 특별 아이콘
+        bool isLlmCall = System.Text.RegularExpressions.Regex
+            .IsMatch(url, LlmServicePattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        activity.SetTag("aitop.http.is_llm_call", isLlmCall);
+
+        // 5xx: 다운스트림 서비스 장애
+        if (statusCode >= 500)
+        {
+            activity.SetTag("aitop.http.downstream_error", true);
+            activity.SetStatus(ActivityStatusCode.Error, $"Downstream HTTP {statusCode}");
+        }
+    }
+}
+```
+
+**활성화 방법 (Program.cs)**:
+```csharp
+// ASP.NET Core 미들웨어 등록 + HttpClient 프로파일링 활성화
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation(opts =>
+        {
+            opts.EnrichWithHttpRequestMessage = (activity, req) =>
+                HttpClientProfiler.OnRequestStart(activity, req);
+            opts.EnrichWithHttpResponseMessage = (activity, res) =>
+                HttpClientProfiler.OnResponseReceived(activity, res);
+        })
+        .AddEntityFrameworkCoreInstrumentation(opts =>
+        {
+            opts.EnrichWithIDbCommand = (activity, cmd) =>
+                DbCommandProfiler.EnrichWithCommand(activity, (DbCommand)cmd);
+        })
+    );
+
+app.UseMiddleware<AitopProfilingMiddleware>();
+```
+
+### 3.6 CLR 메트릭 수집
 
 ```csharp
 // sdk-instrumentation/dotnet/src/Aitop.Instrumentation/ClrMetricsCollector.cs
@@ -1044,6 +1375,44 @@ Java Batch (Spring Batch)
 | `method.sql.count` | Counter | 1 | `language`, `method` | 메소드당 SQL 호출 수 |
 | `method.sql.duration` | Histogram | ms | `language`, `method` | 메소드 내 SQL 총 소요 시간 |
 
+### 7.4 DB 호출 프로파일링 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `db.query.duration` | Histogram | ms | `language`, `db.system`, `service` | DB 쿼리 실행 시간 분포 |
+| `db.query.slow.count` | Counter | 1 | `language`, `db.system`, `service` | 슬로우 쿼리 발생 횟수 |
+| `db.query.rows_affected` | Histogram | 1 | `language`, `db.system`, `service` | 쿼리당 영향받은 row 수 |
+| `db.n_plus_one.suspected` | Counter | 1 | `language`, `class`, `method` | N+1 쿼리 패턴 감지 횟수 |
+| `db.connections.active` | Gauge | 1 | `language`, `pool`, `service` | 활성 DB 커넥션 수 |
+| `db.connections.wait_time` | Histogram | ms | `language`, `pool`, `service` | 커넥션 풀 대기 시간 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `db.query.duration` P95 | > 200ms | > 1s |
+| `db.query.slow.count` (rate/5m) | > 10/5m | > 50/5m |
+| `db.connections.active / max` | > 0.80 | > 0.95 |
+
+### 7.5 외부 HTTP/소켓 호출 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `http.client.duration` | Histogram | ms | `language`, `server.address`, `http.method`, `service` | 외부 HTTP 호출 응답시간 |
+| `http.client.slow.count` | Counter | 1 | `language`, `server.address`, `service` | 슬로우 외부 호출 횟수 |
+| `http.client.error.count` | Counter | 1 | `language`, `server.address`, `http.status_code`, `service` | 외부 호출 에러 횟수 |
+| `http.client.llm.count` | Counter | 1 | `language`, `server.address`, `service` | LLM 서비스 HTTP 호출 횟수 |
+| `http.client.llm.duration` | Histogram | ms | `language`, `server.address`, `service` | LLM 서비스 응답시간 |
+| `http.client.response_size` | Histogram | bytes | `language`, `server.address`, `service` | 외부 호출 응답 크기 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `http.client.duration` P95 | > 1s | > 3s |
+| `http.client.error.count` (rate/5m) | > 5% | > 10% |
+| `http.client.llm.duration` P95 | > 2s | > 5s |
+
 ---
 
 ## 8. 구현 로드맵
@@ -1087,15 +1456,164 @@ Java Batch (Spring Batch)
 | 기능 | Scouter | Pinpoint | **AITOP (설계)** |
 |------|---------|---------|-----------------|
 | Java 메소드 트리 | ✅ | ✅ | ✅ 동등 수준 목표 |
-| .NET 지원 | ❌ | ❌ | ✅ **차별화** |
+| .NET 지원 | ❌ | ⚠️ 제한적 | ✅ **차별화** |
 | Python AI 체인 | ❌ | ❌ | ✅ **핵심 강점** |
 | Java↔Python 통합 뷰 | ❌ | ❌ | ✅ **독보적 차별화** |
-| LLM TTFT/TPS | ❌ | ❌ | ✅ |
-| GPU 모니터링 | ❌ | ❌ | ✅ |
+| DB 호출 인라인 표시 | ✅ | ✅ | ✅ 동등 |
+| SQL 바인딩 파라미터 캡처 | ✅ | ✅ | ✅ 동등 |
+| 슬로우 쿼리 자동 감지 | ✅ | ✅ | ✅ 동등 |
+| N+1 쿼리 패턴 감지 | ✅ | ✅ | ✅ 동등 |
+| 외부 HTTP 호출 인라인 표시 | ✅ | ✅ | ✅ 동등 |
+| HTTP 슬로우 호출 감지 | ✅ | ⚠️ | ✅ 동등 |
+| LLM 서비스 HTTP 감지 | ❌ | ❌ | ✅ **차별화** |
+| LLM TTFT/TPS | ❌ | ❌ | ✅ **독보적** |
+| GPU 모니터링 | ❌ | ❌ | ✅ **독보적** |
+| OTel 표준 기반 | ❌ 독자 포맷 | ❌ 독자 포맷 | ✅ 벤더 중립 |
 | OTel 표준 기반 | ❌ | ❌ | ✅ 벤더 중립 |
 | 오픈소스 | ✅ | ✅ | 📋 상용 솔루션 |
 
 ---
 
+## 9. DB 호출 & 외부 HTTP 호출 프로파일링 상세
+
+> 이 섹션은 메소드 콜 트리에서 DB 호출과 외부 HTTP 호출이 어떻게 **인라인**으로 표시되는지, 그 구현 원리와 시각 표현을 종합적으로 설명합니다.
+
+### 9.1 왜 인라인 표시인가?
+
+Scouter/Pinpoint를 사용해 본 개발자라면 알고 있습니다: **"어느 메소드에서 느린 SQL이 나왔는가?"**를 파악하려면 DB 호출이 콜 트리 내에 인라인으로 표시되어야 합니다.
+
+```
+❌ 별도 탭 방식 (APM 일반)
+──────────────────────────────
+[메소드 탭]          [SQL 탭]
+RecommendCtrl         SELECT * FROM users
+  UserService         SELECT * FROM products
+  MLService         ← 어떤 메소드에서 실행된 것인지 불명확
+
+✅ 콜 트리 인라인 방식 (AITOP)
+──────────────────────────────
+▼ RecommendController (245ms)
+  ▼ UserService.getProfile (15ms)
+    ▼ UserDAO.findById (14ms)
+      [🗄 SQL] SELECT * FROM users WHERE id=?  → 14ms
+  ▼ MLService.predict (198ms)
+    ▶ ModelInference.call (150ms)
+      [🌐 HTTP] POST /predict → 150ms   ← 병목의 원인이 즉시 보임
+```
+
+### 9.2 구현 계층도
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     요청 처리 흐름                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  HTTP 요청 도착                                                  │
+│      │                                                          │
+│      ▼                                                          │
+│  [AITOP 미들웨어] MethodProfilingSession.Begin(txId)            │
+│      │                                                          │
+│      ▼                                                          │
+│  컨트롤러 → 서비스 → DAO 메소드 호출 체인                          │
+│      │                                                          │
+│      ├─── [JDBC/ADO.NET 훅] ──────────────────────────────────┐ │
+│      │    PreparedStatement.execute()                          │ │
+│      │    DbCommand.ExecuteAsync()                             │ │
+│      │    → SQL + 바인딩 + 실행시간 캡처                        │ │
+│      │    → 현재 콜 스택 프레임에 DB 이벤트로 첨부              │ │
+│      │                                                         │ │
+│      ├─── [HttpClient 훅] ────────────────────────────────────┤ │
+│      │    java.net.HttpURLConnection                           │ │
+│      │    System.Net.Http.HttpClient                           │ │
+│      │    → URL + 메소드 + 상태코드 + 응답시간 캡처             │ │
+│      │    → LLM 서비스 감지 → 자식 Trace 연결 준비              │ │
+│      │                                                         │ │
+│      ▼                                                         │ │
+│  응답 반환                                                      │ │
+│      │                                                         │ │
+│      ▼                                                         │ │
+│  [AITOP 미들웨어] MethodProfilingSession.End()                  │ │
+│      → 콜 트리 + DB 이벤트 + HTTP 이벤트 직렬화                  │ │
+│      → OTel Span 이벤트로 기록 → Collector 전송                 │ │
+│                                                                 │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 9.3 XLog 트랜잭션 상세 최종 예시
+
+Java + Python LLM 통합 시나리오의 완전한 프로파일링 표시:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  트랜잭션 상세 [Java] recommend-service                             │
+│  GET /api/recommend  ●  412ms  ●  200 OK  ●  txid: a1b2c3d4       │
+├─ 타임라인 ─────────────────────────────────────────────────────────┤
+│  0     50    100    150    200    250    300    350    400    412   │
+│  ├──────────────────────────────────────────────────────────────┤  │
+│  [Java: RecommendController      ████████████████████████████████] │
+│    [Java: UserService.getProfile ████]                              │
+│    [Java: MLService.predict               ████████████████████████] │
+│      [Python LLM: /predict                     ███████████████████] │
+├─ 메소드 콜 트리 ──────────────────────────────────────────────────┤
+│                                                                    │
+│  ▼ RecommendController.getRecommendations()          ■■■■■ 412ms   │
+│                                                                    │
+│    ▼ AuthFilter.doFilter()                           ■ 2ms         │
+│                                                                    │
+│    ▼ UserService.getProfile()                        ■ 23ms        │
+│      ▼ UserDAO.findById()                            ■ 20ms        │
+│        [🗄 SQL] SELECT id, name, tier FROM users                    │
+│                WHERE id=?  →  바인딩: ["u-42"]  rows:1  20ms       │
+│      ▼ UserDAO.getPreferences()                      ■ 3ms         │
+│        [🗄 SQL] SELECT key, val FROM prefs WHERE uid=?  →  2ms     │
+│                바인딩: ["u-42"]  rows:5                             │
+│                                                                    │
+│    ▼ CacheService.getFromRedis()                     ■ 1ms         │
+│      [📦 Redis] GET recommend:u-42  →  MISS  1ms                  │
+│                                                                    │
+│    ▼ MLService.predict()                         ■■■■■■■■■ 382ms   │
+│      ▶ FeatureExtractor.run()                    ■■ 32ms           │
+│        [🗄 SQL] SELECT f.* FROM features WHERE uid=?  →  28ms     │
+│                바인딩: ["u-42"]  rows:120                          │
+│                                                                    │
+│      ▶ ModelInference.callLlm()             ■■■■■■■ 150ms         │
+│        [🌐 HTTP→LLM] POST http://python-llm/predict               │
+│                       상태코드: 200  응답: 2.1KB  150ms            │
+│                       → Trace 연결: python-llm-service [▶]        │
+│                                                                    │
+│      ▶ CacheService.put()                            ■ 2ms         │
+│        [📦 Redis] SET recommend:u-42 EX 300  →  1.8ms             │
+│                                                                    │
+│    ▼ ResponseMapper.toJSON()                         ■ 3ms         │
+│                                                                    │
+├─ 요약 ─────────────────────────────────────────────────────────────┤
+│  SQL 3건 / 총 50ms  │  슬로우 쿼리: 없음                           │
+│  HTTP 외부 1건 / 총 150ms (전체의 36%) → LLM 서비스               │
+│  Redis 2건 / 총 3ms  │  예외: 없음  │  GC 정지: 0회               │
+├─ Python LLM Trace 연결 (▶ 클릭 시 확장) ─────────────────────────┤
+│  [Python] python-llm-service  153ms  200 OK                        │
+│  ├─ Guardrail 입력     12ms  PASS                                   │
+│  ├─ 임베딩 생성        45ms  text-embedding-3-small  128tok         │
+│  ├─ VectorDB 검색      38ms  Qdrant  5건 반환                       │
+│  ├─ LLM 생성          820ms  llama3-70b                             │
+│  │   TTFT: 180ms  TPS: 42tok/s  입력 512tok  출력 380tok           │
+│  └─ Guardrail 출력     8ms  PASS                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.4 설정 레퍼런스
+
+| 설정 키 (Java) | 환경변수 (.NET) | 기본값 | 설명 |
+|----------------|----------------|--------|------|
+| `aitop.profiling.enabled` | `AITOP_PROFILING_ENABLED` | `true` | 메소드 프로파일링 활성화 |
+| `aitop.profiling.threshold.ms` | `AITOP_PROFILING_THRESHOLD_MS` | `5` | 메소드 수집 임계치 (ms) |
+| `aitop.jdbc.slow-query.threshold-ms` | `AITOP_DB_SLOW_THRESHOLD_MS` | `100` | 슬로우 쿼리 임계치 (ms) |
+| `aitop.jdbc.capture-bindings` | `AITOP_DB_CAPTURE_BINDINGS` | `true` | SQL 바인딩 파라미터 수집 |
+| `aitop.http.slow-call.threshold-ms` | `AITOP_HTTP_SLOW_THRESHOLD_MS` | `1000` | 슬로우 HTTP 호출 임계치 (ms) |
+| `aitop.http.llm-service-pattern` | `AITOP_HTTP_LLM_PATTERN` | `llm\|predict\|inference` | LLM 서비스 감지 패턴 |
+
+---
+
 *이 문서는 Phase 24 구현 시 상세 기술 스펙으로 확장됩니다.*
-*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md)*
+*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) | [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md)*

@@ -38,6 +38,7 @@
 4. [기능 격차 분석 (Gap Analysis)](#4-기능-격차-분석-gap-analysis)
 5. [추가 개발 로드맵](#5-추가-개발-로드맵)
 6. [상용화 전략](#6-상용화-전략)
+7. [메소드 프로파일링 전략](#7-메소드-프로파일링-전략)
 
 ---
 
@@ -379,6 +380,246 @@ Month 10-12:
 2. **콘텐츠 마케팅**: "AI 서비스 모니터링 가이드" 시리즈 블로그 + 컨퍼런스 발표
 3. **파트너십**: GPU 클라우드 업체, AI 플랫폼 업체와 기술 파트너십
 4. **POC 프로그램**: Enterprise 고객 대상 2주 무료 POC → 성공 사례 축적
+
+---
+
+---
+
+## 7. 메소드 프로파일링 전략
+
+> **핵심 개념**: 메소드 프로파일링은 하나의 HTTP 요청이 처리되는 동안 내부에서 호출된 메소드들을 **계층 구조(콜 트리)**로 시각화하는 기능입니다.
+> Scouter/Pinpoint가 Java에서 제공하는 기능을 AITOP은 Java + .NET + Python LLM 통합 뷰로 확장합니다.
+
+### 7.1 현재 접근 방식
+
+AITOP은 **OTel auto-instrumentation + 언어별 런타임 확장**의 하이브리드 방식을 채택합니다:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     하이브리드 계측 아키텍처                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Java               .NET                Python/Go/Node          │
+│  ──────             ────                ──────────────          │
+│  OTel Java Agent    OTel .NET Auto      OTel SDK (기존)          │
+│  + ByteBuddy 확장   + CLR Profiler API                          │
+│  (메소드 트리)      (메소드 JIT Hook)  (LLM 체인 특화)            │
+│       │                   │                   │                 │
+│       └───────────────────┴───────────────────┘                 │
+│                            │                                    │
+│                   OTel Collector / AITOP Agent                  │
+│                            │                                    │
+│                   AITOP Backend + XLog 통합 뷰                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- **Java**: `opentelemetry-javaagent.jar` + AITOP Extension (ByteBuddy Advice) — JVM 시작 시 `-javaagent` 옵션만 추가
+- **.NET**: OTel .NET Auto-Instrumentation + CLR Profiler (`ICorProfilerCallback`) — 환경변수로 활성화
+- **Python/Node/Go**: 기존 OTel SDK 계측 유지 (LLM 체인 뷰로 연결)
+
+### 7.2 구현 방식 비교
+
+| 구분 | 직접 개발 (from scratch) | OTel만 사용 | **하이브리드 (현재 전략)** |
+|------|--------------------------|-------------|--------------------------|
+| **개요** | 자체 바이트코드 계측 프레임워크 | OTel auto-instrumentation만 | OTel 기반 + 언어별 런타임 확장 |
+| **장점** | 완전한 제어권, 독자 최적화 가능 | 표준화, 유지보수 부담 최소 | 빠른 개발 + 부족한 부분만 보완 |
+| **단점** | 개발/유지보수 비용 매우 높음 | 메소드 수준 프로파일링 미지원 | OTel 의존성, 업그레이드 관리 필요 |
+| **메소드 콜 트리** | ✅ 완전 제어 | ❌ Span 수준만 | ✅ 임계치 기반 선택적 수집 |
+| **DB 호출 인라인** | ✅ 자유로운 구현 | ⚠️ 별도 Span (트리 내 미통합) | ✅ AITOP 확장으로 인라인 표시 |
+| **외부 호출 인라인** | ✅ 자유로운 구현 | ⚠️ 별도 Span | ✅ HTTP/소켓 계층 훅으로 캡처 |
+| **SQL 바인딩 캡처** | ✅ 완전 제어 | ❌ 쿼리만 (파라미터 없음) | ✅ PreparedStatement/ADO.NET 훅 |
+| **슬로우 쿼리 자동 감지** | ✅ | ❌ | ✅ 임계치 설정 (기본 100ms) |
+| **벤더 락인** | ✅ 없음 (자체) | ❌ OTel 의존 | ⚠️ OTel 의존 (표준이므로 낮음) |
+| **Python LLM 연동** | 별도 개발 필요 | ⚠️ Trace 연결만 | ✅ OTel Trace ID로 자동 연결 |
+| **개발 속도** | 느림 (6~12개월) | 빠름 (1~2개월) | **적당 (3~4개월)** |
+| **대표 사례** | Scouter, Pinpoint | Grafana Tempo | **AITOP (채택)** |
+
+> **결론**: 하이브리드 방식은 "OTel 생태계의 넓은 프레임워크 커버리지 + AITOP 고유 기능(메소드 트리, DB 인라인, LLM 연결)"을 동시에 얻는 최적 전략입니다.
+
+### 7.3 핵심 프로파일링 관점
+
+#### DB 호출 프로파일링
+
+DB 쿼리는 메소드 콜 트리 안에 **인라인으로** 표시됩니다 (별도 탭이 아님).
+
+```
+메소드 콜 트리 내 DB 호출 인라인 표시
+──────────────────────────────────────────────────────────
+▼ UserService.getProfile()                        ■ 15ms
+  ▼ UserDAO.findById()                            ■ 14ms
+    [🗄 SQL] SELECT id, name, tier FROM users           ← SQL 아이콘
+             WHERE id=?                                 ← 쿼리 미리보기
+             바인딩: ["user-42"]  rows: 1               ← 바인딩 파라미터 포함
+             응답시간: 14ms  ← DB 서버 도착~결과 반환까지
+──────────────────────────────────────────────────────────
+```
+
+**캡처 원리**:
+- **Java**: JDBC `PreparedStatement.execute*()` 메소드를 ByteBuddy로 후킹 → SQL 문 + 바인딩 파라미터 + 실행 시간 캡처
+- **.NET**: Entity Framework Core / ADO.NET `DbCommand.ExecuteAsync()` 훅 → SQL + 파라미터 캡처
+- **슬로우 쿼리 자동 감지**: 기본 100ms 초과 시 XLog에 ⚠️ 표시 + 별도 슬로우 쿼리 목록 집계
+- **PII 마스킹**: `password`, `email`, `ssn` 등 민감 컬럼명 자동 감지 → `****` 처리
+
+#### 외부 소켓/HTTP 호출 프로파일링
+
+REST API, gRPC, 소켓 호출도 메소드 콜 트리 안에 **인라인으로** 표시됩니다.
+
+```
+메소드 콜 트리 내 외부 호출 인라인 표시
+──────────────────────────────────────────────────────────
+▼ MLService.predict()                        ■■■■■■■■■ 198ms
+  ▶ FeatureExtractor.run()                   ■■ 45ms
+  ▶ ModelInference.call()          ■■■■■■■ 150ms
+    [🌐 HTTP] POST http://python-llm-service/predict  ← 지구본 아이콘
+              상태코드: 200  응답시간: 150ms             ← URL + 응답시간
+              → Trace 연결: python-llm-service [▶]     ← 자식 Trace 연결
+──────────────────────────────────────────────────────────
+```
+
+**캡처 원리**:
+- **Java**: Apache HttpClient, OkHttp, `java.net.HttpURLConnection` 자동 계측 (OTel Java Agent 기본 지원)
+- **.NET**: `System.Net.Http.HttpClient` 자동 계측 (OTel .NET 기본 지원)
+- **추가 정보**: URL, HTTP 메소드, 상태코드, 요청/응답 크기, 응답시간 — 콜 트리 노드에 인라인 표시
+- **Python LLM 연결**: OTel Trace Context 전파(W3C TraceContext)로 자식 Trace와 자동 연결
+
+#### 콜 트리 인라인 표시의 중요성
+
+> Scouter/Pinpoint는 SQL과 외부 호출을 **메소드 콜 트리 내에 인라인**으로 보여줍니다.
+> 이것이 별도 "DB 탭"이나 "외부 호출 탭"보다 강력한 이유:
+
+| 표시 방식 | DB 탭 / 외부 호출 탭 분리 | **콜 트리 인라인 (AITOP 방식)** |
+|----------|--------------------------|-------------------------------|
+| **문맥 파악** | 어떤 메소드에서 발생했는지 알기 어려움 | 정확히 어느 메소드가 DB/외부 호출을 했는지 즉시 파악 |
+| **병목 진단** | 탭 이동 필요 | 콜 트리를 따라가면 병목 위치가 바로 보임 |
+| **중첩 호출** | 표현 불가 | 루프 안의 N+1 쿼리, 중첩 HTTP 호출 시각화 |
+| **개발자 경험** | 단편적 정보 | 실행 흐름 전체를 한 화면에서 파악 |
+
+### 7.4 XLog 트랜잭션 상세 — 프로파일링 표시 예시
+
+#### Java 트랜잭션 예시 (완전한 콜 트리)
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  트랜잭션 상세 [Java] recommend-service                             │
+│  GET /api/recommend  ●  412ms  ●  200 OK  ●  2026-03-23 10:00:00  │
+├────────────────────────────────────────────────────────────────────┤
+│  메소드 콜 트리                                                     │
+│                                                                    │
+│  ▼ RecommendController.getRecommendations()          ■■■■■ 412ms   │
+│    ▼ AuthFilter.doFilter()                           ■ 2ms         │
+│    ▼ UserService.getProfile()                        ■ 23ms        │
+│      ▼ UserDAO.findById()                            ■ 20ms        │
+│        [🗄 SQL] SELECT id,name,tier FROM users                      │
+│                WHERE id=?  →  바인딩: ["u-42"]  2.3ms              │
+│      ▼ UserDAO.getPreferences()                      ■ 3ms         │
+│        [🗄 SQL] SELECT * FROM prefs WHERE uid=?  →  1.1ms          │
+│    ▼ MLService.predict()                         ■■■■■■■■■ 382ms   │
+│      ▶ FeatureExtractor.run()                    ■■ 32ms           │
+│      ▶ ModelInference.call()           ■■■■■■■■ 150ms              │
+│        [🌐 HTTP] POST /predict  →  200  150ms                      │
+│        → [Python LLM Span 연결 ▶]                                  │
+│      ▶ CacheService.put()                            ■ 2ms         │
+│        [🗄 Redis] SET recommend:u-42  →  1.8ms                     │
+│    ▼ ResponseMapper.toJSON()                         ■ 3ms         │
+│                                                                    │
+├─ 요약 ─────────────────────────────────────────────────────────────┤
+│  SQL 3건 / 총 25ms / 슬로우 쿼리 없음                               │
+│  외부 HTTP 1건 / 총 150ms  ← 전체의 36%                            │
+│  예외 없음  |  GC 정지 0회                                          │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**각 노드 시각 구분**:
+| 아이콘 | 의미 | 표시 정보 |
+|--------|------|----------|
+| `[🗄 SQL]` | DB 쿼리 | SQL 문, 바인딩 파라미터, 응답시간, 영향 row 수 |
+| `[🌐 HTTP]` | 외부 REST/gRPC | URL, 메소드, 상태코드, 응답시간 |
+| `[🔴 SQL ⚠️]` | 슬로우 쿼리 (100ms+) | 위와 동일 + 경고 강조 표시 |
+| `[🔴 HTTP ⚠️]` | 슬로우 외부 호출 (1s+) | 위와 동일 + 경고 강조 표시 |
+| `[📦 Redis]` | Redis/Cache | 명령, 키, 응답시간 |
+
+#### Java → Python LLM 통합 뷰
+
+```
+Java 트랜잭션 (412ms)
+  └─ ModelInference.call() [🌐 HTTP → python-llm-service, 150ms]
+       │  (W3C TraceContext 전파)
+       ▼
+  Python 트랜잭션 (153ms, 네트워크 제외)
+    ├─ Guardrail 입력 검증     12ms
+    ├─ 임베딩 생성 (OTel Span) 45ms
+    ├─ VectorDB 검색            38ms
+    ├─ LLM 생성 (llama3-70b)   820ms  ← TTFT: 180ms, TPS: 42
+    └─ Guardrail 출력 검증     8ms
+```
+
+이 통합 뷰는 **Java→Python LLM 전체 흐름을 단일 화면에서** 파악할 수 있는 Scouter/Pinpoint 대비 핵심 차별화입니다.
+
+### 7.5 향후 전략
+
+#### Phase 24 구현 계획 (2026 Q2)
+
+```
+Phase 24-1: Java SDK MVP (6주)
+  ├─ OTel Java Agent 통합 + ByteBuddy 메소드 프로파일링
+  ├─ JDBC 바인딩 캡처 + 슬로우 쿼리 감지
+  └─ JVM 메트릭 (Heap/GC/Thread)
+
+Phase 24-2: .NET SDK MVP (6주)
+  ├─ OTel .NET 자동 계측 + CLR Profiler 메소드 훅
+  ├─ ADO.NET / EF Core DB 호출 프로파일링
+  └─ CLR 메트릭 (GC/ThreadPool)
+
+Phase 24-3: XLog 통합 뷰 (4주)
+  ├─ 메소드 콜 트리 UI (SQL/HTTP 아이콘 인라인)
+  └─ Java → Python LLM Trace 연결 통합 뷰
+```
+
+#### OTel Profiling SIG 모니터링 및 마이그레이션 경로
+
+현재 OpenTelemetry **Profiling SIG (Special Interest Group)**은 CPU/Memory 프로파일 데이터를 OTel 표준으로 수집하는 스펙을 개발 중입니다 (2025년 기준 Draft 상태).
+
+| 시점 | 대응 전략 |
+|------|----------|
+| **현재 (Draft)** | 하이브리드 방식으로 구현. OTel Profiling SIG 스펙 변경 최소화 |
+| **OTel Profiling Stable 선언 시** | AITOP 확장 계측을 단계적으로 OTel 표준 API로 교체 |
+| **마이그레이션 우선순위** | 1) 메소드 프로파일 데이터 전송 포맷 → OTel 표준화 2) DB/HTTP 인라인 표시 유지 |
+| **하위 호환성** | 기존 ByteBuddy/CLR 계측은 유지하면서 점진적 교체 (Big Bang 방지) |
+
+#### Continuous Profiling 확장 계획 (Phase 27 이후)
+
+메소드 트리 기반 프로파일링 이후, **지속적 CPU/Memory 프로파일링(Flame Graph)**으로 확장합니다:
+
+```
+현재 (Phase 24):  요청별 메소드 콜 트리 (APM 스타일)
+         ↓
+Phase 27:        Continuous Profiling 통합
+                  ├─ Go/Python: pprof + Pyroscope 연동
+                  ├─ Java:      async-profiler 연동
+                  ├─ .NET:      dotnet-trace 연동
+                  └─ Flame Graph → Trace 연결 (병목 메소드 ↔ 느린 트랜잭션 교차 분석)
+```
+
+### 7.6 Scouter/Pinpoint 대비 차별화
+
+| 기능 | Scouter | Pinpoint | **AITOP** |
+|------|---------|---------|-----------|
+| **Java 메소드 콜 트리** | ✅ | ✅ | ✅ 동등 |
+| **.NET 지원** | ❌ | ⚠️ 제한적 | ✅ **차별화** |
+| **Python 지원** | ❌ | ❌ | ✅ **차별화** |
+| **DB 호출 인라인 (콜 트리 내)** | ✅ | ✅ | ✅ 동등 |
+| **SQL 바인딩 파라미터** | ✅ | ✅ | ✅ 동등 |
+| **슬로우 쿼리 자동 감지** | ✅ | ✅ | ✅ 동등 |
+| **외부 HTTP 인라인 (콜 트리 내)** | ✅ | ✅ | ✅ 동등 |
+| **Java → Python LLM 통합 뷰** | ❌ | ❌ | ✅ **독보적** |
+| **LLM TTFT/TPS/토큰 메트릭** | ❌ | ❌ | ✅ **독보적** |
+| **GPU 모니터링** | ❌ | ❌ | ✅ **독보적** |
+| **OTel 표준 기반** | ❌ 독자 포맷 | ❌ 독자 포맷 | ✅ **벤더 중립** |
+| **Continuous Profiling** | ❌ | ❌ | 📋 Phase 27 예정 |
+
+> **핵심 메시지**: AITOP은 Scouter/Pinpoint가 잘 하는 **Java 메소드 프로파일링**을 그대로 계승하면서,
+> "Java Spring → Python LLM" 전체 흐름을 단일 뷰에서 보여주는 **엔터프라이즈 AI APM**으로 차별화합니다.
 
 ---
 
