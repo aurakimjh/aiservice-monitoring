@@ -1,0 +1,80 @@
+# AITOP Lite — 단기 성능 진단용 원클릭 배포
+#
+# 사용 시나리오: 1~2주 AI 서비스 성능 진단 → HTML 보고서 → 완전 제거
+# 모든 컴포넌트 AGPL-free (Apache 2.0 / BSD / PostgreSQL License)
+#
+# 설치:   docker compose -f docker-compose.lite.yaml up -d
+# 대시보드: http://localhost:8080
+# 보고서:  curl -X POST http://localhost:8080/api/report
+# 제거:   docker compose -f docker-compose.lite.yaml down -v && rm -rf ./data ./reports
+
+services:
+
+  # ── AITOP Collection Server (Lite mode) ──────────────────────────────
+  aitop-server:
+    build:
+      context: ./agent
+      dockerfile: ../infra/docker/Dockerfile.collection-server
+    container_name: aitop-lite-server
+    ports:
+      - "8080:8080"
+    environment:
+      - AITOP_LISTEN_ADDR=:8080
+      - AITOP_LOG_LEVEL=info
+      - AITOP_STORAGE_TYPE=local
+      - AITOP_STORAGE_PATH=/var/aitop/data
+      - AITOP_STORAGE_RETENTION_DAYS=7
+    volumes:
+      - ./data:/var/aitop/data
+      - ./reports:/var/aitop/reports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── OTel Collector (Apache 2.0) ──────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: aitop-lite-otel
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/docker/otelcol-commercial.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Prometheus (Apache 2.0) — 메트릭 저장 ───────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: aitop-lite-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-remote-write-receiver"
+    volumes:
+      - ./infra/docker/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # ── Jaeger (Apache 2.0) — 트레이스 ──────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: aitop-lite-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+      - MEMORY_MAX_TRACES=5000
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4320:4317"    # OTLP gRPC (Collector → Jaeger)
+    restart: unless-stopped

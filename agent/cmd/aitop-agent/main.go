@@ -27,6 +27,7 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/scheduler"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/shell"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/statemachine"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/lite"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/transport"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/updater"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
@@ -269,6 +270,43 @@ func main() {
 				}
 			}
 		}
+		return
+	}
+
+	// ── lite mode: local-only operation ──────────────────────────────────────
+	if cfg.Agent.Mode == models.ModeLite {
+		logger.Info("running in LITE mode — Fleet/OTA disabled, local storage only")
+
+		// Start Lite HTTP server (status dashboard + report/cleanup API)
+		litePort := os.Getenv("AITOP_LITE_PORT")
+		if litePort == "" {
+			litePort = "8080"
+		}
+		liteSrv := lite.NewServer(litePort, buf, logger)
+		go liteSrv.Start(ctx)
+
+		// Run collect on schedule, but no server flush
+		sched := scheduler.New(logger)
+		if err := sched.Register("collect", cfg.Schedule.Default, runCollect); err != nil {
+			logger.Error("failed to register collect job", "error", err)
+			os.Exit(1)
+		}
+		// Local buffer prune (7-day retention)
+		pruneJob := func(ctx context.Context) {
+			if err := buf.Prune(7 * 24 * time.Hour); err != nil {
+				logger.Warn("buffer prune failed", "error", err)
+			}
+		}
+		if err := sched.Register("prune", "0 */6 * * *", pruneJob); err != nil {
+			logger.Warn("failed to register prune job", "error", err)
+		}
+		sched.Start(ctx)
+		logger.Info("lite scheduler started", "jobs", sched.Jobs())
+
+		<-ctx.Done()
+		logger.Info("shutdown signal received, stopping lite agent…")
+		sched.Stop()
+		logger.Info("aitop-agent (lite) stopped")
 		return
 	}
 

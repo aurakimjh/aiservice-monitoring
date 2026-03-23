@@ -9,6 +9,7 @@ const (
 	ModeFull          AgentMode = "full"
 	ModeCollectOnly   AgentMode = "collect-only"
 	ModeCollectExport AgentMode = "collect-export"
+	ModeLite          AgentMode = "lite"
 )
 
 // AgentStatus represents the lifecycle status of the agent.
