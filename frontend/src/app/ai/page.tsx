@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, SearchInput, Select, Badge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
+import { AISubNav } from '@/components/ai';
 import { useProjectStore } from '@/stores/project-store';
 import { getProjectAIServices } from '@/lib/demo-data';
 import { formatDuration, formatCost } from '@/lib/utils';
@@ -75,6 +76,8 @@ export default function AIServicesPage() {
         { label: 'Home', href: '/' },
         { label: 'AI Services', icon: <Bot size={14} /> },
       ]} />
+
+      <AISubNav />
 
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">AI Services</h1>

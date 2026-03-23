@@ -553,3 +553,136 @@ export const TIME_RANGES: TimeRange[] = [
   { label: 'Last 24h', value: '24h', seconds: 86400 },
   { label: 'Last 7d', value: '7d', seconds: 604800 },
 ];
+
+// ── Phase 19: AI Value Enhancement ──────────────────────────────────────
+
+// 19-1: LLM Evaluation
+export type EvalMetricName = 'relevancy' | 'faithfulness' | 'coherence' | 'toxicity' | 'latency' | 'cost';
+export type EvalJobStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface EvalMetricScore {
+  metric: EvalMetricName;
+  score: number;
+  threshold?: number;
+}
+
+export interface EvalSample {
+  id: string;
+  prompt: string;
+  response: string;
+  reference?: string;
+  scores: EvalMetricScore[];
+  latencyMs: number;
+  tokenCount: number;
+  judgeModel: string;
+  pass: boolean;
+}
+
+export interface EvalJob {
+  id: string;
+  name: string;
+  status: EvalJobStatus;
+  model: string;
+  judgeModel: string;
+  datasetName: string;
+  datasetSize: number;
+  metrics: EvalMetricName[];
+  aggregateScores: EvalMetricScore[];
+  samplesProcessed: number;
+  createdAt: number;
+  completedAt?: number;
+  duration?: number;
+}
+
+export interface ABTestComparison {
+  id: string;
+  name: string;
+  modelA: string;
+  modelB: string;
+  datasetName: string;
+  sampleCount: number;
+  status: EvalJobStatus;
+  metricsA: EvalMetricScore[];
+  metricsB: EvalMetricScore[];
+  winRateA: number;
+  winRateB: number;
+  createdAt: number;
+}
+
+// 19-2: Prompt Hub
+export interface PromptVersion {
+  version: number;
+  systemPrompt: string;
+  userTemplate: string;
+  variables: string[];
+  author: string;
+  createdAt: number;
+  commitMessage: string;
+  performance: {
+    avgLatencyMs: number;
+    avgQualityScore: number;
+    avgTokens: number;
+    usageCount: number;
+  };
+}
+
+export interface PromptEntry {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  model: string;
+  currentVersion: number;
+  versions: PromptVersion[];
+  totalUsage: number;
+  avgQualityScore: number;
+  isPublic: boolean;
+  owner: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 19-3: AI Cost Optimization
+export interface ModelCostProfile {
+  model: string;
+  provider: string;
+  inputCostPer1k: number;
+  outputCostPer1k: number;
+  avgLatencyMs: number;
+  qualityScore: number;
+  dailyTokens: number;
+  dailyCost: number;
+  costEfficiency: number;
+}
+
+export interface CacheAnalysis {
+  totalRequests: number;
+  cacheHits: number;
+  cacheMisses: number;
+  hitRate: number;
+  estimatedSavings: number;
+  potentialSavings: number;
+  topCacheablePatternsCount: number;
+}
+
+export interface CostRecommendation {
+  id: string;
+  priority: 'high' | 'medium' | 'low';
+  category: 'model_switch' | 'cache' | 'token_reduction' | 'batch' | 'routing';
+  title: string;
+  description: string;
+  currentCost: number;
+  estimatedSaving: number;
+  effort: 'low' | 'medium' | 'high';
+  implemented: boolean;
+}
+
+export interface BudgetAlert {
+  id: string;
+  name: string;
+  threshold: number;
+  currentSpend: number;
+  period: 'daily' | 'weekly' | 'monthly';
+  enabled: boolean;
+  lastTriggered?: number;
+}

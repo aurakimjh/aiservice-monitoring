@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1246,5 +1246,114 @@ export function getCollectionSchedules(): CollectionSchedule[] {
     { id: 'sched-01', name: '전체 정기 수집', targetType: 'all', cron: '*/30 * * * *', enabled: true, lastRun: new Date(Date.now() - 180_000).toISOString(), nextRun: new Date(Date.now() + 1620_000).toISOString() },
     { id: 'sched-02', name: 'GPU 그룹 집중 수집', targetType: 'group', targetId: 'grp-gpu', cron: '*/5 * * * *', enabled: true, lastRun: new Date(Date.now() - 60_000).toISOString(), nextRun: new Date(Date.now() + 240_000).toISOString() },
     { id: 'sched-03', name: 'DB 야간 수집', targetType: 'group', targetId: 'grp-db', cron: '0 2 * * *', enabled: false, lastRun: new Date(Date.now() - 86400_000).toISOString(), nextRun: new Date(Date.now() + 72000_000).toISOString() },
+  ];
+}
+
+// ══ Phase 19: AI Value Enhancement — Mock Data ══════════════════════════
+
+const now = Date.now();
+
+export function getEvalJobs(): EvalJob[] {
+  return [
+    { id: 'eval-01', name: 'RAG Quality Benchmark v3', status: 'completed', model: 'gpt-4o', judgeModel: 'claude-3.5-sonnet', datasetName: 'qa-finance-500', datasetSize: 500, metrics: ['relevancy', 'faithfulness', 'coherence'], aggregateScores: [{ metric: 'relevancy', score: 0.87, threshold: 0.8 }, { metric: 'faithfulness', score: 0.92, threshold: 0.85 }, { metric: 'coherence', score: 0.84, threshold: 0.8 }], samplesProcessed: 500, createdAt: now - 86400_000, completedAt: now - 82800_000, duration: 3600 },
+    { id: 'eval-02', name: 'Code Assistant Eval', status: 'completed', model: 'claude-3.5-sonnet', judgeModel: 'gpt-4o', datasetName: 'code-review-200', datasetSize: 200, metrics: ['relevancy', 'coherence'], aggregateScores: [{ metric: 'relevancy', score: 0.91 }, { metric: 'coherence', score: 0.88 }], samplesProcessed: 200, createdAt: now - 172800_000, completedAt: now - 169200_000, duration: 2400 },
+    { id: 'eval-03', name: 'Summarizer Toxicity Check', status: 'running', model: 'llama-3-70b', judgeModel: 'gpt-4o', datasetName: 'news-articles-300', datasetSize: 300, metrics: ['toxicity', 'coherence'], aggregateScores: [{ metric: 'toxicity', score: 0.03 }, { metric: 'coherence', score: 0.79 }], samplesProcessed: 187, createdAt: now - 1800_000 },
+    { id: 'eval-04', name: 'Customer Support v2', status: 'completed', model: 'gpt-4o-mini', judgeModel: 'claude-3.5-sonnet', datasetName: 'support-tickets-150', datasetSize: 150, metrics: ['relevancy', 'faithfulness'], aggregateScores: [{ metric: 'relevancy', score: 0.78, threshold: 0.8 }, { metric: 'faithfulness', score: 0.85, threshold: 0.85 }], samplesProcessed: 150, createdAt: now - 259200_000, completedAt: now - 255600_000, duration: 1800 },
+    { id: 'eval-05', name: 'Translation Quality', status: 'pending', model: 'gpt-4o', judgeModel: 'claude-3.5-sonnet', datasetName: 'ko-en-translation-100', datasetSize: 100, metrics: ['relevancy', 'coherence', 'faithfulness'], aggregateScores: [], samplesProcessed: 0, createdAt: now - 300_000 },
+  ];
+}
+
+export function getEvalSamples(jobId: string): EvalSample[] {
+  const samples: EvalSample[] = [];
+  const prompts = [
+    'What are the key factors affecting GDP growth in 2024?',
+    'Explain the difference between supervised and unsupervised learning.',
+    'Summarize the quarterly earnings report for Q3.',
+    'What security measures should be implemented for API endpoints?',
+    'How does transformer attention mechanism work?',
+    'Describe the impact of climate change on agriculture.',
+    'What are the best practices for database indexing?',
+    'Explain the concept of microservices architecture.',
+  ];
+  for (let i = 0; i < prompts.length; i++) {
+    const rel = 0.7 + Math.random() * 0.25;
+    const faith = 0.75 + Math.random() * 0.2;
+    const coh = 0.72 + Math.random() * 0.22;
+    samples.push({
+      id: `${jobId}-s${i + 1}`,
+      prompt: prompts[i],
+      response: `This is the model response for sample ${i + 1}. The answer covers the key aspects of the question with supporting details and references.`,
+      reference: i % 2 === 0 ? `Reference answer for sample ${i + 1} with expected content.` : undefined,
+      scores: [{ metric: 'relevancy', score: +rel.toFixed(2) }, { metric: 'faithfulness', score: +faith.toFixed(2) }, { metric: 'coherence', score: +coh.toFixed(2) }],
+      latencyMs: 800 + Math.floor(Math.random() * 2000),
+      tokenCount: 150 + Math.floor(Math.random() * 400),
+      judgeModel: 'claude-3.5-sonnet',
+      pass: rel > 0.8 && faith > 0.8,
+    });
+  }
+  return samples;
+}
+
+export function getABTests(): ABTestComparison[] {
+  return [
+    { id: 'ab-01', name: 'GPT-4o vs Claude-3.5 on QA', modelA: 'gpt-4o', modelB: 'claude-3.5-sonnet', datasetName: 'qa-finance-500', sampleCount: 200, status: 'completed', metricsA: [{ metric: 'relevancy', score: 0.87 }, { metric: 'faithfulness', score: 0.92 }, { metric: 'coherence', score: 0.84 }, { metric: 'latency', score: 0.75 }, { metric: 'cost', score: 0.60 }], metricsB: [{ metric: 'relevancy', score: 0.89 }, { metric: 'faithfulness', score: 0.90 }, { metric: 'coherence', score: 0.86 }, { metric: 'latency', score: 0.82 }, { metric: 'cost', score: 0.72 }], winRateA: 42, winRateB: 58, createdAt: now - 86400_000 },
+    { id: 'ab-02', name: 'Llama-3 vs GPT-4o-mini on Support', modelA: 'llama-3-70b', modelB: 'gpt-4o-mini', datasetName: 'support-tickets-150', sampleCount: 150, status: 'completed', metricsA: [{ metric: 'relevancy', score: 0.76 }, { metric: 'faithfulness', score: 0.81 }, { metric: 'coherence', score: 0.79 }, { metric: 'latency', score: 0.90 }, { metric: 'cost', score: 0.95 }], metricsB: [{ metric: 'relevancy', score: 0.78 }, { metric: 'faithfulness', score: 0.85 }, { metric: 'coherence', score: 0.82 }, { metric: 'latency', score: 0.70 }, { metric: 'cost', score: 0.65 }], winRateA: 55, winRateB: 45, createdAt: now - 172800_000 },
+  ];
+}
+
+export function getPromptEntries(): PromptEntry[] {
+  return [
+    { id: 'pr-01', name: 'RAG QA System Prompt', description: 'Main system prompt for RAG-based question answering with citations', tags: ['rag', 'qa', 'production'], model: 'gpt-4o', currentVersion: 5, versions: [
+      { version: 5, systemPrompt: 'You are a helpful assistant that answers questions based on the provided context. Always cite sources using [Source N] format. If the context does not contain the answer, say "I don\'t have enough information."', userTemplate: 'Context: {{context}}\n\nQuestion: {{question}}', variables: ['context', 'question'], author: 'admin', createdAt: now - 86400_000, commitMessage: 'Add citation format requirement', performance: { avgLatencyMs: 1200, avgQualityScore: 0.87, avgTokens: 320, usageCount: 2400 } },
+      { version: 4, systemPrompt: 'You are a helpful assistant that answers questions based on the provided context. If the context does not contain the answer, say "I don\'t have enough information."', userTemplate: 'Context: {{context}}\n\nQuestion: {{question}}', variables: ['context', 'question'], author: 'admin', createdAt: now - 604800_000, commitMessage: 'Add fallback instruction', performance: { avgLatencyMs: 1150, avgQualityScore: 0.82, avgTokens: 290, usageCount: 8500 } },
+      { version: 3, systemPrompt: 'You are a helpful assistant. Answer based on context only.', userTemplate: 'Context: {{context}}\n\nQuestion: {{question}}', variables: ['context', 'question'], author: 'sre', createdAt: now - 1209600_000, commitMessage: 'Simplify system prompt', performance: { avgLatencyMs: 980, avgQualityScore: 0.75, avgTokens: 250, usageCount: 12000 } },
+    ], totalUsage: 22900, avgQualityScore: 0.87, isPublic: true, owner: 'admin', createdAt: now - 2592000_000, updatedAt: now - 86400_000 },
+    { id: 'pr-02', name: 'Code Review Assistant', description: 'Reviews code changes and provides improvement suggestions', tags: ['code', 'review', 'dev'], model: 'claude-3.5-sonnet', currentVersion: 3, versions: [
+      { version: 3, systemPrompt: 'You are an expert code reviewer. Analyze the code diff and provide: 1) Security issues 2) Performance concerns 3) Code style suggestions. Be concise and actionable.', userTemplate: 'Language: {{language}}\nDiff:\n```\n{{diff}}\n```', variables: ['language', 'diff'], author: 'ai_engineer', createdAt: now - 172800_000, commitMessage: 'Add structured output format', performance: { avgLatencyMs: 2100, avgQualityScore: 0.91, avgTokens: 450, usageCount: 890 } },
+      { version: 2, systemPrompt: 'You are a code reviewer. Analyze the given code diff and suggest improvements.', userTemplate: 'Language: {{language}}\nDiff:\n{{diff}}', variables: ['language', 'diff'], author: 'ai_engineer', createdAt: now - 604800_000, commitMessage: 'Add language parameter', performance: { avgLatencyMs: 1900, avgQualityScore: 0.85, avgTokens: 380, usageCount: 3200 } },
+    ], totalUsage: 4090, avgQualityScore: 0.91, isPublic: false, owner: 'ai_engineer', createdAt: now - 1296000_000, updatedAt: now - 172800_000 },
+    { id: 'pr-03', name: 'Document Summarizer', description: 'Summarizes long documents into concise bullet points', tags: ['summary', 'production'], model: 'gpt-4o-mini', currentVersion: 2, versions: [
+      { version: 2, systemPrompt: 'Summarize the document into 5-7 key bullet points. Focus on actionable insights and data points. Use clear, professional language.', userTemplate: 'Document:\n{{document}}\n\nMax length: {{max_words}} words', variables: ['document', 'max_words'], author: 'admin', createdAt: now - 259200_000, commitMessage: 'Add max length control', performance: { avgLatencyMs: 950, avgQualityScore: 0.83, avgTokens: 200, usageCount: 5600 } },
+    ], totalUsage: 5600, avgQualityScore: 0.83, isPublic: true, owner: 'admin', createdAt: now - 864000_000, updatedAt: now - 259200_000 },
+    { id: 'pr-04', name: 'SQL Query Generator', description: 'Generates SQL queries from natural language questions', tags: ['sql', 'database', 'dev'], model: 'gpt-4o', currentVersion: 4, versions: [
+      { version: 4, systemPrompt: 'You are an SQL expert. Generate a valid SQL query for the given schema and question. Use proper JOIN syntax, avoid subqueries when possible, and add comments.', userTemplate: 'Schema:\n{{schema}}\n\nQuestion: {{question}}\nDialect: {{dialect}}', variables: ['schema', 'question', 'dialect'], author: 'sre', createdAt: now - 432000_000, commitMessage: 'Add dialect support (PostgreSQL/MySQL)', performance: { avgLatencyMs: 1400, avgQualityScore: 0.88, avgTokens: 280, usageCount: 1200 } },
+    ], totalUsage: 1200, avgQualityScore: 0.88, isPublic: false, owner: 'sre', createdAt: now - 1728000_000, updatedAt: now - 432000_000 },
+    { id: 'pr-05', name: 'Incident RCA Analyzer', description: 'Analyzes monitoring data to identify root causes of incidents', tags: ['incident', 'rca', 'ops'], model: 'claude-3.5-sonnet', currentVersion: 2, versions: [
+      { version: 2, systemPrompt: 'You are an SRE expert. Analyze the incident data (metrics, logs, traces) and provide: 1) Root cause analysis 2) Impact assessment 3) Recommended remediation steps. Use the 5-Why framework.', userTemplate: 'Incident: {{incident_summary}}\nMetrics: {{metrics}}\nLogs: {{logs}}\nTime window: {{time_window}}', variables: ['incident_summary', 'metrics', 'logs', 'time_window'], author: 'sre', createdAt: now - 604800_000, commitMessage: 'Add 5-Why framework', performance: { avgLatencyMs: 2800, avgQualityScore: 0.86, avgTokens: 520, usageCount: 340 } },
+    ], totalUsage: 340, avgQualityScore: 0.86, isPublic: true, owner: 'sre', createdAt: now - 1296000_000, updatedAt: now - 604800_000 },
+  ];
+}
+
+export function getModelCostProfiles(): ModelCostProfile[] {
+  return [
+    { model: 'gpt-4o', provider: 'OpenAI', inputCostPer1k: 2.50, outputCostPer1k: 10.00, avgLatencyMs: 1200, qualityScore: 0.89, dailyTokens: 2_400_000, dailyCost: 18.60, costEfficiency: 0.048 },
+    { model: 'gpt-4o-mini', provider: 'OpenAI', inputCostPer1k: 0.15, outputCostPer1k: 0.60, avgLatencyMs: 650, qualityScore: 0.78, dailyTokens: 5_200_000, dailyCost: 2.34, costEfficiency: 0.333 },
+    { model: 'claude-3.5-sonnet', provider: 'Anthropic', inputCostPer1k: 3.00, outputCostPer1k: 15.00, avgLatencyMs: 1400, qualityScore: 0.91, dailyTokens: 1_800_000, dailyCost: 19.80, costEfficiency: 0.046 },
+    { model: 'claude-3.5-haiku', provider: 'Anthropic', inputCostPer1k: 0.80, outputCostPer1k: 4.00, avgLatencyMs: 420, qualityScore: 0.76, dailyTokens: 3_100_000, dailyCost: 8.88, costEfficiency: 0.086 },
+    { model: 'llama-3-70b', provider: 'Self-hosted', inputCostPer1k: 0.05, outputCostPer1k: 0.05, avgLatencyMs: 1800, qualityScore: 0.74, dailyTokens: 1_500_000, dailyCost: 0.15, costEfficiency: 4.933 },
+    { model: 'mixtral-8x7b', provider: 'Self-hosted', inputCostPer1k: 0.03, outputCostPer1k: 0.03, avgLatencyMs: 900, qualityScore: 0.71, dailyTokens: 800_000, dailyCost: 0.05, costEfficiency: 14.200 },
+  ];
+}
+
+export function getCacheAnalysis(): CacheAnalysis {
+  return { totalRequests: 48_500, cacheHits: 18_430, cacheMisses: 30_070, hitRate: 0.38, estimatedSavings: 12.50, potentialSavings: 28.40, topCacheablePatternsCount: 15 };
+}
+
+export function getCostRecommendations(): CostRecommendation[] {
+  return [
+    { id: 'rec-01', priority: 'high', category: 'model_switch', title: 'Switch FAQ queries to GPT-4o-mini', description: 'Simple FAQ queries currently use GPT-4o. Switching to GPT-4o-mini would reduce cost by 94% with only 5% quality drop for this use case.', currentCost: 8.20, estimatedSaving: 7.71, effort: 'low', implemented: false },
+    { id: 'rec-02', priority: 'high', category: 'cache', title: 'Enable semantic cache for RAG queries', description: 'Repeated similar queries could be served from cache. Current hit rate is 38%; enabling semantic matching could reach 65%.', currentCost: 18.60, estimatedSaving: 5.02, effort: 'medium', implemented: false },
+    { id: 'rec-03', priority: 'medium', category: 'token_reduction', title: 'Compress context window for summarization', description: 'Document summarizer sends full documents (avg 4K tokens). Pre-extracting key sections could reduce input by 40%.', currentCost: 2.34, estimatedSaving: 0.94, effort: 'medium', implemented: false },
+    { id: 'rec-04', priority: 'medium', category: 'batch', title: 'Batch code review requests', description: 'Code reviews are processed one-by-one. Batching up to 5 diffs per request would reduce API calls by 60%.', currentCost: 4.50, estimatedSaving: 1.80, effort: 'low', implemented: true },
+    { id: 'rec-05', priority: 'low', category: 'routing', title: 'Route simple queries to local LLM', description: 'Classification shows 30% of queries are simple lookups that Llama-3 can handle. Routing these locally saves API costs.', currentCost: 6.00, estimatedSaving: 1.50, effort: 'high', implemented: false },
+  ];
+}
+
+export function getBudgetAlerts(): BudgetAlert[] {
+  return [
+    { id: 'ba-01', name: 'Daily AI API Budget', threshold: 60, currentSpend: 49.77, period: 'daily', enabled: true, lastTriggered: now - 259200_000 },
+    { id: 'ba-02', name: 'Weekly GPU Compute', threshold: 350, currentSpend: 280, period: 'weekly', enabled: true },
+    { id: 'ba-03', name: 'Monthly Total AI Cost', threshold: 2000, currentSpend: 1420, period: 'monthly', enabled: true },
+    { id: 'ba-04', name: 'Per-Service Alert (RAG)', threshold: 25, currentSpend: 18.60, period: 'daily', enabled: false },
   ];
 }

@@ -3,7 +3,7 @@
 import { useRef, useEffect, useCallback, memo } from 'react';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart } from 'echarts/charts';
+import { LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart, RadarChart } from 'echarts/charts';
 import {
   GridComponent,
   TooltipComponent,
@@ -15,6 +15,7 @@ import {
   ToolboxComponent,
   VisualMapComponent,
   BrushComponent,
+  RadarComponent,
 } from 'echarts/components';
 import type { EChartsOption } from 'echarts';
 
@@ -23,10 +24,10 @@ type EChartsInstance = ReturnType<typeof echarts.init>;
 // Register once at module level
 echarts.use([
   CanvasRenderer,
-  LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart,
+  LineChart, BarChart, ScatterChart, HeatmapChart, GaugeChart, PieChart, RadarChart,
   GridComponent, TooltipComponent, LegendComponent, DataZoomComponent,
   MarkLineComponent, MarkAreaComponent, TitleComponent, ToolboxComponent,
-  VisualMapComponent, BrushComponent,
+  VisualMapComponent, BrushComponent, RadarComponent,
 ]);
 
 // Dark theme for all charts
