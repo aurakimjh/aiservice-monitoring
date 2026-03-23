@@ -1,19 +1,20 @@
 # OpenTelemetry 아키텍처 설계
 
-> **문서 버전**: v2.1.0
+> **문서 버전**: v3.0.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-23 (Session 37 — 배포 모드 분리: Enterprise/Lite 비교 아키텍처 다이어그램 추가)
+> **최종 업데이트**: 2026-03-24 (Phase 21-23 완료 — Continuous Profiling, AI Copilot, Topology, Multi-Cloud, Terraform Provider, SSO)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
-> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Go, Collector, Fleet, CLI)
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (44개 화면)
+> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Go, 12개 Collector, Fleet, CLI)
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 가이드
-> - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
+> - [TEST_GUIDE.md](./TEST_GUIDE.md) — 통합 테스트 전략 (매뉴얼 + AI 교차검증)
 > - [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) — XLog/HeatMap 대시보드 상세 설계
-> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석, 로드맵
+> - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석, 완성도 평가, 로드맵
 > - [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md) — Java/.NET SDK 및 메소드 프로파일링 설계 (Phase 24)
+> - [E2E_REDESIGN.md](./E2E_REDESIGN.md) — E2E 테스트 시나리오 재설계
 
 ---
 

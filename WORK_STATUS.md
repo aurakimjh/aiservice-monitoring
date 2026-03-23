@@ -661,18 +661,18 @@ npm run test:i18n     # i18n 커버리지 감사
 
 ## [10] Phase 7': E2E 통합 검증 (재설계) 🔄 🔧
 
-> **목표**: 새 UI + Agent 기준으로 전체 시스템 E2E 검증
-> **전제**: Phase 17 Backend API 완성 후 진행
-> **원래**: Phase 7 (Grafana 기반) → Next.js UI로 교체됨에 따라 재설계
-> **참조**: [DOCS/E2E_REDESIGN.md](DOCS/E2E_REDESIGN.md) — 재설계 배경 + 검증 범위 + 성공 기준
-> **배치 근거**: 인프라 필요(🔧)로 코드 작업과 병렬 진행 가능. E2E 스크립트는 이미 완성(30%)되어 실제 Docker 환경 실행만 대기 중. 코드 작업 블로커가 아니므로 수작업 영역으로 분리.
+> **목표**: 전체 시스템 E2E 검증 — 매뉴얼 + AI 교차검증 체계
+> **전제**: 모든 코드 Phase(1~30) 완료
+> **참조**: [DOCS/TEST_GUIDE.md](DOCS/TEST_GUIDE.md) — 통합 테스트 전략 (매뉴얼 Level 5-7 + AI-L3 교차검증)
+> **참조**: [DOCS/MANUAL_TESTING_GUIDE.md](DOCS/MANUAL_TESTING_GUIDE.md) — 초보자용 상세 테스트 절차서
+> **참조**: [DOCS/E2E_REDESIGN.md](DOCS/E2E_REDESIGN.md) — E2E 재설계 배경
 
-| # | 작업 | 검증 항목 | 상태 |
-|---|------|----------|------|
-| 7'-1 | 로컬 Docker 통합 테스트 | 전체 스택 기동, 헬스체크, 텔레메트리 수집 확인 | ⚠️ 🔧 |
-| 7'-2 | 부하 테스트 + 샘플링 | Locust 4 시나리오, Tail Sampling 보존율, 비용 절감 효과 | ⚠️ 🔧 |
-| 7'-3 | Trace 연속성 검증 | 5 레이어 Trace ID 연속, Baggage 전달, Metric↔Log 상관관계 | ⚠️ 🔧 |
-| 7'-4 | 보안 감사 | OWASP Top 10, PII 마스킹 검증, mTLS 인증서 검증 | ⚠️ 🔧 |
+| # | 작업 | 검증 항목 | 테스트 매핑 | 상태 |
+|---|------|----------|-----------|------|
+| 7'-1 | 로컬 Docker 통합 테스트 | 전체 스택 기동 + 헬스체크 | 매뉴얼 L5 + AI-L3 교차검증 | ⚠️ 🔧 |
+| 7'-2 | 부하 테스트 + 샘플링 | Locust 4 시나리오, Tail Sampling 검증 | 매뉴얼 L6 + AI-L4 성능 분석 | ⚠️ 🔧 |
+| 7'-3 | Trace 연속성 검증 | 5 레이어 Trace ID 연속, Metric↔Log 상관 | 매뉴얼 L5 + AI-L3 API 호환성 | ⚠️ 🔧 |
+| 7'-4 | 보안 감사 | OWASP Top 10, PII 마스킹, mTLS | 매뉴얼 L7 + AI-L1 코드 리뷰 | ⚠️ 🔧 |
 
 **신규 파일 (Session 27 — 파일 생성 완료, 실행은 실제 인프라 필요):**
 - `DOCS/E2E_REDESIGN.md` — Phase 7' 재설계 문서 (배경/범위/성공기준/연관파일)
@@ -710,31 +710,31 @@ make -C agent e2e-all
 
 ## [11] Phase 8': Kubernetes 통합 배포 📋 🔧
 
-> **목표**: Next.js Frontend + Collection Server + Agent를 Helm으로 통합 배포
-> **전제**: Phase 7' 검증 통과 후 진행
-> **배치 근거**: Phase 7' E2E 검증 통과가 필수 선행 조건. 수작업 특성상 코드 기능(Phase 27·19~26)이 완성된 후 배포해야 재배포 횟수 최소화. Phase 27 StorageBackend 구현 완료 후 배포해야 S3/Local 선택이 가능.
+> **목표**: 전체 스택 Helm 통합 배포 (Frontend + Collection Server + Agent)
+> **전제**: Phase 7' 교차검증 통과 (매뉴얼 + AI 결과 일치 확인)
+> **참조**: [DOCS/TEST_GUIDE.md](DOCS/TEST_GUIDE.md) — 매뉴얼 Level 8 + AI-L4 교차검증
 
-| # | 작업 | 상세 | 상태 |
-|---|------|------|------|
-| 8'-1 | Frontend Dockerfile + Helm | Next.js 프로덕션 빌드 + Helm 서브차트 추가 | 📋 🔧 |
-| 8'-2 | Collection Server Helm | gRPC + REST + PostgreSQL + MinIO 연동 Helm 차트 | 📋 🔧 |
-| 8'-3 | Helm Dry-Run + 스테이징 | dev/prod dry-run, 스테이징 배포, Pod 상태 확인 | 📋 🔧 |
-| 8'-4 | 프로덕션 배포 | Thanos S3, Alertmanager → Slack/PagerDuty, Grafana Ingress+TLS | 📋 🔧 |
-| 8'-5 | DEB/RPM 패키지 실빌드 | nfpm → DEB/RPM 실제 빌드 + 설치 검증 | 📋 🔧 |
+| # | 작업 | 상세 | 테스트 매핑 | 상태 |
+|---|------|------|-----------|------|
+| 8'-1 | Frontend Dockerfile + Helm | Next.js standalone 빌드 + Helm 서브차트 | 매뉴얼 L8 | 📋 🔧 |
+| 8'-2 | Collection Server Helm | REST + PostgreSQL + S3 연동 Helm 차트 | 매뉴얼 L8 | 📋 🔧 |
+| 8'-3 | Helm Dry-Run + 스테이징 | dev/prod dry-run, Pod 상태 확인 | 매뉴얼 L8 + AI-L4 | 📋 🔧 |
+| 8'-4 | 프로덕션 배포 | Jaeger + Alertmanager + Ingress+TLS | 매뉴얼 L8 | 📋 🔧 |
+| 8'-5 | DEB/RPM 패키지 실빌드 | nfpm → DEB/RPM 빌드 + 설치 검증 | 매뉴얼 L8 | 📋 🔧 |
 
 ---
 
 ## [12] Phase 9': SLO 튜닝 + 운영 안정화 📋 🔧
 
-> **목표**: 프로덕션 운영 데이터 기반 임계치 튜닝
+> **목표**: 프로덕션 운영 데이터 기반 임계치 튜닝 + 최종 품질 승인
 > **전제**: Phase 8' 프로덕션 배포 후 1~2주 운영 데이터 확보
-> **배치 근거**: Phase 8' 프로덕션 배포 + 실제 트래픽 1~2주 관측 후에만 SLO 임계치 실측 가능. Phase 20-3 합성 모니터링이 SLO 프로브로 활용됨. 항상 수작업 영역의 마지막 단계.
+> **참조**: [DOCS/TEST_GUIDE.md](DOCS/TEST_GUIDE.md) — 매뉴얼 Level 9 + AI-L5 문서↔코드 일관성 교차검증
 
-| # | 작업 | 상세 | 상태 |
-|---|------|------|------|
-| 9'-1 | SLO 임계치 튜닝 | TTFT/TPS/가드레일/GPU/에러율 실측 후 ±20% 조정 | 📋 🔧 |
-| 9'-2 | Tail Sampling 최적화 | 정책별 보존율 확인, 비용 목표 달성 (~$200/월 @1K RPS) | 📋 🔧 |
-| 9'-3 | 대시보드 커스터마이징 | 팀별 필터, 비즈니스 KPI, On-Call 링크 | 📋 🔧 |
+| # | 작업 | 상세 | 테스트 매핑 | 상태 |
+|---|------|------|-----------|------|
+| 9'-1 | SLO 임계치 튜닝 | TTFT/TPS/GPU/에러율 실측 ±20% 조정 | 매뉴얼 L9 | 📋 🔧 |
+| 9'-2 | Tail Sampling 최적화 | 정책별 보존율, 비용 목표 달성 | 매뉴얼 L9 + AI-L4 | 📋 🔧 |
+| 9'-3 | 교차검증 최종 보고서 | 매뉴얼+AI 결과 대조, 불일치 해결, 릴리스 승인 | 교차검증 프로토콜 | 📋 🔧 |
 
 ---
 

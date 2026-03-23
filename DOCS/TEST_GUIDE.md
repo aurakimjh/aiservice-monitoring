@@ -1,711 +1,533 @@
-# 테스트 & 운영 검증 가이드 (TEST_GUIDE.md)
+# AITOP 통합 테스트 전략 가이드 (TEST_GUIDE.md)
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
-> **대상 독자**: 처음 이 프로젝트를 검증하는 초보자, QA, SRE
-> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
+> **대상 독자**: QA 엔지니어, SRE, 개발자, 프로젝트 관리자
+> **최종 업데이트**: 2026-03-24 (Phase 1-30 완료 / 테스트 전략 전면 개편)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
-> - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성 (이 문서 전에 참고)
+> - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
-> - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계
-
-이 문서는 **모니터링 솔루션 자체가 올바르게 동작하는지** 검증하는 가이드입니다.
-AI 서비스 코드가 없어도, 이 문서만 따라 하면 전체 파이프라인을 테스트할 수 있습니다.
-
-> **📌 이 문서를 읽기 전에 — 전체 테스트 철학**
->
-> 이 프로젝트의 테스트는 **"모니터링하는 도구가 모니터링되는 것"** 을 목표로 합니다.
->
-> ```
-> 일반적인 테스트:  내 코드가 올바른지?
-> 이 문서의 테스트: 모니터링 파이프라인 자체가 올바른지?
-> ```
->
-> 비유하면 **소방서 훈련**과 같습니다:
-> - 화재 발생 → 경보음 → 소방차 출동 → 진화
-> - 실제 화재가 없어도 정기적으로 훈련하여 각 단계가 잘 작동하는지 확인
->
-> Level 1~9는 아래 파이프라인을 단계별로 검증합니다:
-> ```
-> Level 1: 인프라 기동      →  소방서가 열려 있나?
-> Level 2: 데이터 수신      →  경보가 울리나?
-> Level 3: 대시보드 표시    →  지도에 표시되나?
-> Level 4: Alert 발동       →  자동 알림이 오나?
-> Level 5: 부하 테스트      →  동시에 여러 화재 처리 가능?
-> Level 6: 추적 단절 탐지   →  경로 중간에 끊기지 않나?
-> Level 7: 비용 시뮬레이션  →  운영 비용은 얼마인가?
-> Level 8~9: 배포 검증      →  실제 서버에 배포 가능한가?
-> ```
+> - [MANUAL_TESTING_GUIDE.md](./MANUAL_TESTING_GUIDE.md) — 초보자용 매뉴얼 테스트 절차서
 
 ---
 
 ## 목차
 
-1. [테스트 전 준비사항](#1-테스트-전-준비사항)
-2. [Level 1: 로컬 인프라 기동 테스트](#2-level-1-로컬-인프라-기동-테스트)
-3. [Level 2: 텔레메트리 발생 & 수신 확인](#3-level-2-텔레메트리-발생--수신-확인)
-4. [Level 3: Grafana 대시보드 표시 확인](#4-level-3-grafana-대시보드-표시-확인)
-5. [Level 4: Alert Rule 검증](#5-level-4-alert-rule-검증)
-6. [Level 5: 부하 테스트 (Load Test)](#6-level-5-부하-테스트-load-test)
-7. [Level 6: Context Propagation 단절 탐지](#7-level-6-context-propagation-단절-탐지)
-8. [Level 7: Sampling 비용 시뮬레이션](#8-level-7-sampling-비용-시뮬레이션)
-9. [Level 8: Helm Chart Dry-Run 검증](#9-level-8-helm-chart-dry-run-검증)
-10. [Level 9: CI/CD 파이프라인 로컬 실행](#10-level-9-cicd-파이프라인-로컬-실행)
-11. [테스트 체크리스트 (종합)](#11-테스트-체크리스트-종합)
-12. [자주 발생하는 문제 (FAQ)](#12-자주-발생하는-문제-faq)
+1. [테스트 철학 — "모니터링 도구의 모니터링"](#1-테스트-철학--모니터링-도구의-모니터링)
+2. [테스트 분류 체계](#2-테스트-분류-체계)
+3. [Part A: 매뉴얼 테스트 절차 (Level 1-9)](#3-part-a-매뉴얼-테스트-절차-level-1-9)
+4. [Part B: AI 테스트 절차 (AI-L1 ~ AI-L5)](#4-part-b-ai-테스트-절차-ai-l1--ai-l5)
+5. [Part C: 교차검증 프로토콜](#5-part-c-교차검증-프로토콜)
+6. [Phase 7'/8'/9' 테스트 로드맵](#6-phase-789-테스트-로드맵)
+7. [테스트 보고서 템플릿](#7-테스트-보고서-템플릿)
+8. [FAQ — 자주 발생하는 문제와 해결법](#8-faq--자주-발생하는-문제와-해결법)
 
 ---
 
-## 1. 테스트 전 준비사항
+## 1. 테스트 철학 — "모니터링 도구의 모니터링"
 
-### 1-1. 필수 소프트웨어
+### 1-1. 핵심 원칙
 
-아래 도구가 설치되어 있어야 합니다. **설치 방법은 `DOCS/LOCAL_SETUP.md`를 참고**하세요.
+AITOP은 AI 서비스를 모니터링하는 도구입니다. 이 도구 자체가 올바르게 동작하지 않으면 고객의 AI 서비스 장애를 감지할 수 없습니다. 따라서 **"모니터링하는 도구가 모니터링되는 것"** 이 테스트의 최우선 목표입니다.
 
-| 도구 | 최소 버전 | 확인 명령어 | 용도 |
-|------|-----------|------------|------|
-| Docker Desktop | 4.30+ | `docker --version` | 로컬 인프라 스택 |
-| Docker Compose | v2.x | `docker compose version` | 서비스 오케스트레이션 |
-| Python | 3.10+ | `python --version` | 테스트 스크립트 실행 |
-| pip | 최신 | `pip --version` | Python 패키지 설치 |
-| curl | 기본 | `curl --version` | API 호출 테스트 |
-| Git Bash (Windows) | — | — | 쉘 환경 |
+```
+일반적인 테스트:  내 코드가 올바른지?
+AITOP의 테스트:   모니터링 파이프라인 자체가 올바른지?
+```
 
-> **Windows 사용자**: 모든 명령어는 **Git Bash** 기준입니다.
-> PowerShell에서 실행하면 경로 문제가 발생할 수 있습니다.
+비유하면 **소방서 정기 훈련**과 같습니다:
 
-### 1-2. Python 의존성 설치
+| 소방서 훈련              | AITOP 테스트                              |
+|--------------------------|------------------------------------------|
+| 소방서가 열려 있는가?    | Level 1: 빌드가 성공하는가?              |
+| 경보가 울리는가?         | Level 2: 단위 테스트가 통과하는가?       |
+| 지도에 표시되는가?       | Level 3: 35개 UI 페이지가 렌더링되는가?  |
+| 출동 경로가 맞는가?      | Level 4: API 계약이 일치하는가?          |
+| 동시에 여러 화재 처리?   | Level 5-6: Docker 통합 + 부하 테스트     |
+| 방화 시설 점검           | Level 7: OWASP 보안 감사                 |
+| 실전 배포 가능?          | Level 8-9: K8s 배포 + SLO 검증          |
+
+### 1-2. 테스트 피라미드
+
+```
+                    /\
+                   /  \         Level 8-9: K8s 배포 + SLO 검증
+                  / E2E \       (가장 느리지만 가장 현실적)
+                 /________\
+                /          \    Level 5-7: Docker 통합 + 부하 + 보안
+               / Integration\   (서비스간 연동 검증)
+              /______________\
+             /                \  Level 3-4: UI 접근성 + API 계약
+            /   Component      \ (개별 컴포넌트 검증)
+           /____________________\
+          /                      \ Level 1-2: 빌드 + 단위 테스트
+         /     Unit / Build       \ (가장 빠르고 가장 자주 실행)
+        /__________________________\
+```
+
+### 1-3. 이중 검증 철학 — 사람 + AI
+
+모든 테스트는 **두 가지 관점**에서 검증합니다:
+
+- **Part A (매뉴얼)**: 사람이 직접 명령어를 실행하고 결과를 눈으로 확인
+- **Part B (AI)**: Claude Code/GPT 등 AI 도구를 활용하여 코드 품질/일관성을 자동 검증
+- **Part C (교차검증)**: Part A와 Part B의 결과를 비교하여 불일치를 찾아냄
+
+이 이중 검증을 통해 사람이 놓치는 패턴 불일치를 AI가 잡고, AI가 놓치는 실제 동작 문제를 사람이 잡습니다.
+
+---
+
+## 2. 테스트 분류 체계
+
+### 2-1. 전체 매핑
+
+| Part | 분류 | 실행 주체 | 수준 | 소요 시간 |
+|------|------|-----------|------|-----------|
+| **A** | 매뉴얼 테스트 | 사람 (QA/개발자) | Level 1-9 | 총 2-4시간 |
+| **B** | AI 테스트 | Claude Code / GPT | AI-L1 ~ AI-L5 | 총 1-2시간 |
+| **C** | 교차검증 | 사람 + AI 협업 | 대조표 작성 | 총 30분 |
+
+### 2-2. Part A — 매뉴얼 테스트 (9 레벨)
+
+| Level | 이름 | 무엇을 검증하는가 | 필수 도구 | 소요 시간 |
+|-------|------|-------------------|-----------|-----------|
+| 1 | 빌드 검증 | Go/Frontend 코드가 컴파일되는가 | Go 1.25+, Node.js 22+ | 5분 |
+| 2 | 단위 테스트 | 개별 함수/컴포넌트가 올바른가 | go test, vitest | 10분 |
+| 3 | UI 접근성 검증 | 35개 페이지가 렌더링되는가 | 브라우저 | 20분 |
+| 4 | API 계약 테스트 | 프론트엔드/백엔드 API가 일치하는가 | curl | 15분 |
+| 5 | Docker 통합 테스트 | 전체 시스템이 연동되는가 | Docker Compose | 20분 |
+| 6 | 부하 테스트 | 동시 200 사용자를 처리할 수 있는가 | Locust | 30분 |
+| 7 | 보안 감사 | OWASP Top 10 취약점이 없는가 | curl + 수동 | 30분 |
+| 8 | K8s 배포 검증 | Helm Chart가 유효한가 | helm CLI | 15분 |
+| 9 | SLO 검증 | 성능 임계치를 충족하는가 | Prometheus + 계산 | 15분 |
+
+### 2-3. Part B — AI 테스트 (5 레벨)
+
+| Level | 이름 | 무엇을 검증하는가 | AI 도구 |
+|-------|------|-------------------|---------|
+| AI-L1 | 코드 품질 리뷰 | 타입 안전성, 데드 코드, 보안 취약점 | Claude Code |
+| AI-L2 | 테스트 커버리지 분석 | 테스트가 부족한 영역 식별 및 보강 | Claude Code |
+| AI-L3 | API 호환성 검증 | 프론트엔드/백엔드 인터페이스 일관성 | Claude Code |
+| AI-L4 | 성능 프로파일링 분석 | 성능 병목 코드 식별 | Claude Code |
+| AI-L5 | 문서/코드 일관성 검증 | 문서와 코드 간 불일치 탐지 | Claude Code |
+
+### 2-4. Part C — 교차검증
+
+Part A의 매뉴얼 결과와 Part B의 AI 결과를 대조하여, 양쪽 모두 PASS인 항목만 최종 PASS로 판정합니다. 불일치가 있으면 원인을 조사하고 해결합니다.
+
+---
+
+## 3. Part A: 매뉴얼 테스트 절차 (Level 1-9)
+
+> 각 Level의 상세한 초보자용 절차는 [MANUAL_TESTING_GUIDE.md](./MANUAL_TESTING_GUIDE.md) 를 참고하세요.
+> 이 섹션은 각 Level의 목적, 사전 조건, 핵심 명령어, 예상 결과, 트러블슈팅을 요약합니다.
+
+---
+
+### Level 1: 빌드 검증
+
+**목적**: Go 백엔드와 Next.js 프론트엔드가 오류 없이 컴파일되는지 확인합니다. 빌드가 실패하면 이후 모든 테스트가 불가능합니다.
+
+**사전 조건**:
+- Go 1.25 이상 설치 (`go version` 으로 확인)
+- Node.js 22 이상 설치 (`node --version` 으로 확인)
+- npm 10 이상 설치 (`npm --version` 으로 확인)
+
+**핵심 명령어**:
+
+```bash
+# Go 빌드 (agent 디렉토리에서)
+cd /c/workspace/aiservice-monitoring/agent
+go build ./...
+
+# Frontend 빌드 (frontend 디렉토리에서)
+cd /c/workspace/aiservice-monitoring/frontend
+npm install
+npx next build
+```
+
+**예상 결과**:
+- Go: 오류 메시지 없이 종료 (exit code 0)
+- Frontend: `Route (app)` 테이블이 출력되고 `.next` 디렉토리가 생성됨
+
+**PASS 조건**: 두 빌드 모두 오류 없이 완료
+
+**트러블슈팅**:
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `go: module not found` | Go 모듈 캐시 문제 | `cd agent && go mod tidy` |
+| `Type error` (Frontend) | TypeScript 타입 불일치 | 에러 메시지의 파일:라인 확인 |
+| `npm ERR!` | node_modules 손상 | `rm -rf node_modules && npm install` |
+| `next: command not found` | PATH 문제 | `npx next build` 사용 (npx 경유) |
+
+---
+
+### Level 2: 단위 테스트
+
+**목적**: 개별 함수와 컴포넌트가 올바르게 동작하는지 확인합니다.
+
+**사전 조건**: Level 1 통과 (빌드 성공)
+
+**핵심 명령어**:
+
+```bash
+# Go 유닛 테스트 (21개 테스트 파일)
+cd /c/workspace/aiservice-monitoring/agent
+go test ./... -v
+
+# Frontend 유닛 테스트 (Vitest, 5개 테스트 파일)
+cd /c/workspace/aiservice-monitoring/frontend
+npx vitest run
+```
+
+**예상 결과**:
+- Go: 각 테스트 패키지마다 `ok` 또는 `PASS` 표시
+- Frontend: `Tests passed` 메시지
+
+**PASS 조건**: 모든 테스트가 PASS (FAIL 0개)
+
+**트러블슈팅**:
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `FAIL` 표시 | 테스트 로직 오류 | 해당 `_test.go` 파일의 실패 함수 확인 |
+| `timeout` | 네트워크 의존 테스트 | `-timeout 60s` 옵션 추가 |
+| Frontend `SyntaxError` | jsdom 환경 이슈 | `node_modules` 재설치 |
+
+---
+
+### Level 3: UI 접근성 검증
+
+**목적**: Next.js 프론트엔드의 35개 이상 페이지가 모두 정상 렌더링되는지 확인합니다. 데모 모드(백엔드 없이)에서 동작하는지 검증합니다.
+
+**사전 조건**: Level 1 통과 (Frontend 빌드 성공)
+
+**핵심 명령어**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/frontend
+npm run dev
+# 브라우저에서 http://localhost:3000 접속
+```
+
+**35개 페이지 체크리스트**:
+
+| # | 경로 | 페이지 이름 | 확인 포인트 |
+|---|------|------------|-------------|
+| 1 | `/` | 메인 대시보드 | KPI 카드 렌더링 |
+| 2 | `/login` | 로그인 | 폼 표시 (admin@aitop.io / admin) |
+| 3 | `/agents` | 에이전트 목록 | 테이블 렌더링 |
+| 4 | `/agents/groups/{id}` | 에이전트 그룹 상세 | 그룹 정보 표시 |
+| 5 | `/ai` | AI 서비스 목록 | 카드 렌더링 |
+| 6 | `/ai/{id}` | AI 서비스 상세 | 상세 정보 표시 |
+| 7 | `/ai/costs` | AI 비용 분석 | 차트 렌더링 |
+| 8 | `/ai/evaluation` | AI 평가 | 평가 데이터 표시 |
+| 9 | `/ai/gpu` | GPU 모니터링 | GPU 카드 렌더링 |
+| 10 | `/ai/prompts` | 프롬프트 관리 | 프롬프트 목록 |
+| 11 | `/ai/training` | 학습 관리 | 학습 작업 목록 |
+| 12 | `/ai/training/{id}` | 학습 상세 | 상세 정보 표시 |
+| 13 | `/alerts` | 알림 목록 | 알림 테이블 |
+| 14 | `/anomalies` | 이상 탐지 | 이상 징후 목록 |
+| 15 | `/business` | 비즈니스 대시보드 | KPI 표시 |
+| 16 | `/cloud` | 클라우드 모니터링 | 클라우드 리소스 |
+| 17 | `/copilot` | AI 코파일럿 | 채팅 인터페이스 |
+| 18 | `/costs` | 비용 관리 | 비용 차트 |
+| 19 | `/dashboards` | 대시보드 빌더 | 대시보드 목록 |
+| 20 | `/diagnostics` | 진단 보고서 | 보고서 목록 |
+| 21 | `/executive` | 경영진 대시보드 | Executive KPI |
+| 22 | `/infra` | 인프라 목록 | 서버 테이블 |
+| 23 | `/infra/{hostname}` | 인프라 상세 | 서버 상세 정보 |
+| 24 | `/infra/cache` | 캐시 모니터링 | Redis/캐시 상태 |
+| 25 | `/infra/queues` | 메시지 큐 | 큐 상태 표시 |
+| 26 | `/logs` | 로그 뷰어 | 로그 테이블 |
+| 27 | `/marketplace` | 마켓플레이스 | 플러그인 목록 |
+| 28 | `/metrics` | 메트릭 탐색기 | 메트릭 차트 |
+| 29 | `/mobile` | 모바일 뷰 | 반응형 UI |
+| 30 | `/notebooks` | 노트북 | 노트북 목록 |
+| 31 | `/pipelines` | 파이프라인 | 파이프라인 목록 |
+| 32 | `/profiling` | 프로파일링 목록 | 프로파일 목록 |
+| 33 | `/profiling/{profileId}` | 프로파일 상세 | 프로파일 데이터 |
+| 34 | `/projects` | 프로젝트 관리 | 프로젝트 목록 |
+| 35 | `/projects/new` | 프로젝트 생성 | 생성 폼 |
+| 36 | `/projects/{id}` | 프로젝트 상세 | 프로젝트 정보 |
+| 37 | `/services` | 서비스 목록 | 서비스 테이블 |
+| 38 | `/services/{id}` | 서비스 상세 | 서비스 정보 |
+| 39 | `/settings` | 설정 | 설정 폼 |
+| 40 | `/slo` | SLO 관리 | SLO 목록 |
+| 41 | `/tenants` | 테넌트 관리 | 테넌트 목록 |
+| 42 | `/topology` | 토폴로지 맵 | 그래프 렌더링 |
+| 43 | `/traces` | 트레이스 뷰어 | 트레이스 목록 |
+| 44 | `/traces/{traceId}` | 트레이스 상세 | 스팬 트리 |
+
+**PASS 조건**: 모든 페이지가 JavaScript 오류 없이 렌더링됨 (데모 데이터 기반)
+
+**트러블슈팅**:
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 빈 페이지 | demo-data.ts 폴백 미작동 | 브라우저 콘솔에서 에러 확인 |
+| 500 에러 | 서버 컴포넌트 오류 | `npm run dev` 터미널 로그 확인 |
+| 스타일 깨짐 | Tailwind CSS 빌드 실패 | `npm run dev` 재시작 |
+
+---
+
+### Level 4: API 계약 테스트
+
+**목적**: Collection Server의 REST API 엔드포인트가 프론트엔드의 기대와 일치하는지 확인합니다.
+
+**사전 조건**: Go 빌드 성공 (Level 1)
+
+**핵심 명령어**:
+
+```bash
+# Collection Server 실행
+cd /c/workspace/aiservice-monitoring/agent
+go run ./cmd/collection-server
+
+# 별도 터미널에서 API 테스트
+# 헬스체크
+curl -s http://localhost:8080/health
+# 기대: {"status":"ok",...}
+
+# 로그인
+curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# 기대: {"token":"eyJ..."} (JWT 토큰)
+
+# 에이전트 목록 (JWT 필요)
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | python -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
+
+curl -s http://localhost:8080/api/v1/agents \
+  -H "Authorization: Bearer $TOKEN"
+# 기대: {"agents":[],...} (빈 배열 또는 에이전트 목록)
+```
+
+**필수 확인 엔드포인트**:
+
+| 메서드 | 경로 | 기대 상태 코드 |
+|--------|------|---------------|
+| GET | `/health` | 200 |
+| POST | `/api/v1/auth/login` | 200 |
+| POST | `/api/v1/auth/refresh` | 200 |
+| GET | `/api/v1/agents` | 200 |
+| POST | `/api/v1/agents/register` | 200/201 |
+| POST | `/api/v1/agents/heartbeat` | 200/204 |
+| GET | `/api/v1/collect/jobs` | 200 |
+| POST | `/api/v1/collect/trigger` | 200/201 |
+| GET | `/api/v1/fleet/kpi` | 200 |
+| GET | `/api/v1/diagnostics` | 200 |
+
+**PASS 조건**: 모든 엔드포인트가 기대한 상태 코드를 반환
+
+**트러블슈팅**:
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `connection refused` | 서버 미실행 | `go run ./cmd/collection-server` 재실행 |
+| `401 Unauthorized` | 토큰 만료/없음 | 로그인 API로 새 토큰 발급 |
+| `404 Not Found` | 잘못된 경로 | API 경로 확인 (`/api/v1/` 접두사) |
+
+---
+
+### Level 5: Docker 통합 테스트
+
+**목적**: docker-compose.e2e.yaml을 사용하여 전체 시스템(Frontend + Collection Server + PostgreSQL + MinIO + OTel Collector + Prometheus + Tempo + Loki + Demo 서비스)이 올바르게 연동되는지 확인합니다.
+
+**사전 조건**:
+- Docker Desktop 실행 중
+- 최소 8GB 여유 메모리 (10개 이상 컨테이너 동시 실행)
+
+**핵심 명령어**:
 
 ```bash
 cd /c/workspace/aiservice-monitoring
 
-# 가상환경 생성 (최초 1회)
-python -m venv .venv
+# E2E 스택 실행
+docker compose -f docker-compose.e2e.yaml up -d --build
 
-# 활성화
-source .venv/bin/activate      # Git Bash / Linux / macOS
-# .venv\Scripts\activate       # Windows CMD
-# .venv\Scripts\Activate.ps1   # PowerShell
+# 상태 확인 (모든 서비스 healthy 대기)
+docker compose -f docker-compose.e2e.yaml ps
 
-# 테스트에 필요한 패키지 설치
-pip install --upgrade pip
-pip install \
-  opentelemetry-sdk \
-  opentelemetry-api \
-  opentelemetry-exporter-otlp-proto-grpc \
-  opentelemetry-instrumentation-fastapi \
-  httpx \
-  locust \
-  tabulate
+# 개별 헬스체크
+curl -s http://localhost:8080/health     # Collection Server
+curl -s http://localhost:3000/api/health  # Frontend
+curl -s http://localhost:9090/-/ready     # Prometheus
+curl -s http://localhost:3200/ready       # Tempo
+curl -s http://localhost:3100/ready       # Loki
+
+# 종료
+docker compose -f docker-compose.e2e.yaml down -v
 ```
 
-### 1-3. 프로젝트 클론 (처음인 경우)
+**서비스 체크리스트**:
 
-```bash
-git clone https://github.com/aura-kimjh/aiservice-monitoring.git /c/workspace/aiservice-monitoring
-cd /c/workspace/aiservice-monitoring
-```
+| 서비스 | 포트 | 헬스체크 URL |
+|--------|------|-------------|
+| Collection Server | 8080 | http://localhost:8080/health |
+| Frontend | 3000 | http://localhost:3000/api/health |
+| PostgreSQL | 5432 | `docker exec aitop-postgres-e2e pg_isready` |
+| MinIO | 9000/9001 | http://localhost:9001 (Console) |
+| OTel Collector | 4317/4318 | http://localhost:13133/ |
+| Prometheus | 9090 | http://localhost:9090/-/ready |
+| Tempo | 3200 | http://localhost:3200/ready |
+| Loki | 3100 | http://localhost:3100/ready |
+| Demo RAG Service | 8000 | http://localhost:8000/health |
 
-### 1-4. 테스트 레벨 안내
+**PASS 조건**: 모든 서비스가 `healthy` 또는 `Up` 상태
 
-테스트는 **Level 1부터 순서대로** 진행합니다. 이전 Level이 통과해야 다음 Level을 테스트할 수 있습니다.
+**트러블슈팅**:
 
-```
-Level 1: 인프라 기동           ← Docker만 있으면 가능 (5분)
-Level 2: 텔레메트리 수신       ← Python SDK 필요 (10분)
-Level 3: 대시보드 표시         ← 브라우저만 필요 (5분)
-Level 4: Alert Rule 검증       ← bash + promtool (5분)
-Level 5: 부하 테스트           ← Python + locust (15분)
-Level 6: 트레이스 단절 탐지    ← Python + httpx (10분)
-Level 7: 비용 시뮬레이션       ← Python + tabulate (5분)
-Level 8: Helm Dry-Run          ← helm CLI 필요 (10분)
-Level 9: CI 로컬 실행          ← act CLI 선택 (15분)
-```
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 빌드 실패 | Dockerfile 오류 | `docker compose logs <서비스명>` 확인 |
+| 포트 충돌 | 이미 점유된 포트 | `netstat -ano \| findstr :<포트>` 로 확인 |
+| 메모리 부족 | 서비스가 너무 많음 | Docker Desktop 메모리 할당 증가 |
+| DB 연결 실패 | PostgreSQL 미시작 | healthcheck 로그 확인, depends_on 대기 |
 
 ---
 
-## 2. Level 1: 로컬 인프라 기동 테스트
+### Level 6: 부하 테스트
 
-> **목표**: Docker Compose로 모니터링 스택 6개 서비스가 정상 기동되는지 확인
+**목적**: Locust 기반으로 Collection Server에 동시 200명 사용자 부하를 가하여 성능 목표를 충족하는지 검증합니다.
 
-### 왜 이 테스트가 필요한가?
+**사전 조건**: Level 5 통과 (Docker E2E 스택 가동 중) 또는 Collection Server 단독 실행
 
-모니터링의 가장 기본은 **모니터링 도구 자체가 동작하는 것**입니다.
-건물의 화재 경보기가 고장나 있으면 화재를 감지할 수 없듯이,
-모니터링 스택이 가동되지 않으면 어떤 성능 문제도 발견할 수 없습니다.
-이 테스트는 6개 핵심 서비스가 모두 정상 동작하는지 확인하는 기초 체크입니다.
-
-### 이 테스트가 실패하면?
-
-- **포트 충돌**: 이미 다른 프로그램이 같은 포트를 사용 중일 수 있습니다.
-  `netstat -ano | findstr :4317` 명령으로 점유 프로세스를 확인하세요.
-- **Docker 미실행**: Docker Desktop이 실행 중인지 확인하세요.
-- **메모리 부족**: 6개 서비스를 동시에 띄우려면 최소 4GB 여유 메모리가 필요합니다.
-  Docker Desktop → Settings → Resources에서 메모리 할당을 확인하세요.
-
-### Step 1: 스택 시작
+**핵심 명령어**:
 
 ```bash
-cd /c/workspace/aiservice-monitoring
-
-# 전체 스택 백그라운드 실행
-docker compose -f infra/docker/docker-compose.yaml up -d
-```
-
-### Step 2: 기동 상태 확인 (30초 대기 후)
-
-```bash
-# 모든 컨테이너가 "Up" 또는 "healthy" 상태인지 확인
-docker compose -f infra/docker/docker-compose.yaml ps
-```
-
-**기대 출력**:
-```
-NAME              STATUS          PORTS
-otel-collector    Up (healthy)    0.0.0.0:4317->4317/tcp, 0.0.0.0:4318->4318/tcp
-prometheus        Up              0.0.0.0:9090->9090/tcp
-tempo             Up              0.0.0.0:3200->3200/tcp
-loki              Up              0.0.0.0:3100->3100/tcp
-grafana           Up              0.0.0.0:3000->3000/tcp
-jaeger            Up              0.0.0.0:16686->16686/tcp
-```
-
-> **6개 서비스가 모두 `Up`이면 PASS**입니다.
-
-### Step 3: 개별 헬스체크
-
-```bash
-# OTel Collector 헬스
-curl -s http://localhost:13133/health
-# 기대: {"status":"Server available","..."}
-
-# Prometheus 준비 상태
-curl -s http://localhost:9090/-/ready
-# 기대: "Prometheus Server is Ready."
-
-# Grafana 헬스
-curl -s http://localhost:3000/api/health
-# 기대: {"commit":"...","database":"ok","version":"..."}
-
-# Tempo 준비 상태
-curl -s http://localhost:3200/ready
-# 기대: "ready" 또는 HTTP 200
-
-# Loki 준비 상태
-curl -s http://localhost:3100/ready
-# 기대: "ready" 또는 HTTP 200
-
-# Jaeger 헬스
-curl -s http://localhost:16686/
-# 기대: HTML 페이지 (Jaeger UI)
-```
-
-### Step 4: 결과 판정
-
-| 항목 | 확인 방법 | PASS 조건 |
-|------|-----------|----------|
-| OTel Collector | `curl localhost:13133/health` | `Server available` |
-| Prometheus | `curl localhost:9090/-/ready` | `Ready` |
-| Grafana | `curl localhost:3000/api/health` | `database: ok` |
-| Tempo | `curl localhost:3200/ready` | HTTP 200 |
-| Loki | `curl localhost:3100/ready` | HTTP 200 |
-| Jaeger | 브라우저 `localhost:16686` | UI 표시 |
-
-**모든 항목 PASS → Level 1 완료**
-
-### 문제 발생 시
-
-```bash
-# 특정 서비스 로그 확인
-docker compose -f infra/docker/docker-compose.yaml logs otel-collector --tail=50
-docker compose -f infra/docker/docker-compose.yaml logs prometheus --tail=50
-
-# 포트 충돌 확인 (Windows)
-netstat -ano | findstr :4317
-# Git Bash
-ss -tlnp 2>/dev/null | grep 4317 || netstat -tlnp 2>/dev/null | grep 4317
-
-# 완전 재시작 (데이터 초기화)
-docker compose -f infra/docker/docker-compose.yaml down -v
-docker compose -f infra/docker/docker-compose.yaml up -d
-```
-
----
-
-## 3. Level 2: 텔레메트리 발생 & 수신 확인
-
-> **목표**: Python SDK로 테스트 Span/Metric을 생성하고, Collector가 수신하는지 확인
-> **전제 조건**: Level 1 완료 (인프라 스택 가동 중)
-
-### 왜 이 테스트가 필요한가?
-
-인프라 서비스가 떠 있어도, 실제 데이터가 **수집되는지**는 별개의 문제입니다.
-도로가 깔려 있어도 차가 실제로 달릴 수 있는지 테스트하는 것과 같습니다.
-SDK → Collector → 저장소(Jaeger/Prometheus)까지 데이터가 흘러가는지 확인합니다.
-
-### 이 테스트가 실패하면?
-
-- **트레이스가 전송되지 않음**: OTel Collector의 gRPC 엔드포인트(4317)에 접근 가능한지 확인하세요.
-- **Jaeger에 서비스가 안 보임**: Collector 로그에서 exporter 오류를 확인하세요. 전송 후 10-30초 대기가 필요합니다(batch processor 버퍼).
-- **Prometheus 메트릭이 0**: Collector의 Prometheus exporter(8889 포트)가 정상 동작하는지 확인하세요.
-
-### Step 1: 테스트 트레이스 발생
-
-```bash
-cd /c/workspace/aiservice-monitoring
-source .venv/bin/activate
-
-python -c "
-import time, os
-os.environ['OTEL_EXPORTER_OTLP_ENDPOINT'] = 'http://localhost:4317'
-os.environ['OTEL_EXPORTER_OTLP_INSECURE'] = 'true'
-
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
-
-# Provider 설정
-resource = Resource.create({
-    'service.name': 'test-guide-service',
-    'deployment.environment': 'test'
-})
-provider = TracerProvider(resource=resource)
-exporter = OTLPSpanExporter(endpoint='http://localhost:4317', insecure=True)
-provider.add_span_processor(BatchSpanProcessor(exporter))
-trace.set_tracer_provider(provider)
-
-tracer = trace.get_tracer('test-guide')
-
-# 테스트 Span 생성 (부모-자식 관계)
-with tracer.start_as_current_span('test-request') as parent:
-    parent.set_attribute('http.method', 'GET')
-    parent.set_attribute('http.url', '/api/test')
-
-    with tracer.start_as_current_span('test-llm-call') as child:
-        child.set_attribute('llm.model', 'test-model')
-        child.set_attribute('llm.ttft_ms', 150)
-        time.sleep(0.1)  # 100ms 시뮬레이션
-
-    with tracer.start_as_current_span('test-guardrail') as child:
-        child.set_attribute('guardrail.action', 'PASS')
-        child.set_attribute('guardrail.policy', 'input_safety')
-        time.sleep(0.05)
-
-# Flush (전송 보장)
-provider.force_flush()
-provider.shutdown()
-print('✅ 테스트 트레이스 전송 완료')
-"
-```
-
-### Step 2: Jaeger에서 트레이스 확인
-
-1. 브라우저에서 **http://localhost:16686** 접속
-2. 좌측 **Service** 드롭다운에서 `test-guide-service` 선택
-3. **Find Traces** 클릭
-4. 트레이스 1개가 표시되면 클릭
-
-**확인 사항**:
-- [x] `test-request` 부모 Span이 보이는가?
-- [x] `test-llm-call`, `test-guardrail` 자식 Span이 보이는가?
-- [x] 각 Span에 설정한 Attribute가 표시되는가? (`llm.model`, `guardrail.action` 등)
-
-### Step 3: Prometheus에서 Collector 내부 메트릭 확인
-
-```bash
-# OTel Collector가 수신한 Span 수 확인
-curl -s 'http://localhost:9090/api/v1/query?query=otelcol_receiver_accepted_spans_total' | \
-  python -c "
-import sys, json
-data = json.load(sys.stdin)
-results = data.get('data', {}).get('result', [])
-if results:
-    for r in results:
-        print(f'  수신 Span 수: {r[\"value\"][1]}  (receiver: {r[\"metric\"].get(\"receiver\", \"unknown\")})')
-    print('✅ Collector가 Span을 수신하고 있습니다')
-else:
-    print('⚠️  아직 메트릭이 수집되지 않았습니다. 1분 후 재시도하세요.')
-"
-```
-
-### Step 4: 결과 판정
-
-| 항목 | PASS 조건 |
-|------|----------|
-| 스크립트 실행 | `✅ 테스트 트레이스 전송 완료` 출력 |
-| Jaeger | `test-guide-service` 트레이스가 Span 3개와 함께 표시 |
-| Prometheus | `otelcol_receiver_accepted_spans_total` > 0 |
-
-**모든 항목 PASS → Level 2 완료**
-
----
-
-## 4. Level 3: Grafana 대시보드 표시 확인
-
-> **목표**: Grafana에 5개 대시보드가 프로비저닝되어 있는지 확인
-> **전제 조건**: Level 1 완료
-
-### 왜 이 테스트가 필요한가?
-
-대시보드는 수집된 데이터를 **눈으로 볼 수 있게** 해주는 핵심 UI입니다.
-데이터가 수집되어도 대시보드가 없으면 활용할 수 없습니다.
-5개 대시보드와 3개 데이터소스가 올바르게 연결되었는지 확인합니다.
-
-### 이 테스트가 실패하면?
-
-- **대시보드가 안 보임**: Grafana 컨테이너가 dashboard JSON 파일을 올바르게 마운트했는지 확인하세요. `docker compose logs grafana --tail=30`으로 프로비저닝 오류를 확인할 수 있습니다.
-- **데이터소스 연결 실패**: Grafana 내 Data sources에서 각 소스의 URL이 올바른지 확인하세요 (Prometheus: `http://prometheus:9090`, Tempo: `http://tempo:3200`, Loki: `http://loki:3100`).
-- **대시보드에 "No Data" 표시**: 정상입니다. 아직 실제 AI 서비스가 연결되지 않았기 때문입니다. 데이터소스 연결만 정상이면 PASS입니다.
-
-### Step 1: Grafana 접속
-
-1. 브라우저에서 **http://localhost:3000** 접속
-2. 로그인: ID `admin`, PW `admin`
-3. (첫 접속 시 비밀번호 변경 요청 → Skip 가능)
-
-### Step 2: 대시보드 존재 확인
-
-좌측 메뉴 → **Dashboards** 클릭
-
-아래 5개 대시보드가 보여야 합니다:
-
-| # | 대시보드 이름 | 설명 |
-|---|-------------|------|
-| 1 | AI Service Overview | Executive KPI 8개 + 레이어별 기여도 |
-| 2 | LLM Performance | TTFT/TPS/토큰 비용/큐 대기 |
-| 3 | GPU Correlation | VRAM vs 큐 대기 이중 Y축, OOM 예측 |
-| 4 | Guardrail Analysis | 차단율/위반 유형/레이턴시/Loki 로그 |
-| 5 | Agent & External API | Tool 성공률/P99/재귀 깊이 |
-
-### Step 3: 데이터소스 연결 확인
-
-좌측 메뉴 → **Connections** → **Data sources**
-
-| 데이터소스 | Type | 상태 |
-|-----------|------|------|
-| Prometheus | Prometheus | `Data source is working` |
-| Tempo | Tempo | `Data source is working` |
-| Loki | Loki | `Data source is working` |
-
-각 데이터소스의 **Test** 버튼을 클릭하여 연결 상태를 확인합니다.
-
-### Step 4: API로 확인 (CLI 선호 시)
-
-```bash
-# 대시보드 목록 API
-curl -s http://admin:admin@localhost:3000/api/search | \
-  python -c "
-import sys, json
-dashboards = json.load(sys.stdin)
-print(f'등록된 대시보드 수: {len(dashboards)}')
-for d in dashboards:
-    print(f'  - {d[\"title\"]}  (uid: {d.get(\"uid\", \"N/A\")})')
-if len(dashboards) >= 5:
-    print('✅ 대시보드 5개 이상 등록됨')
-else:
-    print('⚠️  대시보드가 부족합니다. Grafana 프로비저닝 로그를 확인하세요.')
-"
-
-# 데이터소스 확인
-curl -s http://admin:admin@localhost:3000/api/datasources | \
-  python -c "
-import sys, json
-ds_list = json.load(sys.stdin)
-print(f'등록된 데이터소스 수: {len(ds_list)}')
-for ds in ds_list:
-    print(f'  - {ds[\"name\"]} ({ds[\"type\"]})')
-"
-```
-
-### Step 5: 결과 판정
-
-| 항목 | PASS 조건 |
-|------|----------|
-| 대시보드 수 | 5개 이상 |
-| 데이터소스 | Prometheus, Tempo, Loki 모두 `working` |
-
-**모든 항목 PASS → Level 3 완료**
-
----
-
-## 5. Level 4: Alert Rule 검증
-
-> **목표**: Prometheus Alert Rule 9개가 올바르게 정의되어 있는지 검증
-> **전제 조건**: Level 1 완료
-
-### 방법 A: test-alerts.sh 스크립트 실행 (권장)
-
-```bash
-cd /c/workspace/aiservice-monitoring
-
-# 실행 권한 부여
-chmod +x scripts/test-alerts.sh
-
-# 실행
-bash scripts/test-alerts.sh
-```
-
-**기대 출력**:
-```
-========================================================
-  AI Service Alert Rule 검증
-  Rules: .../infra/docker/prometheus-rules.yaml
-========================================================
-
-── 1. YAML 문법 검증 ───────────────────────────────────
-  ✅ PASS: prometheus-rules.yaml 문법 정상
-
-── 2. 필수 Alert Rule 존재 확인 ────────────────────────
-  ✅ PASS: Alert 존재: LLM_TTFT_High
-  ✅ PASS: Alert 존재: LLM_TPS_Low
-  ... (9개 모두 PASS)
-
-── 3. 임계치 값 검증 ───────────────────────────────────
-  ✅ PASS: TTFT 임계치 3000ms
-  ... (6개 모두 PASS)
-
-── 4. for 절 (알람 지속 시간) 검증 ────────────────────
-  ... (3개 모두 PASS)
-
-── 5. severity 레이블 검증 ─────────────────────────────
-  ... (9개 모두 PASS)
-
-========================================================
-  검증 결과
-  PASS: 27  FAIL: 0
-  상태: PASS
-========================================================
-```
-
-> **FAIL: 0이면 Level 4 PASS**입니다.
-
-### 방법 B: promtool로 직접 검증 (promtool 설치된 경우)
-
-```bash
-# promtool 설치 확인
-promtool --version
-
-# YAML 문법 검증
-promtool check rules infra/docker/prometheus-rules.yaml
-```
-
-### 방법 C: 수동 확인 (도구 없는 경우)
-
-`infra/docker/prometheus-rules.yaml` 파일을 열어 아래 9개 Alert가 존재하는지 확인합니다:
-
-1. `LLM_TTFT_High` (severity: critical, > 3000, for: 5m)
-2. `LLM_TPS_Low` (severity: warning, < 15, for: 5m)
-3. `LLM_Queue_Backlog` (severity: critical, > 5000, for: 3m)
-4. `GPU_VRAM_Critical` (severity: critical, > 90, for: 2m)
-5. `GPU_Temperature_High` (severity: warning, > 85, for: 5m)
-6. `Guardrail_Block_Rate_High` (severity: warning, > 10, for: 3m)
-7. `Guardrail_Latency_High` (severity: warning, > 1500, for: 3m)
-8. `ExternalAPI_Timeout_Rate_High` (severity: warning, > 5, for: 5m)
-9. `VectorDB_Search_Slow` (severity: warning, > 800, for: 5m)
-
----
-
-## 6. Level 5: 부하 테스트 (Load Test)
-
-> **목표**: Locust 기반 부하 테스트 스크립트가 정상 실행되는지 확인
-> **전제 조건**: Level 1 완료 + Python 환경 + locust 설치
-> **주의**: 이 테스트는 **실제 AI 서비스가 실행 중일 때** 의미 있습니다.
-> 서비스가 없으면 스크립트 구문 검증만 수행합니다.
-
-### Step 1: Locust 설치 확인
-
-```bash
-source .venv/bin/activate
+# Locust 설치 (Python 환경)
 pip install locust
-locust --version
-# 기대: locust 2.x.x
-```
 
-### Step 2: 스크립트 구문 검증 (서비스 없이)
-
-```bash
-# Python 구문 오류 확인
-python -c "import ast; ast.parse(open('scripts/load-test.py').read()); print('✅ 구문 검증 PASS')"
-```
-
-### Step 3: Locust Web UI로 테스트 (서비스 있을 때)
-
-```bash
-# Locust Web UI 실행
-locust -f scripts/load-test.py --host http://localhost:8000
+# Web UI 모드 실행
+cd /c/workspace/aiservice-monitoring
+locust -f locust/locustfile.py --host http://localhost:8080
 
 # 브라우저에서 http://localhost:8089 접속
-# Users: 10, Spawn rate: 2 입력 후 Start 클릭
+# Users: 200, Spawn rate: 10 설정 후 Start
+
+# 헤드리스 모드 (CI/CD용, 10분 실행)
+locust -f locust/locustfile.py --config locust/locust.conf --headless --run-time 10m
 ```
 
-> **서비스가 없는 경우**: Step 2의 구문 검증만 PASS이면 Level 5 통과로 간주합니다.
+**4가지 부하 시나리오**:
 
-### Step 4: 부하 테스트 시나리오 설명
+| 시나리오 | 클래스 | 비중 | 설명 |
+|---------|--------|------|------|
+| 대시보드 조회 | `APIQueryUser` | 60% | 에이전트 목록, 상세, KPI 조회 |
+| 에이전트 등록 | `AgentRegUser` | 10% | 신규 에이전트 등록/삭제 |
+| Heartbeat Storm | `HeartbeatUser` | 20% | 다수 에이전트 주기적 Heartbeat |
+| 수집 트리거 | `CollectTrigUser` | 10% | 수집 작업 트리거 + 진단 보고서 |
 
-| 시나리오 | 클래스명 | 설명 |
-|---------|---------|------|
-| 정상 트래픽 | `NormalTrafficUser` | 채팅 70%, 임베딩 20%, 헬스체크 10% |
-| 가드레일 스트레스 | `GuardrailStressUser` | 악성 입력 20% 혼합 |
-| LLM 과부하 | `LLMOverloadUser` | 동시 100 요청, 긴 컨텍스트 |
-| 외부 API 지연 | `ExternalAPIDelayUser` | Circuit Breaker 동작 검증 |
+**성능 목표 (SLO)**:
+
+| 메트릭 | 목표 | 판정 |
+|--------|------|------|
+| p50 응답시간 | < 500ms | 필수 |
+| p95 응답시간 | < 2000ms | 필수 |
+| p99 응답시간 | < 5000ms | 권장 |
+| 실패율 | < 1% | 필수 |
+| 목표 RPS | ~1000 req/s | 참고 |
+
+**PASS 조건**: p95 < 2000ms 이고 실패율 < 1%
+
+**트러블슈팅**:
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 대부분 401 응답 | 인증 실패 | 데모 계정 유효성 확인 |
+| p95 > 2000ms | 서버 성능 부족 | DB 쿼리 최적화 필요, Docker 리소스 증가 |
+| 연결 거부 다수 | 서버 과부하 | Users 수를 줄여서 재시도 |
 
 ---
 
-## 7. Level 6: Context Propagation 단절 탐지
+### Level 7: 보안 감사 (OWASP Top 10)
 
-> **목표**: validate-traces.py 스크립트가 정상 동작하는지 확인
-> **전제 조건**: Level 1 완료 + Level 2 완료 (트레이스 데이터 존재)
+**목적**: 주요 웹 보안 취약점이 없는지 확인합니다.
 
-### Step 1: 스크립트 구문 검증
+**사전 조건**: Level 4 통과 (API 접근 가능)
+
+**검증 항목**:
+
+| # | OWASP 항목 | 검증 방법 | 기대 결과 |
+|---|-----------|-----------|-----------|
+| 1 | 인젝션 | SQL Injection 패턴 입력 테스트 | 에러 메시지에 SQL 구문 미노출 |
+| 2 | 인증 실패 | 잘못된 JWT로 API 호출 | 401 반환 |
+| 3 | 민감 데이터 노출 | API 응답에 비밀번호/시크릿 포함 여부 | 민감 정보 미포함 |
+| 4 | XXE | XML 페이로드 전송 | 거부 또는 무시 |
+| 5 | 접근 제어 | 인증 없이 보호된 API 호출 | 401/403 반환 |
+| 6 | 보안 설정 오류 | 불필요한 HTTP 헤더 노출 | Server 헤더 미노출 |
+| 7 | XSS | 스크립트 태그 입력 | HTML 이스케이프 처리 |
+| 8 | 역직렬화 | 악성 JSON 페이로드 | 400 또는 안전한 에러 |
+| 9 | 알려진 취약점 | 의존성 버전 확인 | 알려진 CVE 없음 |
+| 10 | 로깅/모니터링 | 실패한 로그인 기록 확인 | 로그에 기록됨 |
+
+**핵심 테스트 명령어 예시**:
 
 ```bash
-python -c "import ast; ast.parse(open('scripts/validate-traces.py').read()); print('✅ 구문 검증 PASS')"
+# 인증 없이 보호된 API 접근 시도
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/v1/agents
+# 기대: 401
+
+# 잘못된 JWT로 접근 시도
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer invalid-token-here" \
+  http://localhost:8080/api/v1/agents
+# 기대: 401
+
+# SQL Injection 시도
+curl -s http://localhost:8080/api/v1/agents?filter="1'+OR+'1'='1"
+# 기대: 400 또는 빈 결과 (SQL 오류 미노출)
+
+# XSS 시도 (에이전트 등록 시)
+curl -s -X POST http://localhost:8080/api/v1/agents/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"agent_id":"<script>alert(1)</script>","hostname":"test"}'
+# 기대: 400 (유효성 검증 실패) 또는 이스케이프 처리
 ```
 
-### Step 2: 실행 (Tempo 연동)
-
-```bash
-python scripts/validate-traces.py \
-  --tempo-url http://localhost:3200 \
-  --hours 1
-```
-
-> **참고**: Level 2에서 전송한 테스트 트레이스가 있어야 결과가 나옵니다.
-> 트레이스가 없으면 "0개 트레이스 분석됨"으로 표시될 수 있습니다 — 이것은 정상입니다.
-
-### Step 3: CI용 실행 (실패 시 exit 1)
-
-```bash
-python scripts/validate-traces.py \
-  --tempo-url http://localhost:3200 \
-  --hours 1 \
-  --fail-on-broken
-```
+**PASS 조건**: 10개 항목 모두 기대 결과와 일치
 
 ---
 
-## 8. Level 7: Sampling 비용 시뮬레이션
+### Level 8: Kubernetes 배포 검증 (Helm Dry-Run)
 
-> **목표**: Tail Sampling 정책별 비용 시뮬레이션 스크립트 실행
-> **전제 조건**: Python 환경 + tabulate 설치
+**목적**: Helm Chart가 유효한 Kubernetes YAML을 생성하는지 확인합니다.
 
-### Step 1: 실행
+**사전 조건**: helm CLI 설치 (`helm version`)
 
-```bash
-pip install tabulate
-
-python scripts/benchmark-sampling.py
-```
-
-**기대 출력 (예시)**:
-```
-┌──────────────────────┬──────────────┬──────────────┬──────────────┐
-│ 정책                  │ 보존율 (%)   │ 월간 트레이스 │ 월간 비용 ($) │
-├──────────────────────┼──────────────┼──────────────┼──────────────┤
-│ 전량 수집 (100%)      │ 100.0        │ 2,592,000    │ $415.00      │
-│ Head-based 5%         │ 5.0          │ 129,600      │ $20.75       │
-│ Tail Sampling (추천)  │ 19.3         │ 500,256      │ $80.04       │
-│ ...                   │              │              │              │
-└──────────────────────┴──────────────┴──────────────┴──────────────┘
-```
-
-### Step 2: CSV 내보내기
+**핵심 명령어**:
 
 ```bash
-python scripts/benchmark-sampling.py --export-csv sampling-results.csv
-cat sampling-results.csv
-```
-
----
-
-## 9. Level 8: Helm Chart Dry-Run 검증
-
-> **목표**: Helm Chart 템플릿이 유효한 YAML을 렌더링하는지 확인
-> **전제 조건**: helm CLI 설치
-
-### Step 1: Helm 설치 확인
-
-```bash
-helm version
-# 기대: version.BuildInfo{Version:"v3.x.x", ...}
-```
-
-설치가 안 되어 있다면:
-```bash
-# Windows (Chocolatey)
-choco install kubernetes-helm
-
-# macOS (Homebrew)
-brew install helm
-
-# Linux (snap)
-snap install helm --classic
-```
-
-### Step 2: 서브차트 의존성 다운로드 (최초 1회)
-
-```bash
-# Helm 서브차트 다운로드 (인터넷 연결 필요)
+# 서브차트 의존성 다운로드
 helm dependency update helm/aiservice-monitoring/
-```
 
-> 이 단계를 건너뛰면 Step 3~4에서 의존성 오류가 발생합니다.
-
-### Step 3: Chart Lint (문법 검증)
-
-```bash
+# Chart 문법 검증
 helm lint helm/aiservice-monitoring/
+
+# 기본값 렌더링
+helm template test-release helm/aiservice-monitoring/ --debug 2>&1 | head -100
+
+# dev 환경 렌더링
+helm template test-release helm/aiservice-monitoring/ \
+  -f helm/aiservice-monitoring/values-dev.yaml --debug 2>&1 | head -100
+
+# prod 환경 렌더링
+helm template test-release helm/aiservice-monitoring/ \
+  -f helm/aiservice-monitoring/values-prod.yaml --debug 2>&1 | head -100
+
+# 개별 템플릿 렌더링
+helm template test-release helm/aiservice-monitoring/ -s templates/rbac.yaml
+helm template test-release helm/aiservice-monitoring/ -s templates/servicemonitor.yaml
+helm template test-release helm/aiservice-monitoring/ -s templates/prometheus-rules.yaml
 ```
 
-**기대 출력**:
-```
-==> Linting helm/aiservice-monitoring/
-[INFO] Chart.yaml: icon is recommended
-1 chart(s) linted, 0 chart(s) failed
-```
-
-> `0 chart(s) failed`이면 PASS
-
-### Step 3: Template Dry-Run (렌더링 검증)
-
-```bash
-# 기본값으로 렌더링
-helm template test-release helm/aiservice-monitoring/ \
-  --debug 2>&1 | head -100
-
-# dev 환경으로 렌더링
-helm template test-release helm/aiservice-monitoring/ \
-  -f helm/aiservice-monitoring/values-dev.yaml \
-  --debug 2>&1 | head -100
-
-# prod 환경으로 렌더링
-helm template test-release helm/aiservice-monitoring/ \
-  -f helm/aiservice-monitoring/values-prod.yaml \
-  --debug 2>&1 | head -100
-```
-
-> 렌더링 오류 없이 YAML이 출력되면 PASS
-
-### Step 4: 특정 템플릿만 렌더링
-
-```bash
-# RBAC 템플릿만
-helm template test-release helm/aiservice-monitoring/ \
-  -s templates/rbac.yaml
-
-# ServiceMonitor만
-helm template test-release helm/aiservice-monitoring/ \
-  -s templates/servicemonitor.yaml
-
-# PrometheusRule만
-helm template test-release helm/aiservice-monitoring/ \
-  -s templates/prometheus-rules.yaml
-```
-
-### Step 5: 결과 판정
+**PASS 조건**:
 
 | 항목 | PASS 조건 |
 |------|----------|
@@ -714,270 +536,574 @@ helm template test-release helm/aiservice-monitoring/ \
 | dev 렌더링 | YAML 에러 없음 |
 | prod 렌더링 | YAML 에러 없음 |
 
----
+**트러블슈팅**:
 
-## 10. Level 9: CI/CD 파이프라인 로컬 실행
-
-> **목표**: GitHub Actions 워크플로우를 로컬에서 실행하여 검증
-> **전제 조건**: `act` CLI 설치 (선택) 또는 수동 실행
-
-### 방법 A: act CLI로 로컬 실행 (선택)
-
-[act](https://github.com/nektos/act)를 사용하면 GitHub Actions를 로컬에서 실행할 수 있습니다.
-
-```bash
-# act 설치
-# Windows (Chocolatey)
-choco install act-cli
-
-# macOS (Homebrew)
-brew install act
-
-# 워크플로우 실행
-cd /c/workspace/aiservice-monitoring
-
-# lint 워크플로우
-act -W .github/workflows/lint.yaml --job yamllint
-
-# test-alerts 워크플로우
-act -W .github/workflows/test-alerts.yaml
-```
-
-### 방법 B: 수동으로 CI 단계 실행 (act 없이)
-
-#### YAML Lint
-
-```bash
-pip install yamllint
-
-yamllint -d relaxed collector/config/
-yamllint -d relaxed infra/kubernetes/
-yamllint -d relaxed infra/docker/
-yamllint -d relaxed helm/aiservice-monitoring/values.yaml
-yamllint -d relaxed helm/aiservice-monitoring/values-dev.yaml
-yamllint -d relaxed helm/aiservice-monitoring/values-prod.yaml
-```
-
-#### Python Lint
-
-```bash
-pip install ruff
-
-ruff check sdk-instrumentation/python/
-ruff check scripts/*.py
-```
-
-#### Helm Lint
-
-```bash
-helm lint helm/aiservice-monitoring/
-```
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `dependencies not found` | 서브차트 미다운로드 | `helm dependency update` 실행 |
+| `template rendering error` | 템플릿 문법 오류 | 에러 메시지의 파일:라인 확인 |
+| `values not defined` | values.yaml 키 누락 | values.yaml과 templates 매핑 확인 |
 
 ---
 
-## 11. 테스트 체크리스트 (종합)
+### Level 9: SLO 검증
 
-아래 체크리스트를 복사하여 테스트 결과를 기록하세요.
+**목적**: 시스템이 정의된 Service Level Objectives를 충족하는지 확인합니다.
+
+**사전 조건**: Level 5 + Level 6 통과 (E2E 스택 + 부하 테스트 데이터 존재)
+
+**SLO 정의**:
+
+| SLO 항목 | 목표 | 측정 방법 |
+|---------|------|-----------|
+| 가용성 | > 99.5% | `(전체 요청 - 5xx 오류) / 전체 요청 * 100` |
+| API P95 레이턴시 | < 2000ms | Prometheus: `histogram_quantile(0.95, ...)` |
+| TTFT P95 | < 3000ms | Prometheus 알림 규칙 확인 |
+| Heartbeat 처리량 | > 50 에이전트/초 | 부하 테스트 결과에서 산출 |
+| 에러율 | < 1% | `error_total / request_total * 100` |
+
+**Prometheus 쿼리로 SLO 확인**:
+
+```bash
+# API P95 레이턴시 (E2E 스택 기동 후 부하 테스트 이후)
+curl -s 'http://localhost:9090/api/v1/query?query=histogram_quantile(0.95,sum(rate(http_server_duration_milliseconds_bucket[5m]))by(le))'
+
+# 에러율
+curl -s 'http://localhost:9090/api/v1/query?query=sum(rate(http_server_requests_total{code=~"5.."}[5m]))/sum(rate(http_server_requests_total[5m]))*100'
+
+# Prometheus 알림 규칙 상태 확인
+curl -s http://localhost:9090/api/v1/rules | python -m json.tool
+```
+
+**PASS 조건**: 5개 SLO 항목 모두 목표 충족
+
+---
+
+## 4. Part B: AI 테스트 절차 (AI-L1 ~ AI-L5)
+
+AI 테스트는 Claude Code 또는 유사한 AI 코드 분석 도구를 활용하여, 사람이 놓칠 수 있는 패턴 불일치/보안 취약점/일관성 문제를 자동으로 탐지합니다.
+
+---
+
+### AI-L1: 코드 품질 리뷰
+
+**목적**: 타입 안전성, 데드 코드, 보안 취약점을 AI가 분석합니다.
+
+**Claude Code 프롬프트 예시**:
 
 ```
+다음 항목을 분석해 주세요:
+1. frontend/src/ 내 TypeScript 코드에서 `any` 타입 사용 현황
+2. agent/ 내 Go 코드에서 error 반환값을 무시하는 곳 (unchecked errors)
+3. 하드코딩된 시크릿/비밀번호가 소스코드에 포함되어 있는지
+4. 사용되지 않는 import/변수/함수 (dead code)
+5. SQL Injection에 취약한 문자열 연결 패턴
+```
+
+**확인 체크리스트**:
+
+| 항목 | AI가 확인 | 기대 결과 |
+|------|----------|-----------|
+| `any` 타입 사용 | TypeScript 전체 스캔 | 최소화됨 (0개 권장) |
+| unchecked errors | Go 전체 스캔 | `_` 무시 패턴 없음 |
+| 하드코딩 시크릿 | 전체 소스 스캔 | 프로덕션 시크릿 없음 |
+| 데드 코드 | import/변수/함수 스캔 | 사용되지 않는 코드 없음 |
+| SQL Injection | 문자열 연결 패턴 | 파라미터화 쿼리 사용 |
+
+**PASS 조건**: 심각한(critical) 이슈 0개, 경고(warning) 5개 미만
+
+---
+
+### AI-L2: 테스트 커버리지 분석 및 보강
+
+**목적**: 테스트가 부족한 영역을 AI가 식별하고 보강 방안을 제시합니다.
+
+**Claude Code 프롬프트 예시**:
+
+```
+AITOP 프로젝트의 테스트 커버리지를 분석해 주세요:
+
+1. agent/ 디렉토리의 Go 테스트 현황:
+   - 어떤 패키지에 테스트가 있고, 어떤 패키지에 없는지
+   - 테스트되지 않은 주요 함수/메서드 식별
+
+2. frontend/src/ 디렉토리의 Vitest 테스트 현황:
+   - 어떤 컴포넌트/훅/유틸에 테스트가 있는지
+   - 테스트가 부족한 핵심 영역 식별
+
+3. E2E 테스트 (frontend/e2e/) 현황:
+   - 7개 spec 파일이 어떤 시나리오를 커버하는지
+   - 누락된 시나리오 식별
+
+4. 커버리지 보강 우선순위 제안 (상/중/하)
+```
+
+**현재 테스트 현황 참조**:
+
+| 영역 | 테스트 파일 수 | 위치 |
+|------|---------------|------|
+| Go 유닛 테스트 | 21개 | `agent/**/*_test.go` |
+| Frontend Vitest | 5개 | `frontend/src/**/__tests__/*.test.{ts,tsx}` |
+| Playwright E2E | 7개 | `frontend/e2e/*.spec.ts` |
+
+**PASS 조건**: AI가 식별한 누락 영역 목록 + 보강 우선순위 수립
+
+---
+
+### AI-L3: API 호환성 검증
+
+**목적**: 프론트엔드가 호출하는 API 경로/페이로드와 백엔드가 제공하는 API 경로/응답이 정확히 일치하는지 검증합니다.
+
+**Claude Code 프롬프트 예시**:
+
+```
+다음을 비교 분석해 주세요:
+
+1. frontend/src/lib/ 내 API 호출 코드에서 사용하는 엔드포인트 경로 목록
+2. agent/cmd/collection-server/main.go 내 등록된 HTTP 핸들러 경로 목록
+3. 양쪽의 Request/Response 구조체(타입)가 일치하는지
+4. 프론트엔드에서 호출하지만 백엔드에 없는 엔드포인트 (잠재적 404)
+5. 백엔드에 있지만 프론트엔드에서 사용하지 않는 엔드포인트 (미사용 API)
+```
+
+**확인 체크리스트**:
+
+| 항목 | 기대 결과 |
+|------|-----------|
+| 경로 불일치 | 0개 |
+| 요청 필드 불일치 | 0개 |
+| 응답 필드 불일치 | 0개 |
+| 미사용 백엔드 API | 목록화 (정리 대상) |
+| 누락된 백엔드 API | 목록화 (구현 필요) |
+
+**PASS 조건**: 경로/필드 불일치 0개
+
+---
+
+### AI-L4: 성능 프로파일링 분석
+
+**목적**: 코드 레벨에서 성능 병목이 될 수 있는 패턴을 AI가 식별합니다.
+
+**Claude Code 프롬프트 예시**:
+
+```
+성능 관점에서 다음을 분석해 주세요:
+
+1. Go 코드에서 N+1 쿼리 패턴이 있는지
+2. Go 코드에서 goroutine 누수 가능성 (context 미전파, channel 미닫힘)
+3. Go 코드에서 mutex 경합(contention) 위험 지점
+4. Frontend에서 불필요한 리렌더링을 유발하는 state 관리 패턴
+5. Frontend에서 큰 번들을 유발하는 import 패턴
+6. docker-compose.e2e.yaml에서 리소스 제한 미설정 서비스
+```
+
+**PASS 조건**: 심각한 성능 이슈 0개, 개선 권장 사항 문서화
+
+---
+
+### AI-L5: 문서/코드 일관성 검증
+
+**목적**: DOCS/ 디렉토리의 문서와 실제 코드가 일치하는지 검증합니다.
+
+**Claude Code 프롬프트 예시**:
+
+```
+DOCS/ 디렉토리의 문서와 실제 코드를 비교해 주세요:
+
+1. ARCHITECTURE.md에 기술된 컴포넌트가 실제 코드에 존재하는지
+2. AGENT_DESIGN.md에 기술된 API 스펙이 구현과 일치하는지
+3. LOCAL_SETUP.md의 설치/실행 명령어가 현재 코드 구조와 맞는지
+4. TEST_GUIDE.md의 명령어/경로가 실제 파일 시스템과 맞는지
+5. docker-compose 파일명과 서비스명이 문서 기술과 일치하는지
+```
+
+**PASS 조건**: 불일치 0개 (또는 모든 불일치가 문서화되고 수정 계획 있음)
+
+---
+
+## 5. Part C: 교차검증 프로토콜
+
+### 5-1. 교차검증 대조표
+
+매뉴얼 테스트(Part A)와 AI 테스트(Part B)의 결과를 아래 표에 기록하여 비교합니다.
+
+```
+교차검증 대조표
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+검증 항목                 매뉴얼(A)  AI(B)    최종
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+빌드 성공 여부             [ ]       [ ]      [ ]
+단위 테스트 통과           [ ]       [ ]      [ ]
+UI 페이지 렌더링           [ ]       N/A      [ ]
+API 계약 일치              [ ]       [ ]      [ ]
+Docker 통합 정상           [ ]       N/A      [ ]
+부하 테스트 SLO 충족       [ ]       [ ]      [ ]
+보안 취약점 없음           [ ]       [ ]      [ ]
+Helm Chart 유효            [ ]       N/A      [ ]
+SLO 임계치 충족            [ ]       [ ]      [ ]
+코드 품질 양호             N/A       [ ]      [ ]
+테스트 커버리지 적정       N/A       [ ]      [ ]
+문서/코드 일관성           N/A       [ ]      [ ]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 5-2. 불일치 시 해결 절차
+
+1. **불일치 발견**: 매뉴얼 결과와 AI 결과가 다른 항목 식별
+2. **원인 분류**:
+   - **매뉴얼 오판**: 사람이 절차를 잘못 따랐거나 결과를 잘못 판독
+   - **AI 오판**: AI가 잘못된 분석을 수행 (false positive/negative)
+   - **실제 이슈**: 양쪽 중 하나가 실제 문제를 발견
+3. **조치**:
+   - 매뉴얼 오판 → 절차서 보완
+   - AI 오판 → 프롬프트 개선
+   - 실제 이슈 → 버그 등록 및 수정
+4. **재검증**: 수정 후 해당 항목만 재테스트
+
+### 5-3. 최종 서명/승인 프로세스
+
+```
+최종 테스트 서명
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 테스트 일자: ____-__-__
-테스트 담당자: ____________
-테스트 환경: Docker Desktop v____  /  Python v____
+테스트 버전: Phase ____ (commit: ________)
+환경: Docker Desktop v____ / Go v____ / Node.js v____
 
-[ ] Level 1: 로컬 인프라 기동
-    [ ] OTel Collector healthy
-    [ ] Prometheus ready
-    [ ] Grafana healthy
-    [ ] Tempo ready
-    [ ] Loki ready
-    [ ] Jaeger UI 접속
+Part A (매뉴얼) 수행자:  ____________  서명: ____
+Part B (AI) 수행자:      ____________  서명: ____
+Part C (교차검증) 승인자: ____________ 서명: ____
 
-[ ] Level 2: 텔레메트리 수신
-    [ ] 테스트 트레이스 전송 완료
-    [ ] Jaeger에서 test-guide-service 트레이스 확인
-    [ ] Prometheus otelcol_receiver_accepted_spans_total > 0
-
-[ ] Level 3: Grafana 대시보드
-    [ ] 5개 대시보드 존재
-    [ ] 3개 데이터소스 연결 정상 (Prometheus, Tempo, Loki)
-
-[ ] Level 4: Alert Rule 검증
-    [ ] test-alerts.sh PASS: __ / FAIL: 0
-
-[ ] Level 5: 부하 테스트
-    [ ] load-test.py 구문 검증 PASS
-    [ ] (선택) Locust 실행 정상
-
-[ ] Level 6: 트레이스 단절 탐지
-    [ ] validate-traces.py 구문 검증 PASS
-    [ ] (선택) Tempo 연동 실행 정상
-
-[ ] Level 7: 비용 시뮬레이션
-    [ ] benchmark-sampling.py 실행 정상
-    [ ] 비용 표 출력 확인
-
-[ ] Level 8: Helm Chart
-    [ ] helm lint PASS
-    [ ] 기본 렌더링 정상
-    [ ] dev 렌더링 정상
-    [ ] prod 렌더링 정상
-
-[ ] Level 9: CI 로컬 실행
-    [ ] yamllint PASS
-    [ ] ruff check PASS
-    [ ] helm lint PASS
-
-총 결과: PASS __ / FAIL __
-비고: ____________________________________________
+최종 판정: [ ] PASS  [ ] CONDITIONAL PASS  [ ] FAIL
+미해결 이슈 수: ____
+다음 조치: _________________________________________
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ---
 
-## 12. 자주 발생하는 문제 (FAQ)
+## 6. Phase 7'/8'/9' 테스트 로드맵
+
+### 6-1. Phase 7' — E2E 통합 검증
+
+**목표**: 전체 시스템이 end-to-end로 올바르게 연동되는지 검증
+
+**매뉴얼 테스트 (Level 5 + Level 6)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 7'-1 | docker-compose.e2e.yaml 기동 + 헬스체크 | Level 5 체크리스트 |
+| 7'-2 | Locust 부하 테스트 (200 users, 10분) | Locust HTML 리포트 |
+| 7'-3 | Playwright E2E 테스트 실행 | Playwright HTML 리포트 |
+| 7'-4 | 수동 시나리오 테스트 (RAG 질의/가드레일) | 시나리오 체크리스트 |
+
+**AI 테스트 (AI-L3)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 7'-A1 | 프론트엔드/백엔드 API 경로 대조 | 불일치 목록 |
+| 7'-A2 | 요청/응답 타입 호환성 검증 | 타입 불일치 목록 |
+| 7'-A3 | WebSocket 이벤트 호환성 검증 | 이벤트 불일치 목록 |
+
+**교차검증**:
+- 매뉴얼 Level 5에서 발견한 API 오류와 AI-L3의 경로 불일치 대조
+- 양쪽에서 동일한 문제를 발견하면 확정 이슈로 등록
+- 한쪽에서만 발견한 문제는 재검증
+
+**Playwright E2E 테스트 실행**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/frontend
+
+# 전체 E2E 테스트
+npx playwright test
+
+# 개별 시나리오 실행
+npx playwright test e2e/01-sre-incident-response.spec.ts
+npx playwright test e2e/02-ai-engineer-tuning.spec.ts
+npx playwright test e2e/03-consultant-inspection.spec.ts
+npx playwright test e2e/04-agent-management.spec.ts
+npx playwright test e2e/05-navigation-and-i18n.spec.ts
+
+# Visual Regression 테스트
+npx playwright test e2e/visual-regression.spec.ts
+
+# 접근성 테스트
+npx playwright test e2e/a11y.spec.ts
+
+# 리포트 확인
+npx playwright show-report ../reports/playwright
+```
+
+**완료 조건**: 모든 E2E 테스트 통과 + API 불일치 0개 + 부하 테스트 SLO 충족
+
+---
+
+### 6-2. Phase 8' — Kubernetes 배포 검증
+
+**목표**: Helm Chart로 K8s 클러스터에 배포 가능한 상태인지 검증
+
+**매뉴얼 테스트 (Level 8)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 8'-1 | Helm lint + template dry-run | lint 결과 |
+| 8'-2 | dev/prod values 렌더링 검증 | 렌더링된 YAML |
+| 8'-3 | RBAC/ServiceMonitor/PrometheusRule 검증 | 개별 템플릿 YAML |
+| 8'-4 | (선택) 실제 K8s 클러스터 배포 테스트 | kubectl 상태 |
+
+**AI 테스트 (AI-L4)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 8'-A1 | Helm 템플릿 코드 분석 (보안 설정, 리소스 제한) | 분석 리포트 |
+| 8'-A2 | values.yaml 간 차이 분석 (dev vs prod) | 차이 목록 |
+| 8'-A3 | K8s 보안 베스트 프랙티스 준수 여부 | 준수 체크리스트 |
+
+**교차검증**:
+- Helm dry-run으로 발견한 문제와 AI 분석 결과 대조
+- AI가 지적한 보안 설정 미비를 매뉴얼로 재확인
+
+**완료 조건**: `helm lint` 통과 + 3개 환경(기본/dev/prod) 렌더링 성공 + 보안 이슈 0개
+
+---
+
+### 6-3. Phase 9' — SLO 튜닝
+
+**목표**: 정의된 SLO를 충족하도록 시스템을 튜닝하고, 지속적으로 모니터링할 수 있는 체계를 구축
+
+**매뉴얼 테스트 (Level 9)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 9'-1 | Prometheus 알림 규칙 9개 검증 | test-alerts.sh 결과 |
+| 9'-2 | 부하 테스트 후 SLO 메트릭 측정 | SLO 대시보드 스크린샷 |
+| 9'-3 | Sampling 비용 시뮬레이션 | 비용 대조표 |
+| 9'-4 | SLO 미달 항목 원인 분석 + 튜닝 | 튜닝 보고서 |
+
+**AI 테스트 (AI-L5)**:
+
+| 단계 | 작업 | 산출물 |
+|------|------|--------|
+| 9'-A1 | 문서에 정의된 SLO와 코드 내 임계치 대조 | 불일치 목록 |
+| 9'-A2 | Prometheus 알림 규칙과 SLO 정의 일관성 검증 | 일관성 리포트 |
+| 9'-A3 | 성능 병목 코드 패턴 분석 (AI-L4 재실행) | 병목 목록 |
+
+**교차검증**:
+- 매뉴얼로 측정한 SLO 수치와 AI가 분석한 코드 성능 예측 대조
+- 알림 규칙 임계치가 문서/코드에서 일관되는지 양방향 확인
+
+**SLO 대시보드 (프론트엔드 `/slo` 페이지)**:
+
+| SLO | 목표 | 현재치 | 상태 |
+|-----|------|--------|------|
+| 가용성 | > 99.5% | ___% | [ ] |
+| API P95 레이턴시 | < 2000ms | ___ms | [ ] |
+| TTFT P95 | < 3000ms | ___ms | [ ] |
+| Heartbeat 처리량 | > 50/초 | ___/초 | [ ] |
+| 에러율 | < 1% | ___% | [ ] |
+
+**완료 조건**: 5개 SLO 모두 목표 충족 + 알림 규칙 검증 PASS + 문서/코드 일관성 확인
+
+---
+
+## 7. 테스트 보고서 템플릿
+
+### 7-1. 종합 보고서
+
+```
+=============================================================
+  AITOP 테스트 보고서
+  일자: ____-__-__
+  버전: Phase ____ (commit: ________)
+  환경: Windows 11 / Docker Desktop v____ / Go v____ / Node.js v____
+=============================================================
+
+Part A: 매뉴얼 테스트 결과
+─────────────────────────────────────────────────────────────
+Level 1 — 빌드 검증:         [ ] PASS  [ ] FAIL
+  Go build:                  [ ] 성공  [ ] 실패 → 원인: ________
+  Frontend build:            [ ] 성공  [ ] 실패 → 원인: ________
+
+Level 2 — 단위 테스트:       [ ] PASS  [ ] FAIL
+  Go test:                   __개 PASS / __개 FAIL
+  Frontend vitest:           __개 PASS / __개 FAIL
+
+Level 3 — UI 접근성:         [ ] PASS  [ ] FAIL
+  렌더링 성공 페이지:        __개 / 44개
+  실패 페이지 목록:          ________
+
+Level 4 — API 계약:          [ ] PASS  [ ] FAIL
+  확인 엔드포인트:           __개 / 10개
+  실패 엔드포인트:           ________
+
+Level 5 — Docker 통합:       [ ] PASS  [ ] FAIL
+  정상 서비스:               __개 / 9개
+  비정상 서비스:             ________
+
+Level 6 — 부하 테스트:       [ ] PASS  [ ] FAIL
+  p95 응답시간:              ____ms (목표 < 2000ms)
+  실패율:                    ____% (목표 < 1%)
+
+Level 7 — 보안 감사:         [ ] PASS  [ ] FAIL
+  OWASP 항목:               __개 PASS / __개 FAIL
+
+Level 8 — K8s 배포:          [ ] PASS  [ ] FAIL
+  helm lint:                 [ ] PASS  [ ] FAIL
+  렌더링 환경:               __개 / 3개 성공
+
+Level 9 — SLO 검증:          [ ] PASS  [ ] FAIL
+  충족 SLO:                  __개 / 5개
+  미달 SLO:                  ________
+
+─────────────────────────────────────────────────────────────
+
+Part B: AI 테스트 결과
+─────────────────────────────────────────────────────────────
+AI-L1 — 코드 품질:           [ ] PASS  [ ] FAIL
+  Critical 이슈:             __개
+  Warning 이슈:              __개
+
+AI-L2 — 테스트 커버리지:     [ ] PASS  [ ] FAIL
+  Go 커버리지 미달 패키지:   __개
+  Frontend 미달 컴포넌트:    __개
+
+AI-L3 — API 호환성:          [ ] PASS  [ ] FAIL
+  경로 불일치:               __개
+  타입 불일치:               __개
+
+AI-L4 — 성능 분석:           [ ] PASS  [ ] FAIL
+  성능 병목:                 __개
+  개선 권장:                 __개
+
+AI-L5 — 문서/코드 일관성:    [ ] PASS  [ ] FAIL
+  불일치 항목:               __개
+
+─────────────────────────────────────────────────────────────
+
+Part C: 교차검증 결과
+─────────────────────────────────────────────────────────────
+일치 항목:                   __개
+불일치 항목:                 __개
+해결 완료:                   __개
+미해결:                      __개
+
+─────────────────────────────────────────────────────────────
+
+최종 판정: [ ] PASS  [ ] CONDITIONAL PASS  [ ] FAIL
+승인자: ____________ 서명: ____________ 일자: ____-__-__
+비고: ______________________________________________
+
+=============================================================
+```
+
+### 7-2. Level별 상세 보고서 (필요시 개별 작성)
+
+각 Level에서 발견한 이슈는 다음 형식으로 기록합니다:
+
+```
+이슈 보고서
+─────────────────────────────────
+이슈 ID:     AITOP-TEST-____
+Level:       Level __
+심각도:      [ ] Critical  [ ] Major  [ ] Minor
+제목:        ________________________________________
+설명:        ________________________________________
+재현 절차:   ________________________________________
+기대 결과:   ________________________________________
+실제 결과:   ________________________________________
+스크린샷/로그: ________________________________________
+해결 방안:   ________________________________________
+상태:        [ ] Open  [ ] In Progress  [ ] Resolved
+담당자:      ________________________________________
+─────────────────────────────────
+```
+
+---
+
+## 8. FAQ — 자주 발생하는 문제와 해결법
 
 ### Q1: `docker compose` 명령어를 찾을 수 없습니다
 
-Docker Desktop 버전을 확인하세요. 구버전은 `docker-compose` (하이픈 포함)를 사용합니다:
+Docker Desktop 버전을 확인하세요. v2 이상이면 `docker compose` (공백), 구버전은 `docker-compose` (하이픈)입니다:
 ```bash
 docker compose version   # v2 (권장)
 docker-compose --version  # v1 (구버전)
 ```
 Docker Desktop을 최신 버전으로 업데이트하세요.
 
-### Q2: Collector가 기동되지 않습니다
+### Q2: Go 빌드 시 `module not found` 오류
 
 ```bash
-# 포트 충돌 확인
-netstat -ano | findstr :4317
+cd /c/workspace/aiservice-monitoring/agent
+go mod tidy
+go build ./...
+```
+인터넷 연결이 필요할 수 있습니다. 프록시 환경이라면 `GOPROXY` 환경 변수를 설정하세요.
 
-# Collector 로그 확인
-docker compose -f infra/docker/docker-compose.yaml logs otel-collector --tail=50
+### Q3: Frontend 빌드 시 TypeScript 오류
 
-# 설정 파일 문법 확인 (otelcol-contrib 바이너리 필요)
-# otelcol-contrib validate --config infra/docker/otelcol-local.yaml
+```bash
+cd /c/workspace/aiservice-monitoring/frontend
+rm -rf node_modules .next
+npm install
+npx next build
+```
+Next.js 16은 이전 버전과 API/규칙이 다를 수 있습니다. `frontend/AGENTS.md` 에 명시된 대로 `node_modules/next/dist/docs/` 내 관련 가이드를 참고하세요.
+
+### Q4: Docker E2E 스택에서 특정 서비스가 계속 재시작됩니다
+
+```bash
+# 해당 서비스 로그 확인
+docker compose -f docker-compose.e2e.yaml logs <서비스명> --tail=100
+
+# 헬스체크 상태 확인
+docker inspect aitop-<컨테이너명> --format='{{json .State.Health}}'
+
+# 전체 재시작 (데이터 초기화)
+docker compose -f docker-compose.e2e.yaml down -v
+docker compose -f docker-compose.e2e.yaml up -d --build
 ```
 
-### Q3: Jaeger에서 서비스가 보이지 않습니다
+### Q5: Locust 부하 테스트에서 대부분 401 응답
 
-- OTel Collector가 healthy인지 확인 (Level 1 Step 3)
-- Collector 로그에서 `exporter/jaeger`가 에러 없는지 확인
-- 트레이스 전송 후 10~30초 대기 필요 (batch processor 버퍼)
+Collection Server의 데모 인증 계정이 활성화되어 있는지 확인하세요. 기본 자격증명은 `admin / admin123` 입니다. JWT 토큰 만료 시 Locust가 자동으로 재로그인합니다. Collection Server 로그에서 인증 관련 오류를 확인하세요.
 
-### Q4: Grafana 대시보드가 비어 있습니다 (No Data)
-
-대시보드가 데이터를 표시하려면 실제 AI 서비스에서 메트릭이 발생해야 합니다.
-Level 2의 테스트 트레이스로는 대시보드 패널을 채울 수 없습니다 (대시보드는 특정 메트릭명을 쿼리함).
-
-이것은 **정상**입니다. 실제 서비스를 연결하면 데이터가 표시됩니다.
-
-### Q5: `pip install` 중 빌드 오류가 발생합니다
+### Q6: Helm template 실행 시 서브차트 의존성 오류
 
 ```bash
-# pip 업그레이드
-pip install --upgrade pip setuptools wheel
-
-# 특정 패키지 문제 시 바이너리 설치 강제
-pip install --only-binary :all: <패키지명>
+helm dependency update helm/aiservice-monitoring/
+helm template test-release helm/aiservice-monitoring/
 ```
+서브차트 다운로드에는 인터넷 연결이 필요합니다.
 
-### Q6: Windows에서 `scripts/test-alerts.sh`가 실행되지 않습니다
+### Q7: Windows에서 셸 스크립트가 실행되지 않습니다
 
-Git Bash에서 실행해야 합니다:
+모든 명령어는 **Git Bash** 기준입니다. PowerShell이나 CMD에서는 경로 문제가 발생할 수 있습니다:
 ```bash
-# Git Bash 터미널에서
+# Git Bash에서
 bash scripts/test-alerts.sh
 
 # 또는 WSL2에서
 wsl bash scripts/test-alerts.sh
 ```
 
-### Q7: Tempo에서 트레이스가 검색되지 않습니다
+### Q8: 프론트엔드 데모 모드에서 데이터가 비어 있습니다
 
-Tempo는 트레이스를 수신한 후 인덱싱하는 데 약간의 시간이 걸립니다:
-```bash
-# Tempo 상태 확인
-curl -s http://localhost:3200/ready
-# "ready"가 아니면 아직 초기화 중
+데모 모드는 `frontend/src/lib/demo-data.ts` 파일의 정적 데이터를 사용합니다. 백엔드 없이도 기본 렌더링은 되어야 합니다. 데이터가 전혀 보이지 않으면 브라우저 개발자 도구(F12) 콘솔에서 JavaScript 오류를 확인하세요.
 
-# Tempo에 직접 트레이스 검색 (TraceQL)
-curl -s 'http://localhost:3200/api/search?q={}&limit=5' | python -m json.tool
-```
-트레이스 전송 후 30초~1분 정도 기다린 후 다시 시도하세요.
+### Q9: Claude Code로 AI 테스트를 수행하려면 어떻게 해야 하나요?
 
-### Q8: Helm template 실행 시 서브차트 의존성 오류
+1. Claude Code CLI를 프로젝트 루트에서 실행합니다
+2. Part B 섹션의 프롬프트 예시를 그대로 입력합니다
+3. AI의 분석 결과를 테스트 보고서 템플릿에 기록합니다
+4. 발견한 이슈는 이슈 보고서 형식으로 상세히 기록합니다
 
-```bash
-# 서브차트 의존성 다운로드
-helm dependency update helm/aiservice-monitoring/
+### Q10: 교차검증에서 불일치가 발생하면 어떻게 하나요?
 
-# 다시 시도
-helm template test-release helm/aiservice-monitoring/
-```
-
-> 서브차트 다운로드에는 인터넷 연결이 필요합니다.
-
----
-
-## 부록 A: RAG 데모 서비스로 통합 테스트
-
-> Level 1~3 완료 후, RAG 데모 서비스를 이용하면 실제 AI 서비스에서
-> 생성되는 트레이스와 메트릭을 확인할 수 있습니다.
-
-### Step 1: RAG 데모 서비스 실행
-
-```bash
-cd /c/workspace/aiservice-monitoring/demo/rag-service
-
-# 가상환경 설정
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 서비스 시작
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
-MOCK_MODE=true \
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-### Step 2: API 호출로 트레이스 생성
-
-```bash
-# RAG 질문 (문서 검색 + LLM 추론)
-curl -s -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question": "연차 휴가 정책을 알려주세요"}' | python -m json.tool
-
-# 여러 번 호출하여 다양한 트레이스 생성
-for i in {1..10}; do
-  curl -s -X POST http://localhost:8000/api/chat \
-    -H "Content-Type: application/json" \
-    -d '{"question": "원격 근무 정책은?"}'
-done
-```
-
-### Step 3: 모니터링 확인
-
-1. **Jaeger** (http://localhost:16686): Service `rag-demo-service` 선택 → 트레이스 확인
-   - `rag.pipeline` 부모 Span 아래에 `rag.guardrail_input_check`, `rag.embedding`, `rag.vector_search`, `rag.llm_inference` 등의 자식 Span이 보여야 합니다.
-
-2. **Grafana** (http://localhost:3000): AI Service Overview 대시보드에서 요청 수 확인
-
-3. **XLog Dashboard** (http://localhost:8080): 실시간 산점도에서 요청 포인트 확인
-
----
-
-## 부록 B: 테스트 완료 후 정리
-
-```bash
-# 로컬 스택 중지 (데이터 보존)
-docker compose -f infra/docker/docker-compose.yaml down
-
-# 로컬 스택 중지 + 데이터 삭제 (깨끗한 상태)
-docker compose -f infra/docker/docker-compose.yaml down -v
-
-# Python 가상환경 비활성화
-deactivate
-```
+1. 먼저 불일치의 원인을 파악합니다 (매뉴얼 오판인지, AI 오판인지, 실제 이슈인지)
+2. 실제 이슈라면 버그로 등록합니다
+3. 오판이라면 절차서 또는 프롬프트를 개선합니다
+4. 수정 후 해당 항목만 재테스트합니다
 
 ---
 
