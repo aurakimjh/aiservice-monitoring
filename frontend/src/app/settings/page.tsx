@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, Tabs, Button } from '@/components/ui';
 import { RequireRole } from '@/components/auth';
-import { Settings, Building, Users, Database, KeyRound, Archive } from 'lucide-react';
+import { Settings, Building, Users, Database, KeyRound, Archive, Shield } from 'lucide-react';
+import { SSOSettings } from '@/components/settings/sso-settings';
 
 const SETTINGS_TABS = [
   { id: 'org', label: 'Organization', icon: <Building size={14} /> },
   { id: 'users', label: 'Users', icon: <Users size={14} /> },
+  { id: 'sso', label: 'SSO / Identity', icon: <Shield size={14} /> },
   { id: 'datasources', label: 'Data Sources', icon: <Database size={14} /> },
   { id: 'apikeys', label: 'API Keys', icon: <KeyRound size={14} /> },
   { id: 'retention', label: 'Retention', icon: <Archive size={14} /> },
@@ -101,6 +103,8 @@ export default function SettingsPage() {
           </div>
         </Card>
       )}
+
+      {activeTab === 'sso' && <SSOSettings />}
 
       {activeTab === 'apikeys' && (
         <Card padding="lg">

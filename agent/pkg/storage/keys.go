@@ -25,3 +25,10 @@ func DiagnosticKey(agentID, diagnosticID string, createdAt time.Time) string {
 	date := createdAt.Format("2006-01-02")
 	return path.Join("diagnostics", agentID, date, diagnosticID+".json.gz")
 }
+
+// ProfileKey generates a storage key for a profiling snapshot.
+// Format: profiles/{agent_id}/{date}/{service_name}/{profile_id}.pb.gz
+func ProfileKey(agentID, serviceName, profileID string, startedAt time.Time) string {
+	date := startedAt.Format("2006-01-02")
+	return path.Join("profiles", agentID, date, serviceName, profileID+".pb.gz")
+}

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -317,6 +318,7 @@ func main() {
 		"/api/v1/auth/login",
 		"POST /api/v1/auth/refresh",
 		"/api/v1/auth/refresh",
+		"POST /api/v1/profiles",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
@@ -810,6 +812,355 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
+	// ── Terraform Resource CRUD API (Phase 21-2) ────────────────────────────
+
+	// Alert Policies CRUD
+	mux.HandleFunc("GET /api/v1/alerts/policies", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": demoAlertPolicies(), "total": 3})
+	})
+	mux.HandleFunc("POST /api/v1/alerts/policies", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"message":"invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		body["policy_id"] = fmt.Sprintf("pol-%d", time.Now().UnixMilli())
+		body["created_at"] = time.Now().UTC().Format(time.RFC3339)
+		body["updated_at"] = body["created_at"]
+		writeJSON(w, http.StatusCreated, body)
+	})
+	mux.HandleFunc("GET /api/v1/alerts/policies/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/v1/alerts/policies/")
+		policies := demoAlertPolicies()
+		for _, p := range policies {
+			if p["policy_id"] == id {
+				writeJSON(w, http.StatusOK, p)
+				return
+			}
+		}
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+	})
+	mux.HandleFunc("PUT /api/v1/alerts/policies/", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["updated_at"] = time.Now().UTC().Format(time.RFC3339)
+		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("DELETE /api/v1/alerts/policies/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// SLO CRUD
+	mux.HandleFunc("GET /api/v1/slo", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": demoSLOs(), "total": 3})
+	})
+	mux.HandleFunc("POST /api/v1/slo", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["slo_id"] = fmt.Sprintf("slo-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, body)
+	})
+	mux.HandleFunc("GET /api/v1/slo/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/v1/slo/")
+		for _, s := range demoSLOs() {
+			if s["slo_id"] == id {
+				writeJSON(w, http.StatusOK, s)
+				return
+			}
+		}
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+	})
+	mux.HandleFunc("PUT /api/v1/slo/", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("DELETE /api/v1/slo/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// Dashboards CRUD
+	mux.HandleFunc("GET /api/v1/dashboards", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"dashboard_id": "dash-001", "name": "Service Overview", "description": "High-level service health", "managed_by": "ui"},
+			{"dashboard_id": "dash-002", "name": "GPU Cluster", "description": "GPU utilization dashboard", "managed_by": "terraform"},
+		}, "total": 2})
+	})
+	mux.HandleFunc("POST /api/v1/dashboards", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["dashboard_id"] = fmt.Sprintf("dash-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, body)
+	})
+	mux.HandleFunc("GET /api/v1/dashboards/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"dashboard_id": "dash-001", "name": "Service Overview"})
+	})
+	mux.HandleFunc("PUT /api/v1/dashboards/", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("DELETE /api/v1/dashboards/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// Notification Channels CRUD
+	mux.HandleFunc("GET /api/v1/alerts/channels", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"channel_id": "ch-001", "name": "#ops-alerts", "type": "slack", "enabled": true},
+			{"channel_id": "ch-002", "name": "SRE Team", "type": "email", "enabled": true},
+			{"channel_id": "ch-003", "name": "PagerDuty", "type": "pagerduty", "enabled": true},
+		}, "total": 3})
+	})
+	mux.HandleFunc("POST /api/v1/alerts/channels", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["channel_id"] = fmt.Sprintf("ch-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, body)
+	})
+	mux.HandleFunc("GET /api/v1/alerts/channels/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"channel_id": "ch-001", "name": "#ops-alerts", "type": "slack"})
+	})
+	mux.HandleFunc("PUT /api/v1/alerts/channels/", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("DELETE /api/v1/alerts/channels/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// API Keys CRUD (admin only)
+	mux.HandleFunc("GET /api/v1/settings/api-keys", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"key_id": "key-001", "key_prefix": "aitop_pr", "name": "Production Admin", "role": "admin"},
+			{"key_id": "key-002", "key_prefix": "aitop_ci", "name": "CI Pipeline", "role": "sre"},
+			{"key_id": "key-003", "key_prefix": "aitop_tf", "name": "Terraform Provider", "role": "admin"},
+		}, "total": 3})
+	})
+	mux.HandleFunc("POST /api/v1/settings/api-keys", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		keyID := fmt.Sprintf("key-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, map[string]interface{}{
+			"key_id":  keyID,
+			"api_key": fmt.Sprintf("aitop_%s_%s", body["role"], keyID),
+			"name":    body["name"],
+			"role":    body["role"],
+		})
+	})
+	mux.HandleFunc("DELETE /api/v1/settings/api-keys/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// SSO Settings API (Phase 21-3)
+	mux.HandleFunc("GET /api/v1/auth/sso/providers", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "sso-okta", "name": "Okta", "protocol": "oidc", "enabled": true, "buttonLabel": "Sign in with Okta"},
+			{"id": "sso-azure", "name": "Azure AD", "protocol": "oidc", "enabled": true, "buttonLabel": "Sign in with Microsoft"},
+			{"id": "sso-google", "name": "Google Workspace", "protocol": "oidc", "enabled": false, "buttonLabel": "Sign in with Google"},
+		}})
+	})
+	mux.HandleFunc("GET /api/v1/auth/sso/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/auth/sso/")
+		if strings.HasSuffix(path, "/login") {
+			// SSO login initiation — in production, redirect to IdP
+			writeJSON(w, http.StatusOK, map[string]string{"status": "redirect_to_idp", "message": "SSO login would redirect to IdP in production"})
+			return
+		}
+		if strings.HasSuffix(path, "/callback") {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "callback_received", "message": "OIDC callback handler"})
+			return
+		}
+		if strings.HasSuffix(path, "/metadata") {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><EntityDescriptor entityID="aitop-monitoring"/>`))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("POST /api/v1/auth/sso/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/auth/sso/")
+		if strings.HasSuffix(path, "/acs") {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "saml_acs_received", "message": "SAML ACS handler"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /api/v1/settings/sso", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "sso-okta", "name": "Okta", "protocol": "oidc", "enabled": true, "oidc_issuer": "https://dev-123456.okta.com", "oidc_client_id": "0oa1234567890", "default_role": "viewer", "auto_provision": true},
+			{"id": "sso-azure", "name": "Azure AD", "protocol": "oidc", "enabled": true, "oidc_issuer": "https://login.microsoftonline.com/tenant-id/v2.0", "oidc_client_id": "app-client-id", "default_role": "viewer", "auto_provision": true},
+		}})
+	})
+	mux.HandleFunc("POST /api/v1/settings/sso", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["id"] = fmt.Sprintf("sso-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, body)
+	})
+	mux.HandleFunc("PUT /api/v1/settings/sso/", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, http.StatusOK, body)
+	})
+	mux.HandleFunc("DELETE /api/v1/settings/sso/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// ── Profiling API (Phase 21-1: Continuous Profiling) ─────────────────────
+
+	mux.HandleFunc("POST /api/v1/profiles", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.Header.Get("X-Agent-ID")
+		if agentID == "" {
+			agentID = "unknown"
+		}
+		var body struct {
+			ServiceName string            `json:"service_name"`
+			Language    string            `json:"language"`
+			ProfileType string            `json:"profile_type"`
+			Format      string            `json:"format"`
+			DurationSec int               `json:"duration_sec"`
+			SampleCount int               `json:"sample_count"`
+			SizeBytes   int64             `json:"size_bytes"`
+			Labels      map[string]string `json:"labels"`
+			TraceID     string            `json:"trace_id"`
+			SpanID      string            `json:"span_id"`
+			StartedAt   string            `json:"started_at"`
+			EndedAt     string            `json:"ended_at"`
+			DataBase64  string            `json:"data_base64"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"message":"invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		profileID := fmt.Sprintf("prof-%s-%d", agentID, time.Now().UnixMilli())
+		startedAt, _ := time.Parse(time.RFC3339, body.StartedAt)
+		endedAt, _ := time.Parse(time.RFC3339, body.EndedAt)
+		if startedAt.IsZero() {
+			startedAt = time.Now().UTC()
+		}
+		if endedAt.IsZero() {
+			endedAt = startedAt.Add(time.Duration(body.DurationSec) * time.Second)
+		}
+
+		s3Key := storage.ProfileKey(agentID, body.ServiceName, profileID, startedAt)
+
+		// Store profile data in storage backend
+		if store != nil && body.DataBase64 != "" {
+			ref, err := store.Put(r.Context(), s3Key, []byte(body.DataBase64), map[string]string{
+				"language":     body.Language,
+				"profile_type": body.ProfileType,
+				"format":       body.Format,
+			})
+			if err != nil {
+				logger.Error("store profile failed", "error", err)
+			} else {
+				logger.Info("profile stored", "key", s3Key, "ref", ref)
+			}
+		}
+
+		logger.Info("profile uploaded", "id", profileID, "agent", agentID, "service", body.ServiceName, "type", body.ProfileType)
+		bus.Publish(eventbus.Event{Type: "profile.uploaded", AgentID: agentID, Data: map[string]interface{}{"profile_id": profileID}})
+
+		writeJSON(w, http.StatusCreated, map[string]interface{}{
+			"profile_id": profileID,
+			"s3_key":     s3Key,
+			"status":     "uploaded",
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/profiles", func(w http.ResponseWriter, r *http.Request) {
+		// Return demo profiles for MVP (DB integration in production)
+		q := r.URL.Query()
+		profiles := generateDemoProfiles(q.Get("service"), q.Get("language"), q.Get("type"))
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": profiles, "total": len(profiles)})
+	})
+
+	mux.HandleFunc("GET /api/v1/profiles/compare", func(w http.ResponseWriter, r *http.Request) {
+		baseID := r.URL.Query().Get("base")
+		targetID := r.URL.Query().Get("target")
+		if baseID == "" || targetID == "" {
+			http.Error(w, `{"message":"base and target query params required"}`, http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"base_profile_id":   baseID,
+			"target_profile_id": targetID,
+			"root": map[string]interface{}{
+				"name": "root", "baseValue": 10000, "targetValue": 12000, "delta": 2000,
+				"children": []map[string]interface{}{
+					{"name": "main.handleRequest", "baseValue": 5000, "targetValue": 7000, "delta": 2000, "children": []interface{}{}},
+					{"name": "runtime.gcBgMarkWorker", "baseValue": 3000, "targetValue": 2500, "delta": -500, "children": []interface{}{}},
+				},
+			},
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/profiles/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/profiles/")
+		parts := strings.Split(path, "/")
+		profileID := parts[0]
+
+		if len(parts) > 1 && parts[1] == "flamegraph" {
+			// Return demo flame graph
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"profileId": profileID, "profileType": "cpu", "language": "go",
+				"serviceName": "api-gateway", "totalSamples": 15420, "durationSec": 30,
+				"root": map[string]interface{}{
+					"name": "root", "fullName": "root", "value": 15420, "selfValue": 0,
+					"children": []map[string]interface{}{
+						{"name": "main.main", "fullName": "main.main", "value": 12000, "selfValue": 200,
+							"children": []map[string]interface{}{
+								{"name": "net/http.(*Server).Serve", "fullName": "net/http.(*Server).Serve", "value": 9800, "selfValue": 150,
+									"children": []map[string]interface{}{
+										{"name": "net/http.(*conn).serve", "fullName": "net/http.(*conn).serve", "value": 9000, "selfValue": 800,
+											"children": []map[string]interface{}{
+												{"name": "main.handleRequest", "fullName": "main.handleRequest", "value": 5200, "selfValue": 1200, "children": []interface{}{}},
+												{"name": "encoding/json.Marshal", "fullName": "encoding/json.Marshal", "value": 2000, "selfValue": 2000, "children": []interface{}{}},
+												{"name": "database/sql.(*DB).Query", "fullName": "database/sql.(*DB).Query", "value": 1000, "selfValue": 1000, "children": []interface{}{}},
+											}},
+									}},
+							}},
+						{"name": "runtime.gcBgMarkWorker", "fullName": "runtime.gcBgMarkWorker", "value": 2420, "selfValue": 2420, "children": []interface{}{}},
+						{"name": "runtime.mcall", "fullName": "runtime.mcall", "value": 1000, "selfValue": 1000, "children": []interface{}{}},
+					},
+				},
+			})
+			return
+		}
+
+		if len(parts) > 1 && parts[1] == "raw" {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.pb.gz"`, profileID))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("# pprof binary data placeholder"))
+			return
+		}
+
+		// Profile metadata
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"profile_id": profileID, "agent_id": "agent-01", "service_name": "api-gateway",
+			"language": "go", "profile_type": "cpu", "format": "pprof",
+			"duration_sec": 30, "sample_count": 15420, "size_bytes": 245760,
+			"started_at": time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339),
+			"ended_at":   time.Now().Add(-9*time.Minute - 30*time.Second).UTC().Format(time.RFC3339),
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/traces/{traceId}/profiles", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": []map[string]interface{}{
+				{
+					"profile_id": "prof-trace-001", "service_name": "api-gateway",
+					"language": "go", "profile_type": "cpu", "duration_sec": 30,
+					"started_at": time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339),
+				},
+			},
+		})
+	})
+
 	// ── SSE (Server-Sent Events) real-time stream ───────────────────────────
 	// Frontend connects: new EventSource('/api/v1/events?channel=fleet&channel=collect')
 	if wsHub != nil {
@@ -833,6 +1184,58 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 	mux.HandleFunc("GET /health", healthHandler)
 
 	return mux
+}
+
+// demoAlertPolicies returns demo alert policies for the MVP.
+func demoAlertPolicies() []map[string]interface{} {
+	return []map[string]interface{}{
+		{"policy_id": "pol-001", "name": "High Error Rate", "severity": "critical", "target": "service:api-gateway", "condition_type": "metric", "condition": "error_rate > 5%", "threshold_type": "static", "enabled": true, "managed_by": "ui"},
+		{"policy_id": "pol-002", "name": "GPU VRAM Critical", "severity": "critical", "target": "host:gpu-*", "condition_type": "metric", "condition": "gpu_vram_usage > 95%", "threshold_type": "static", "enabled": true, "managed_by": "terraform"},
+		{"policy_id": "pol-003", "name": "LLM TTFT High", "severity": "warning", "target": "service:rag-*", "condition_type": "metric", "condition": "ttft_p95 > 2000ms", "threshold_type": "dynamic", "enabled": true, "managed_by": "ui"},
+	}
+}
+
+// demoSLOs returns demo SLO definitions for the MVP.
+func demoSLOs() []map[string]interface{} {
+	return []map[string]interface{}{
+		{"slo_id": "slo-001", "name": "API P99 Latency", "service": "api-gateway", "sli": "latency_p99 < 500ms", "target": 99.9, "window": "30d", "managed_by": "terraform"},
+		{"slo_id": "slo-002", "name": "RAG Availability", "service": "rag-service", "sli": "availability >= 99.5%", "target": 99.5, "window": "30d", "managed_by": "ui"},
+		{"slo_id": "slo-003", "name": "GPU Uptime", "service": "gpu-cluster", "sli": "uptime >= 99.9%", "target": 99.9, "window": "7d", "managed_by": "terraform"},
+	}
+}
+
+// generateDemoProfiles returns demo profiling data for the MVP.
+func generateDemoProfiles(service, language, profileType string) []map[string]interface{} {
+	demos := []map[string]interface{}{
+		{"profile_id": "prof-001", "agent_id": "agent-01", "service_name": "api-gateway", "language": "go", "profile_type": "cpu", "format": "pprof", "duration_sec": 30, "sample_count": 15420, "size_bytes": 245760, "started_at": time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-002", "agent_id": "agent-01", "service_name": "api-gateway", "language": "go", "profile_type": "memory", "format": "pprof", "duration_sec": 0, "sample_count": 8230, "size_bytes": 189440, "started_at": time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-003", "agent_id": "agent-02", "service_name": "rag-service", "language": "python", "profile_type": "cpu", "format": "collapsed", "duration_sec": 30, "sample_count": 22100, "size_bytes": 312000, "started_at": time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-004", "agent_id": "agent-02", "service_name": "rag-service", "language": "python", "profile_type": "memory", "format": "collapsed", "duration_sec": 0, "sample_count": 5600, "size_bytes": 98000, "started_at": time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-005", "agent_id": "agent-03", "service_name": "payment-api", "language": "java", "profile_type": "cpu", "format": "jfr", "duration_sec": 60, "sample_count": 45000, "size_bytes": 524288, "started_at": time.Now().Add(-30 * time.Minute).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-006", "agent_id": "agent-03", "service_name": "payment-api", "language": "java", "profile_type": "memory", "format": "jfr", "duration_sec": 60, "sample_count": 18000, "size_bytes": 312000, "started_at": time.Now().Add(-30 * time.Minute).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-007", "agent_id": "agent-04", "service_name": "auth-service", "language": "go", "profile_type": "goroutine", "format": "pprof", "duration_sec": 0, "sample_count": 342, "size_bytes": 45000, "started_at": time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-008", "agent_id": "agent-05", "service_name": "ml-inference", "language": "python", "profile_type": "cpu", "format": "collapsed", "duration_sec": 30, "sample_count": 31000, "size_bytes": 420000, "started_at": time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-009", "agent_id": "agent-03", "service_name": "order-service", "language": "java", "profile_type": "thread", "format": "jfr", "duration_sec": 30, "sample_count": 12500, "size_bytes": 198000, "started_at": time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339)},
+		{"profile_id": "prof-010", "agent_id": "agent-01", "service_name": "api-gateway", "language": "go", "profile_type": "cpu", "format": "pprof", "duration_sec": 30, "sample_count": 16200, "size_bytes": 256000, "trace_id": "abc123def456", "started_at": time.Now().Add(-3 * time.Minute).UTC().Format(time.RFC3339)},
+	}
+
+	var filtered []map[string]interface{}
+	for _, p := range demos {
+		if service != "" && p["service_name"] != service {
+			continue
+		}
+		if language != "" && p["language"] != language {
+			continue
+		}
+		if profileType != "" && p["profile_type"] != profileType {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+	if filtered == nil {
+		return demos
+	}
+	return filtered
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

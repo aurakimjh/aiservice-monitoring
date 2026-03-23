@@ -4,6 +4,7 @@ package it
 import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/db"
 	oscol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/os"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/profiling"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/was"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/web"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/core"
@@ -15,4 +16,5 @@ func RegisterAll(reg *core.Registry) {
 	reg.Register(web.New())
 	reg.Register(was.New())
 	reg.Register(db.New())
+	reg.Register(profiling.New())
 }

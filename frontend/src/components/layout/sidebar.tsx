@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   AlertTriangle,
+  Flame,
 } from 'lucide-react';
 import { Tooltip } from '@/components/ui';
 
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Bot, i18nKey: 'nav.ai', href: '/ai' },
   { icon: BarChart3, i18nKey: 'nav.metrics', href: '/metrics', dividerBefore: true },
   { icon: Search, i18nKey: 'nav.traces', href: '/traces' },
+  { icon: Flame, i18nKey: 'nav.profiling', href: '/profiling' },
   { icon: FileText, i18nKey: 'nav.logs', href: '/logs' },
   { icon: ClipboardList, i18nKey: 'nav.diagnostics', href: '/diagnostics', dividerBefore: true },
   { icon: AlertTriangle, i18nKey: 'nav.anomalies', href: '/anomalies' },

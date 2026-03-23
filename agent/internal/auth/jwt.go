@@ -171,6 +171,21 @@ func (m *JWTManager) hmacSign(data []byte) []byte {
 	return h.Sum(nil)
 }
 
+// ValidateAPIKey checks if an API key (aitop_...) is valid.
+// For the MVP, it accepts demo API keys; production would check the database.
+func (m *JWTManager) ValidateAPIKey(key string) *Claims {
+	// Demo API keys for development
+	demoKeys := map[string]*Claims{
+		"aitop_prod_admin_demo_key_001": {UserID: "api-001", Email: "api@aitop.io", Name: "API Key (Admin)", Role: RoleAdmin, OrganizationID: "org-001"},
+		"aitop_ci_sre_demo_key_002":     {UserID: "api-002", Email: "ci@aitop.io", Name: "API Key (SRE)", Role: RoleSRE, OrganizationID: "org-001"},
+		"aitop_tf_admin_demo_key_003":   {UserID: "api-003", Email: "terraform@aitop.io", Name: "Terraform Provider", Role: RoleAdmin, OrganizationID: "org-001"},
+	}
+	if claims, ok := demoKeys[key]; ok {
+		return claims
+	}
+	return nil
+}
+
 // ── Demo Users (개발/테스트용) ───────────────────────────────────────────────
 
 // DemoUser represents a built-in demo account.
@@ -234,6 +249,11 @@ func Middleware(jwtMgr *JWTManager, publicPaths []string) func(http.Handler) htt
 				next.ServeHTTP(w, r)
 				return
 			}
+			// Allow SSO endpoints (Phase 21-3)
+			if strings.HasPrefix(r.URL.Path, "/api/v1/auth/sso/") {
+				next.ServeHTTP(w, r)
+				return
+			}
 
 			// Extract Bearer token
 			authHeader := r.Header.Get("Authorization")
@@ -247,7 +267,19 @@ func Middleware(jwtMgr *JWTManager, publicPaths []string) func(http.Handler) htt
 				return
 			}
 
-			// Verify token
+			// API Key authentication (Phase 21-2: Terraform Provider)
+			if strings.HasPrefix(token, "aitop_") {
+				claims := jwtMgr.ValidateAPIKey(token)
+				if claims != nil {
+					ctx := context.WithValue(r.Context(), claimsKey, claims)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				http.Error(w, `{"message":"invalid API key"}`, http.StatusUnauthorized)
+				return
+			}
+
+			// Verify JWT token
 			claims, err := jwtMgr.Verify(token)
 			if err != nil {
 				http.Error(w, fmt.Sprintf(`{"message":"%s"}`, err.Error()), http.StatusUnauthorized)

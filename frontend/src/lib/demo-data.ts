@@ -1592,3 +1592,89 @@ export function getMessageQueues(): MessageQueueMetrics[] {
     { id: 'mq-02', name: 'event-rabbitmq', type: 'rabbitmq', status: 'warning', brokers: 2, topics: 8, totalMessages: 125_000, messagesPerSec: 420, consumerGroups: 5, consumerLag: 3200 },
   ];
 }
+
+// ── Profiling (Phase 21-1) ──────────────────────────────────────────────
+
+export function getProfilingProfiles(): import('@/types/monitoring').ProfileMetadata[] {
+  const now = Date.now();
+  return [
+    { profile_id: 'prof-001', agent_id: 'agent-01', service_name: 'api-gateway', language: 'go', profile_type: 'cpu', format: 'pprof', duration_sec: 30, sample_count: 15420, size_bytes: 245760, started_at: new Date(now - 7200000).toISOString() },
+    { profile_id: 'prof-002', agent_id: 'agent-01', service_name: 'api-gateway', language: 'go', profile_type: 'memory', format: 'pprof', duration_sec: 0, sample_count: 8230, size_bytes: 189440, started_at: new Date(now - 7200000).toISOString() },
+    { profile_id: 'prof-003', agent_id: 'agent-02', service_name: 'rag-service', language: 'python', profile_type: 'cpu', format: 'collapsed', duration_sec: 30, sample_count: 22100, size_bytes: 312000, started_at: new Date(now - 3600000).toISOString() },
+    { profile_id: 'prof-004', agent_id: 'agent-02', service_name: 'rag-service', language: 'python', profile_type: 'memory', format: 'collapsed', duration_sec: 0, sample_count: 5600, size_bytes: 98000, started_at: new Date(now - 3600000).toISOString() },
+    { profile_id: 'prof-005', agent_id: 'agent-03', service_name: 'payment-api', language: 'java', profile_type: 'cpu', format: 'jfr', duration_sec: 60, sample_count: 45000, size_bytes: 524288, started_at: new Date(now - 1800000).toISOString() },
+    { profile_id: 'prof-006', agent_id: 'agent-03', service_name: 'payment-api', language: 'java', profile_type: 'memory', format: 'jfr', duration_sec: 60, sample_count: 18000, size_bytes: 312000, started_at: new Date(now - 1800000).toISOString() },
+    { profile_id: 'prof-007', agent_id: 'agent-04', service_name: 'auth-service', language: 'go', profile_type: 'goroutine', format: 'pprof', duration_sec: 0, sample_count: 342, size_bytes: 45000, started_at: new Date(now - 900000).toISOString() },
+    { profile_id: 'prof-008', agent_id: 'agent-05', service_name: 'ml-inference', language: 'python', profile_type: 'cpu', format: 'collapsed', duration_sec: 30, sample_count: 31000, size_bytes: 420000, started_at: new Date(now - 600000).toISOString() },
+    { profile_id: 'prof-009', agent_id: 'agent-03', service_name: 'order-service', language: 'java', profile_type: 'thread', format: 'jfr', duration_sec: 30, sample_count: 12500, size_bytes: 198000, started_at: new Date(now - 300000).toISOString() },
+    { profile_id: 'prof-010', agent_id: 'agent-01', service_name: 'api-gateway', language: 'go', profile_type: 'cpu', format: 'pprof', duration_sec: 30, sample_count: 16200, size_bytes: 256000, trace_id: 'abc123def456', started_at: new Date(now - 180000).toISOString() },
+  ];
+}
+
+export function getFlameGraphData(profileId: string): import('@/types/monitoring').FlameGraphData {
+  return {
+    profileId,
+    profileType: 'cpu',
+    language: 'go',
+    serviceName: 'api-gateway',
+    totalSamples: 15420,
+    durationSec: 30,
+    root: {
+      name: 'root', fullName: 'root', value: 15420, selfValue: 0,
+      children: [
+        { name: 'main.main', fullName: 'main.main', value: 12000, selfValue: 200, children: [
+          { name: 'net/http.(*Server).Serve', fullName: 'net/http.(*Server).Serve', value: 9800, selfValue: 150, children: [
+            { name: 'net/http.(*conn).serve', fullName: 'net/http.(*conn).serve', value: 9000, selfValue: 800, children: [
+              { name: 'main.handleRequest', fullName: 'main.handleRequest', value: 5200, selfValue: 1200, children: [
+                { name: 'main.processPayload', fullName: 'main.processPayload', value: 2500, selfValue: 1500, children: [
+                  { name: 'encoding/json.Unmarshal', fullName: 'encoding/json.Unmarshal', value: 1000, selfValue: 1000, children: [] },
+                ] },
+                { name: 'main.validateAuth', fullName: 'main.validateAuth', value: 1500, selfValue: 800, children: [
+                  { name: 'crypto/hmac.Equal', fullName: 'crypto/hmac.Equal', value: 700, selfValue: 700, children: [] },
+                ] },
+              ] },
+              { name: 'encoding/json.Marshal', fullName: 'encoding/json.Marshal', value: 2000, selfValue: 2000, children: [] },
+              { name: 'database/sql.(*DB).Query', fullName: 'database/sql.(*DB).Query', value: 1000, selfValue: 600, children: [
+                { name: 'net.(*conn).Read', fullName: 'net.(*conn).Read', value: 400, selfValue: 400, children: [] },
+              ] },
+            ] },
+          ] },
+          { name: 'main.backgroundSync', fullName: 'main.backgroundSync', value: 1800, selfValue: 300, children: [
+            { name: 'net/http.(*Client).Do', fullName: 'net/http.(*Client).Do', value: 1500, selfValue: 1500, children: [] },
+          ] },
+        ] },
+        { name: 'runtime.gcBgMarkWorker', fullName: 'runtime.gcBgMarkWorker', value: 2420, selfValue: 2420, children: [] },
+        { name: 'runtime.mcall', fullName: 'runtime.mcall', value: 1000, selfValue: 1000, children: [] },
+      ],
+    },
+  };
+}
+
+export function getFlameGraphDiffData(): import('@/types/monitoring').FlameGraphDiff {
+  return {
+    base_profile_id: 'prof-001',
+    target_profile_id: 'prof-010',
+    root: {
+      name: 'root', fullName: 'root', baseValue: 15420, targetValue: 16200, delta: 780, children: [
+        { name: 'main.main', fullName: 'main.main', baseValue: 12000, targetValue: 13200, delta: 1200, children: [
+          { name: 'net/http.(*Server).Serve', fullName: 'net/http.(*Server).Serve', baseValue: 9800, targetValue: 11000, delta: 1200, children: [
+            { name: 'main.handleRequest', fullName: 'main.handleRequest', baseValue: 5200, targetValue: 6800, delta: 1600, children: [] },
+            { name: 'encoding/json.Marshal', fullName: 'encoding/json.Marshal', baseValue: 2000, targetValue: 1800, delta: -200, children: [] },
+          ] },
+        ] },
+        { name: 'runtime.gcBgMarkWorker', fullName: 'runtime.gcBgMarkWorker', baseValue: 2420, targetValue: 2000, delta: -420, children: [] },
+        { name: 'runtime.mcall', fullName: 'runtime.mcall', baseValue: 1000, targetValue: 1000, delta: 0, children: [] },
+      ],
+    },
+  };
+}
+
+// ── SSO Demo Data (Phase 21-3) ────────────────────────────────────────────
+
+export function getSSOProviders(): { id: string; name: string; protocol: string; enabled: boolean; buttonLabel?: string }[] {
+  return [
+    { id: 'sso-okta', name: 'Okta', protocol: 'oidc', enabled: true, buttonLabel: 'Sign in with Okta' },
+    { id: 'sso-azure', name: 'Azure AD', protocol: 'oidc', enabled: true, buttonLabel: 'Sign in with Microsoft' },
+    { id: 'sso-google', name: 'Google Workspace', protocol: 'oidc', enabled: false, buttonLabel: 'Sign in with Google' },
+  ];
+}

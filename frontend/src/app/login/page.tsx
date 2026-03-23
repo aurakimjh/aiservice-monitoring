@@ -130,6 +130,42 @@ export default function LoginPage() {
           </Button>
         </form>
 
+        {/* Enterprise SSO (Phase 21-3) */}
+        <div
+          className={cn(
+            'p-4 space-y-3',
+            'bg-[var(--bg-secondary)] border border-[var(--border-default)]',
+            'rounded-[var(--radius-xl)]',
+          )}
+        >
+          <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)]">
+            <Shield size={12} />
+            Enterprise SSO
+          </div>
+          <div className="space-y-2">
+            <button
+              className={cn(
+                'flex items-center justify-center gap-2 w-full py-2 text-xs font-medium',
+                'border border-[var(--border-default)] rounded-[var(--radius-md)]',
+                'hover:bg-[var(--bg-tertiary)] hover:border-[var(--border-emphasis)]',
+                'transition-colors text-[var(--text-primary)]',
+              )}
+            >
+              Sign in with Okta
+            </button>
+            <button
+              className={cn(
+                'flex items-center justify-center gap-2 w-full py-2 text-xs font-medium',
+                'border border-[var(--border-default)] rounded-[var(--radius-md)]',
+                'hover:bg-[var(--bg-tertiary)] hover:border-[var(--border-emphasis)]',
+                'transition-colors text-[var(--text-primary)]',
+              )}
+            >
+              Sign in with Microsoft
+            </button>
+          </div>
+        </div>
+
         {/* Demo Quick Login */}
         <div
           className={cn(

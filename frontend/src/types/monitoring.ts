@@ -946,3 +946,61 @@ export interface MessageQueueMetrics {
   partitions?: number;
   replicationFactor?: number;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Continuous Profiling Types (Phase 21-1)
+// ═══════════════════════════════════════════════════════════════
+
+export type ProfileLanguage = 'go' | 'python' | 'java' | 'dotnet' | 'nodejs';
+export type ProfileType = 'cpu' | 'memory' | 'goroutine' | 'thread' | 'lock' | 'alloc';
+export type ProfileFormat = 'pprof' | 'jfr' | 'collapsed';
+
+export interface ProfileMetadata {
+  profile_id: string;
+  agent_id: string;
+  service_name: string;
+  language: ProfileLanguage;
+  profile_type: ProfileType;
+  format: ProfileFormat;
+  duration_sec: number;
+  sample_count: number;
+  size_bytes: number;
+  labels?: Record<string, string>;
+  trace_id?: string;
+  span_id?: string;
+  started_at: string;
+  ended_at?: string;
+}
+
+export interface FlameGraphNode {
+  name: string;
+  fullName: string;
+  value: number;
+  selfValue: number;
+  children: FlameGraphNode[];
+}
+
+export interface FlameGraphData {
+  profileId: string;
+  profileType: string;
+  language: string;
+  serviceName: string;
+  totalSamples: number;
+  durationSec: number;
+  root: FlameGraphNode;
+}
+
+export interface FlameGraphDiffNode {
+  name: string;
+  fullName: string;
+  baseValue: number;
+  targetValue: number;
+  delta: number;
+  children: FlameGraphDiffNode[];
+}
+
+export interface FlameGraphDiff {
+  base_profile_id: string;
+  target_profile_id: string;
+  root: FlameGraphDiffNode;
+}

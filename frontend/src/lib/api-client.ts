@@ -377,4 +377,47 @@ export const costApi = {
     apiFetch<Record<string, unknown>>(`/costs/breakdown${range ? `?range=${range}` : ''}`),
 };
 
+// ── Profiling API (Phase 21-1) ─────────────────────────────────────────────
+
+export const profilingApi = {
+  list: (params?: { service?: string; language?: string; type?: string; from?: string; to?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.service) qs.set('service', params.service);
+    if (params?.language) qs.set('language', params.language);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const q = qs.toString();
+    return apiFetch<{ items: import('@/types/monitoring').ProfileMetadata[]; total: number }>(`/profiles${q ? `?${q}` : ''}`);
+  },
+  get: (id: string) =>
+    apiFetch<import('@/types/monitoring').ProfileMetadata>(`/profiles/${id}`),
+  getFlameGraph: (id: string) =>
+    apiFetch<import('@/types/monitoring').FlameGraphData>(`/profiles/${id}/flamegraph`),
+  getRaw: (id: string) =>
+    apiFetch<Blob>(`/profiles/${id}/raw`),
+  compare: (baseId: string, targetId: string) =>
+    apiFetch<import('@/types/monitoring').FlameGraphDiff>(`/profiles/compare?base=${baseId}&target=${targetId}`),
+  getForTrace: (traceId: string) =>
+    apiFetch<{ items: import('@/types/monitoring').ProfileMetadata[] }>(`/traces/${traceId}/profiles`),
+};
+
+// ── SSO API (Phase 21-3) ──────────────────────────────────────────────────
+
+export const ssoApi = {
+  listProviders: () =>
+    apiFetch<{ items: { id: string; name: string; protocol: string; enabled: boolean; buttonLabel?: string }[] }>('/auth/sso/providers'),
+  listConfigs: () =>
+    apiFetch<{ items: Record<string, unknown>[] }>('/settings/sso'),
+  createConfig: (data: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>('/settings/sso', { method: 'POST', body: JSON.stringify(data) }),
+  updateConfig: (id: string, data: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(`/settings/sso/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteConfig: (id: string) =>
+    apiFetch<void>(`/settings/sso/${id}`, { method: 'DELETE' }),
+  testConnection: (id: string) =>
+    apiFetch<{ status: string; message: string }>(`/settings/sso/${id}/test`, { method: 'POST' }),
+};
+
 export { apiFetch };
