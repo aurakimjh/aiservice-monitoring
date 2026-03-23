@@ -61,3 +61,10 @@ logs/
 # Build artifacts
 *.so
 *.dll
+
+# Test results
+frontend/test-results/
+reports/playwright/
+
+# Claude Code
+.claude/
