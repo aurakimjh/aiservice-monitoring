@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-23 (Session 27 — Phase 7' 진행: E2E 통합 검증 재설계 파일 생성)
+> **최종 업데이트**: 2026-03-23 (Session 28 — Java/.NET SDK 설계 문서 작성)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -51,6 +51,7 @@ Phase 21: 엔터프라이즈 기능              [░░░░░░░░░░
 ── 장기 (6~12개월) — 시장 리더십 ─────────────────────────────────────
 Phase 22: AI Copilot + 자동 탐색         [░░░░░░░░░░]   0%  📋
 Phase 23: 멀티 클라우드 + 모바일          [░░░░░░░░░░]   0%  📋
+Phase 24: Java/.NET SDK + 메소드 프로파일링[░░░░░░░░░░]   0%  📋
 ```
 
 ---
@@ -294,12 +295,58 @@ make -C agent e2e-all
 
 ---
 
+## Phase 24: Java/.NET SDK + 메소드 프로파일링 📋
+
+> **목표**: 엔터프라이즈 APM 시장(Java 45% / .NET 25%)으로 확장, 기존 APM 대비 AI 통합 모니터링 차별화
+> **전제**: Phase 21~23 이후 진행 또는 병렬 진행 가능 (독립적인 SDK 레이어)
+> **참조**: [DOCS/JAVA_DOTNET_SDK_DESIGN.md](DOCS/JAVA_DOTNET_SDK_DESIGN.md) — 상세 설계 문서
+
+### 24-1. Java SDK MVP
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 24-1-1 | OTel Java Agent 통합 | `opentelemetry-javaagent.jar` 기반 자동 계측 (Spring Boot, JDBC, HttpClient) — JVM 옵션 1줄 추가로 활성화 | 2주 | 📋 |
+| 24-1-2 | AITOP Java Extension | ByteBuddy 기반 메소드 프로파일링 확장 (임계치 5ms 필터링, ThreadLocal 콜 스택, 비동기 배치 전송) | 2주 | 📋 |
+| 24-1-3 | SQL 바인딩 캡처 | PreparedStatement 바인딩 파라미터 캡처 + PII 컬럼 자동 마스킹 (password/token/email 등) | 1주 | 📋 |
+| 24-1-4 | JVM 메트릭 수집 | Heap/GC/Thread/커넥션 풀 15개 메트릭 + SLO 알림 (Heap>90%, 데드락, 커넥션>95%) | 1주 | 📋 |
+
+### 24-2. .NET SDK MVP
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 24-2-1 | OTel .NET 자동 계측 | ASP.NET Core / HttpClient / EF Core / gRPC 자동 계측 패키지 통합 | 2주 | 📋 |
+| 24-2-2 | CLR Profiler 통합 | `ICorProfilerCallback` 기반 메소드 JIT Hook — 환경변수로 활성화, 코드 변경 없음 | 3주 | 📋 |
+| 24-2-3 | CLR 메트릭 수집 | GC/ThreadPool/예외 11개 메트릭 + `System.Diagnostics.Metrics` 통합 | 1주 | 📋 |
+
+### 24-3. XLog 통합 뷰 (메소드 콜 트리 + LLM 체인 통합)
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 24-3-1 | 언어 감지 로직 | `telemetry.sdk.language` Span 속성 기반 자동 감지 → Java/Python/Go 뷰 자동 선택 | 0.5주 | 📋 |
+| 24-3-2 | 메소드 콜 트리 UI | 접기/펼치기 가능한 트리 컴포넌트 (Scouter 스타일), SQL 바인딩 인라인 표시 | 2주 | 📋 |
+| 24-3-3 | 통합 Trace 뷰 | Java→Python 부모-자식 Trace 연결 시각화: 공통 스팬 타임라인 + 언어별 확장 패널 | 1.5주 | 📋 |
+
+### 24-4. K8s 자동 주입
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 24-4-1 | AITOP K8s Operator | Admission Webhook으로 Java/CLR 에이전트 자동 주입 (Pod 어노테이션만 추가) | 2주 | 📋 |
+| 24-4-2 | Helm 차트 업데이트 | Java/CLR 에이전트 이미지 + ConfigMap + Secret 관리 | 1주 | 📋 |
+
+**기대 효과**:
+- 엔터프라이즈 APM 시장(Java 45% + .NET 25%) 접근 가능
+- Scouter/Pinpoint 대비 차별화: Python AI 체인과 Java 메소드 트리 **통합 뷰** (업계 최초)
+- "Java Spring → Python LLM" 엔드투엔드 병목 추적 — 기존 APM으로는 불가능
+
+---
+
 ## 문서 현황
 
 | 파일 경로 | 상태 | 비고 |
 |-----------|------|------|
-| `DOCS/ARCHITECTURE.md` | ✅ v2.0.0 | OTel + Agent 통합 아키텍처 (12개 섹션) |
-| `DOCS/METRICS_DESIGN.md` | ✅ v2.0.0 | 지표 정의 + Agent 수집 메트릭 매핑 (11개 섹션) |
+| `DOCS/ARCHITECTURE.md` | ✅ v2.0.1 | OTel + Agent 통합 아키텍처 (Java/.NET 언급 추가) |
+| `DOCS/METRICS_DESIGN.md` | ✅ v2.0.1 | 지표 정의 + Agent 수집 메트릭 매핑 (12개 섹션, Java/.NET 추가) |
+| `DOCS/JAVA_DOTNET_SDK_DESIGN.md` | ✅ v1.0.0 | Java/.NET SDK 및 메소드 프로파일링 통합 설계 (Phase 24) |
 | `DOCS/UI_DESIGN.md` | ✅ v2.0.0 | 통합 모니터링 UI 설계 (구현 완료 반영, 26개 라우트) |
 | `DOCS/AGENT_DESIGN.md` | ✅ v1.1.0 | AITOP Agent 상세 설계 (Phase 16 완료 반영) |
 | `DOCS/SOLUTION_STRATEGY.md` | ✅ v1.0.0 | 완성도 평가 + 경쟁 분석 + 상용화 로드맵 |

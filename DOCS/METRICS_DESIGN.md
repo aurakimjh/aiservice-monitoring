@@ -82,6 +82,7 @@ GPU VRAM은 AI 모델이 올라가는 **작업 책상의 크기**입니다.
 6. [병목 구간별 시각화 전략](#6-병목-구간별-시각화-전략)
 7. [장애 예방 Alert 임계치 정의](#7-장애-예방-alert-임계치-정의)
 8. [Context Propagation 설계](#8-context-propagation-설계)
+12. [Java / .NET 전용 메트릭 (Phase 24 예정)](#12-java--net-전용-메트릭-phase-24-예정)
 
 ---
 
@@ -1523,5 +1524,94 @@ abs(
 
 ---
 
+---
+
+## 12. Java / .NET 전용 메트릭 (Phase 24 예정)
+
+> **상세 설계**: [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md) §7 참조
+> **배경**: Java/Spring Boot 및 .NET/ASP.NET Core는 AI 서비스를 호출하는 엔터프라이즈 게이트웨이로 가장 흔히 사용된다.
+> 이 레이어의 병목(GC, 커넥션 풀, 스레드 경합)을 관찰해야 전체 레이턴시 원인을 정확히 파악할 수 있다.
+
+### 12.1 JVM 메트릭 (Java)
+
+> **수집 방법**: OTel Java Agent + AITOP Java Extension 자동 수집 (코드 변경 없음)
+> **수집 주기**: 15초 (Prometheus scrape)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `jvm.heap.used` | Gauge | bytes | `service` | Heap 사용량 |
+| `jvm.heap.max` | Gauge | bytes | `service` | Heap 최대 용량 |
+| `jvm.heap.usage_ratio` | Gauge | 1 (0~1) | `service` | Heap 사용률 (used/max) |
+| `jvm.gc.pause.time` | Counter | ms | `gc.name`, `service` | GC 일시정지 누적 시간 |
+| `jvm.gc.collections` | Counter | 1 | `generation`, `service` | GC 수집 횟수 |
+| `jvm.threads.live` | Gauge | 1 | `service` | 활성 스레드 수 |
+| `jvm.threads.deadlocked` | Gauge | 1 | `service` | 데드락 스레드 수 |
+| `jvm.threads.peak` | Gauge | 1 | `service` | 최대 동시 스레드 수 |
+| `jvm.classes.loaded` | Gauge | 1 | `service` | 로드된 클래스 수 |
+| `jvm.compilation.time` | Counter | ms | `service` | JIT 컴파일 누적 시간 |
+| `jdbc.connections.active` | Gauge | 1 | `pool`, `service` | 활성 DB 커넥션 수 |
+| `jdbc.connections.max` | Gauge | 1 | `pool`, `service` | 커넥션 풀 최대 크기 |
+| `jdbc.slow_query.count` | Counter | 1 | `service` | 슬로우 쿼리 발생 횟수 |
+
+**SLO 기준값 (Java):**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|---------|
+| `jvm.heap.usage_ratio` | > 0.75 | > 0.90 | Slack #oncall |
+| `jvm.gc.pause.time` rate/5m | > 500ms | > 2s | PagerDuty |
+| `jvm.threads.deadlocked` | > 0 | > 0 | PagerDuty (즉시) |
+| `jdbc.connections.active / max` | > 0.80 | > 0.95 | Slack #oncall |
+
+### 12.2 CLR 메트릭 (.NET)
+
+> **수집 방법**: OTel .NET Auto-Instrumentation + AITOP CLR Profiler 자동 수집
+> **수집 주기**: 15초 (Prometheus scrape)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `clr.gc.heap.size` | Gauge | bytes | `service` | GC 힙 전체 크기 |
+| `clr.gc.collections` | Counter | 1 | `generation`, `service` | GC 세대별 수집 횟수 |
+| `clr.gc.pause.duration` | Histogram | ms | `generation`, `service` | GC 일시정지 시간 |
+| `clr.threadpool.threads` | Gauge | 1 | `service` | 활성 스레드 풀 스레드 수 |
+| `clr.threadpool.queue.length` | Gauge | 1 | `service` | 스레드 풀 대기 작업 수 |
+| `clr.threadpool.completed` | Counter | 1 | `service` | 완료된 스레드 풀 작업 수 |
+| `clr.exceptions.thrown` | Counter | 1 | `exception.type`, `service` | 예외 발생 수 |
+| `clr.assemblies.loaded` | Gauge | 1 | `service` | 로드된 어셈블리 수 |
+| `aspnetcore.requests.active` | Gauge | 1 | `service` | 처리 중인 HTTP 요청 수 |
+| `aspnetcore.request.duration` | Histogram | ms | `method`, `route`, `service` | 요청 처리 시간 |
+| `efcore.query.duration` | Histogram | ms | `table`, `service` | EF Core 쿼리 실행 시간 |
+
+**SLO 기준값 (.NET):**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|---------|
+| `clr.gc.pause.duration` P95 | > 200ms | > 500ms | Slack #oncall |
+| `clr.threadpool.queue.length` | > 100 | > 500 | PagerDuty |
+| `aspnetcore.requests.active` | > 200 | > 500 | PagerDuty |
+
+### 12.3 메소드 프로파일링 메트릭 (Java/.NET 공통)
+
+> **수집 방법**: ByteBuddy(Java) / CLR Profiler(.NET) — 임계치(기본 5ms) 이상 메소드만 수집
+> **데이터 모델**: 메소드 콜 트리 JSON → OTel Span 이벤트로 기록
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `method.duration` | Histogram | ms | `language`, `class`, `method` | 메소드 실행 시간 분포 |
+| `method.calls.total` | Counter | 1 | `language`, `class`, `method` | 메소드 호출 횟수 |
+| `method.errors.total` | Counter | 1 | `language`, `class`, `method`, `error_type` | 메소드 예외 발생 수 |
+| `method.sql.count` | Counter | 1 | `language`, `method` | 메소드당 SQL 호출 수 |
+| `method.sql.duration` | Histogram | ms | `language`, `method` | 메소드 내 SQL 총 소요 시간 |
+
+### 12.4 Agent 진단 항목 확장 (Java/.NET)
+
+기존 WAS(IT) 진단 항목(15개)에 Java/.NET 특화 항목을 추가합니다:
+
+| 카테고리 | 항목 | 수집 항목 | 저장소 |
+|---------|------|----------|--------|
+| **JVM (IT)** | ITEM0300~0309 (신규 10개) | Heap 사용률, GC 패턴, Full GC 주기, Thread Dump, 커넥션 풀 상태, 클래스 로딩, JIT 컴파일률, 메모리 누수 징후, 데드락 감지, 힙 덤프 분석 | S3 |
+| **CLR (IT)** | ITEM0310~0319 (신규 10개) | GC 힙 크기, 세대별 GC 주기, 스레드 풀 포화도, 예외 발생률, 어셈블리 로딩, LOH(Large Object Heap) 단편화, 비동기 대기 시간, TaskScheduler 큐 길이, CLR 버전, 환경 설정 | S3 |
+
+---
+
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
-*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md)*
+*관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md)*

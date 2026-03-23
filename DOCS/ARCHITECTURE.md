@@ -13,6 +13,7 @@
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 > - [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) — XLog/HeatMap 대시보드 상세 설계
 > - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석, 로드맵
+> - [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md) — Java/.NET SDK 및 메소드 프로파일링 설계 (Phase 24)
 
 ---
 
@@ -102,12 +103,12 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 ║                                                                               ║
 ║  ┌─────────────────── 계측 레이어 (Instrumentation) ─────────────────────┐  ║
 ║  │                                                                         │  ║
-║  │  [Python Services]          [Node.js Services]       [Go Services]     │  ║
-║  │  FastAPI + OTel SDK         Next.js + OTel SDK       Ollama / Weaviate │  ║
-║  │  LangChain / vLLM           Frontend Streaming        OTel Go SDK      │  ║
-║  │  Guardrails / Embeddings    Browser RUM               gRPC Interceptor │  ║
-║  │        │                          │                         │           │  ║
-║  │        └──────────────────────────┴─────────────────────────┘           │  ║
+║  │  [Python Services]    [Node.js Services]  [Go Services]  [Java/.NET] ▶  │  ║
+║  │  FastAPI + OTel SDK   Next.js + OTel SDK  Ollama/Weaviate Spring Boot  │  ║
+║  │  LangChain / vLLM     Frontend Streaming   OTel Go SDK   ASP.NET Core  │  ║
+║  │  Guardrails/Embeddings Browser RUM         gRPC          ByteBuddy/CLR │  ║
+║  │        │                    │                   │               │       │  ║
+║  │        └────────────────────┴───────────────────┴───────────────┘       │  ║
 ║  │                          OTLP (gRPC :4317 / HTTP :4318)                 │  ║
 ║  └─────────────────────────────────┬───────────────────────────────────────┘  ║
 ║                                    │                                           ║
@@ -200,6 +201,10 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 > - **Python** — AI/ML 생태계의 표준 (LangChain, vLLM, PyTorch 등)
 > - **Node.js** — 빠른 I/O, 웹 프론트엔드 (Next.js, React)
 > - **Go** — 고성능 인프라 서비스 (Ollama, 커스텀 프록시)
+> - **Java** — 엔터프라이즈 백엔드의 표준 (Spring Boot, Tomcat); AI 서비스를 호출하는 게이트웨이 역할이 흔함. OTel Java Agent + ByteBuddy 바이트코드 계측으로 코드 변경 없이 메소드 수준 프로파일링 지원 (📋 Phase 24 예정)
+> - **.NET (C#)** — 엔터프라이즈 Windows/Azure 환경 (ASP.NET Core); CLR Profiling API 기반 메소드 계측 지원 (📋 Phase 24 예정)
+>
+> → 상세 설계: [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md)
 >
 > 각 언어의 OTel SDK 설정이 달라도 **동일한 traceparent 헤더**를 HTTP 요청에 실어 보내면,
 > 서로 다른 서비스의 처리 과정이 하나의 Trace로 합쳐집니다.
