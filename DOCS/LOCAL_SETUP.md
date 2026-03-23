@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-23 (Session 33 — 로컬 스토리지 백엔드 설정 안내 추가)
+> **최종 업데이트**: 2026-03-23 (Session 37 — Lite 모드 빠른 시작 가이드 추가: Docker 원클릭 설치·진단·보고서·제거)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -95,6 +95,7 @@ pip install fastapi         # 그 주방에만 재료를 설치합니다
 8. [첫 실행 검증 체크리스트](#8-첫-실행-검증-체크리스트)
 9. [자주 발생하는 문제 (Troubleshooting)](#9-자주-발생하는-문제-troubleshooting)
 10. [수집 서버 스토리지 백엔드 설정](#10-수집-서버-스토리지-백엔드-설정)
+11. [Lite 모드 빠른 시작 (단기 성능 진단)](#11-lite-모드-빠른-시작-단기-성능-진단)
 
 ---
 
@@ -1482,6 +1483,161 @@ storage:
 | 프로덕션 + 로컬 캐시 | `"both"` | ✅ S3 + 로컬 병행 |
 
 > **참조**: StorageBackend 인터페이스 전체 설계는 [AGENT_DESIGN.md §7.6](./AGENT_DESIGN.md#76-storagebackend-인터페이스-설계)을 참고하세요.
+
+---
+
+---
+
+## 11. Lite 모드 빠른 시작 (단기 성능 진단)
+
+> **목적**: 성능 개선 컨설팅 시나리오에서 AITOP을 **1주일 단기 투입**으로 사용하는 가이드입니다.
+> Docker만 있으면 됩니다. PostgreSQL, S3, Helm은 필요하지 않습니다.
+>
+> **상세 아키텍처**: [ARCHITECTURE.md §13](./ARCHITECTURE.md#13-배포-모드-아키텍처--enterprise-vs-lite)
+> **에이전트 동작**: [AGENT_DESIGN.md §2.4](./AGENT_DESIGN.md#24-lite-모드-에이전트-상세-동작)
+
+### 11.1 사전 요구사항
+
+| 항목 | 요건 | 확인 명령어 |
+|------|------|------------|
+| Docker | 24.0+ | `docker --version` |
+| Docker Compose | v2.x | `docker compose version` |
+
+일반 개발 환경 설정(Python, Node.js, Go)은 Lite 모드에서 **불필요**합니다.
+
+### 11.2 원클릭 설치 및 시작
+
+```bash
+# 1. 저장소 클론 (이미 있으면 생략)
+git clone https://github.com/your-org/aiservice-monitoring.git
+cd aiservice-monitoring
+
+# 2. Lite 모드 시작 (단일 명령어)
+docker-compose -f docker-compose.lite.yaml up -d
+
+# 3. 로그 확인 (에이전트 수집 시작 확인)
+docker-compose -f docker-compose.lite.yaml logs -f aitop-agent
+# 출력 예: "Collector OS: started", "Collector AI-GPU: detected nvidia-smi"
+
+# 4. 웹 UI 접속
+# http://localhost:8080
+# XLog, HeatMap, 프로파일링 대시보드 확인
+```
+
+### 11.3 진단 워크플로 (1주일 스프린트)
+
+```
+Day 1 — 설치 및 베이스라인 수집
+  ├─ docker-compose up
+  ├─ 에이전트 자동 탐지 확인 (OS/WEB/WAS/DB/GPU/LLM)
+  └─ XLog 기준선 확인 (정상 응답시간 분포)
+
+Day 2~3 — 부하 테스트
+  ├─ 부하 도구로 AI 서비스에 트래픽 발생
+  ├─ HeatMap에서 응답시간 분포 변화 관찰
+  └─ XLog에서 느린 트랜잭션 (빨간 점) 식별
+
+Day 4~5 — 프로파일링 드릴다운
+  ├─ 느린 트랜잭션 클릭 → 트레이스 상세 보기
+  ├─ LLM 체인 Span 확인: Guardrail / Embedding / LLM 각 구간 소요시간
+  └─ 병목 구간 특정 (예: Embedding 320ms 이상)
+
+Day 6~7 — 개선 검증
+  ├─ 개선 사항 적용 (코드/설정 변경)
+  ├─ 부하 테스트 재실행
+  └─ HeatMap Before/After 비교
+
+완료 — 보고서 생성 및 제거
+  ├─ 진단 보고서 생성 (§11.4 참조)
+  └─ 흔적 없는 제거 (§11.5 참조)
+```
+
+### 11.4 진단 보고서 생성
+
+진단이 완료되면 PDF 또는 HTML 형식으로 결과를 내보낼 수 있습니다.
+
+```bash
+# PDF 보고서 생성
+docker exec aitop-server aitop-lite report \
+  --format=pdf \
+  --output=/reports/ \
+  --title="AI 서비스 성능 진단 보고서 — 2026-03-23"
+
+# HTML 보고서 생성 (웹 브라우저에서 바로 열기 가능)
+docker exec aitop-server aitop-lite report \
+  --format=html \
+  --output=/reports/
+
+# 호스트 머신에서 보고서 확인
+ls ./reports/
+# → aitop-diagnosis-2026-03-23.pdf
+# → aitop-diagnosis-2026-03-23.html
+```
+
+보고서 포함 내용:
+- 진단 기간 및 대상 서버 목록
+- XLog 응답시간 분포 (HeatMap 스냅샷)
+- 상위 슬로우 트랜잭션 Top 20
+- LLM 체인 구간별 소요시간 분석
+- 병목 구간 및 개선 권고사항
+- 부하 테스트 전후 성능 비교
+
+### 11.5 흔적 없는 제거
+
+진단이 끝나면 데이터와 컨테이너를 완전히 제거합니다.
+
+```bash
+# 1. 컨테이너 + 볼륨 제거 (SQLite DB, Evidence 파일 포함)
+docker-compose -f docker-compose.lite.yaml down -v
+
+# 2. 로컬 파일 완전 삭제
+docker run --rm -v $(pwd)/data:/data alpine rm -rf /data/
+# 또는 호스트에서 직접:
+rm -rf ./data/
+
+# 3. 이미지 제거 (선택)
+docker rmi aitop/server:latest aitop/agent:latest
+
+# 확인: 남은 파일 없음
+ls ./data/ 2>/dev/null || echo "완전히 제거되었습니다"
+```
+
+> **Windows Git Bash 사용자**: `$(pwd)` 대신 절대 경로를 사용하세요.
+> ```bash
+> docker run --rm -v /c/workspace/aiservice-monitoring/data:/data alpine rm -rf /data/
+> ```
+
+### 11.6 Lite 모드 설정 커스터마이징
+
+```yaml
+# docker-compose.lite.yaml 환경 변수로 조정 가능
+
+services:
+  aitop-server:
+    environment:
+      AITOP_MODE: "lite"
+      AITOP_RETENTION_DAYS: "7"      # 데이터 보존 기간 (기본 7일)
+      AITOP_UI_PORT: "8080"          # 웹 UI 포트
+      AITOP_COLLECT_PORT: "9090"     # 에이전트 수신 포트
+
+  aitop-agent:
+    environment:
+      AITOP_SERVER: "http://aitop-server:9090"
+      AITOP_COLLECT_INTERVAL: "30s"  # 수집 주기 (기본 30초)
+      AITOP_XLOG_ENABLED: "true"     # XLog 수집 활성화
+      AITOP_PROFILE_ENABLED: "true"  # 프로파일링 활성화
+```
+
+### 11.7 Lite 모드 vs 일반 로컬 개발 환경 비교
+
+| 항목 | 일반 로컬 개발 (§1~9) | Lite 모드 (§11) |
+|------|----------------------|----------------|
+| **목적** | AITOP 코드 개발 및 기능 구현 | AI 서비스 성능 진단 |
+| **설치 도구** | Python + Node.js + Go + Docker | Docker만 |
+| **데이터베이스** | PostgreSQL (Docker) | SQLite (내장) |
+| **스토리지** | MinIO S3 or 로컬 | 로컬 파일시스템 |
+| **수정 가능** | 소스 코드 수정 가능 | 설정만 변경 가능 |
+| **보고서** | 없음 (개발용) | PDF/HTML 진단 보고서 |
 
 ---
 
