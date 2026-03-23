@@ -432,6 +432,21 @@ make -C agent e2e-all
 | 26-4-4 | Worker Pool 실시간 뷰 | Active/Idle 바 차트 + Restart 카운터 (Python) | 0.5주 | 📋 |
 | 26-4-5 | Goroutine 누수 감지 뷰 | Count 라인 차트 + 기준값 × 2배 경계선 + pprof 딥링크 (Go) | 0.5주 | 📋 |
 
+### 26-5. Redis/Cache Collector
+
+> **목표**: Redis·Valkey·KeyDB·DragonflyDB·Memcached 캐시 계열 DB를 자동 탐지하고 메모리·성능·복제·영속성·클러스터 상태를 수집·시각화한다.
+> **참조**: [DOCS/AGENT_DESIGN.md §3.2 Redis/Cache Collector](DOCS/AGENT_DESIGN.md) · [DOCS/METRICS_DESIGN.md §13.9](DOCS/METRICS_DESIGN.md) · [DOCS/UI_DESIGN.md §8.8](DOCS/UI_DESIGN.md)
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 26-5-1 | Redis/Cache Collector 구현 | `INFO all` · `SLOWLOG GET` · `CONFIG GET` · `CLUSTER INFO` 수집 — Redis/Valkey/KeyDB/DragonflyDB 공통 | 1.5주 | 📋 |
+| 26-5-2 | Memcached Collector 구현 | `stats` 명령으로 get_hits/get_misses · curr_connections · bytes · evictions 수집 | 0.5주 | 📋 |
+| 26-5-3 | 엔진 자동 탐지 로직 | 포트 6379/11211 스캔 + INFO 응답의 `redis_version` / `keydb_version` / `dragonfly_version` 구분 | 0.5주 | 📋 |
+| 26-5-4 | 메트릭 표준화 | `cache.*` 네임스페이스 — 메모리/성능/커넥션/Persistence/Replication/Keyspace 전 항목 Prometheus 노출 | 1주 | 📋 |
+| 26-5-5 | Redis/Cache 대시보드 UI | Hit Rate 게이지 · 메모리 사용률 · Eviction 추세 + Slow Log 테이블 + Replication Lag 차트 + Keyspace 분포 파이 차트 | 1.5주 | 📋 |
+| 26-5-6 | Redis Cluster 지원 | `CLUSTER INFO` 기반 cluster_state · 슬롯 배분(assigned/ok/pfail/fail) 수집 및 Cluster 전용 뷰 | 1주 | 📋 |
+| 26-5-7 | 알림 규칙 등록 | Hit Rate < 80% · 메모리 > 80% · Replication Lag > 1MB · Evictions 급증 → Slack/PagerDuty 알림 | 0.5주 | 📋 |
+
 ---
 
 ## Phase 27: Collection Server 저장 계층 구현 📋

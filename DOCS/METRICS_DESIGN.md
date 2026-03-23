@@ -1755,6 +1755,72 @@ abs(
 | `rabbitmq.queue.depth` | > 500 | > 5,000 | PagerDuty |
 | `activemq.queue.depth` | > 500 | > 5,000 | Slack #oncall |
 
+### 13.9 Redis/Cache 메트릭 (Phase 26 예정)
+
+> **목표**: Redis·Valkey·KeyDB·DragonflyDB·Memcached 캐시 계열 DB의 메모리·성능·복제·영속성 상태를 표준 네임스페이스로 수집한다.
+
+#### 메모리
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.memory.used` | Gauge | bytes | `instance`, `engine` | 현재 사용 중인 메모리 (`used_memory`) |
+| `cache.memory.max` | Gauge | bytes | `instance`, `engine` | 설정된 최대 메모리 한도 (`maxmemory`) |
+| `cache.memory.fragmentation_ratio` | Gauge | ratio | `instance`, `engine` | 메모리 파편화 비율 (`mem_fragmentation_ratio`) |
+| `cache.evictions` | Counter | 1 | `instance`, `engine` | 정책(LRU/LFU)에 의해 삭제된 누적 키 수 |
+
+#### 성능
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.hit_rate` | Gauge | ratio | `instance`, `engine` | 캐시 히트율 (hits / (hits + misses)) |
+| `cache.ops_per_sec` | Gauge | ops/s | `instance`, `engine` | 초당 처리 커맨드 수 (`instantaneous_ops_per_sec`) |
+| `cache.latency` | Histogram | µs | `instance`, `engine` | 커맨드 레이턴시 분포 (P50/P95/P99) |
+
+#### 커넥션
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.connections.active` | Gauge | 1 | `instance`, `engine` | 현재 연결된 클라이언트 수 (`connected_clients`) |
+| `cache.connections.blocked` | Gauge | 1 | `instance`, `engine` | 블로킹 대기 중인 클라이언트 수 (`blocked_clients`) |
+| `cache.connections.rejected` | Counter | 1 | `instance`, `engine` | 누적 거부된 연결 수 (`rejected_connections`) |
+
+#### Persistence
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.persistence.last_save_age` | Gauge | s | `instance`, `engine` | 마지막 RDB 저장으로부터 경과 시간 (now - rdb_last_save_time) |
+| `cache.persistence.unsaved_changes` | Gauge | 1 | `instance`, `engine` | 마지막 저장 이후 변경된 키 수 (`rdb_changes_since_last_save`) |
+| `cache.persistence.aof_rewrite` | Gauge | 0/1 | `instance`, `engine` | AOF 재작성 진행 여부 (`aof_rewrite_in_progress`) |
+
+#### Replication
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.replication.lag` | Gauge | bytes | `instance`, `engine`, `replica` | 레플리카 복제 지연 바이트 수 |
+| `cache.replication.offset` | Gauge | 1 | `instance`, `engine` | 마스터 복제 오프셋 (`master_repl_offset`) |
+
+#### Slow Log / Keyspace
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `cache.slowlog.count` | Gauge | 1 | `instance`, `engine` | 현재 슬로우 로그 항목 수 (`slowlog_len`) |
+| `cache.keyspace.keys` | Gauge | 1 | `instance`, `engine`, `db` | DB별 키 수 |
+| `cache.keyspace.expires` | Gauge | 1 | `instance`, `engine`, `db` | DB별 TTL 설정된 키 수 |
+| `cache.keyspace.avg_ttl` | Gauge | ms | `instance`, `engine`, `db` | DB별 평균 TTL |
+
+**engine 레이블 값**: `redis`, `valkey`, `keydb`, `dragonfly`, `memcached`
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `cache.memory.used / cache.memory.max` | > 80% | > 95% | Slack #oncall |
+| `cache.memory.fragmentation_ratio` | > 1.5 | > 2.0 | Slack #oncall |
+| `cache.hit_rate` | < 80% | < 60% | Slack #oncall |
+| `cache.replication.lag` | > 1MB | > 10MB | PagerDuty |
+| `cache.persistence.last_save_age` | > 3600s | > 86400s | Slack #oncall |
+| `cache.evictions` rate/5m | > 100 | > 1,000 | Slack #oncall |
+
 ---
 
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
