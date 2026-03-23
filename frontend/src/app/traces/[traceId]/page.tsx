@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
-import { generateTrace } from '@/lib/demo-data';
+import { generateTrace, getMethodProfile } from '@/lib/demo-data';
 import { formatDuration } from '@/lib/utils';
+import { MethodCallTree } from '@/components/monitoring';
 import type { TraceSpan } from '@/types/monitoring';
 import {
   Route,
@@ -21,6 +22,7 @@ import {
   Layers,
   Server,
   Zap,
+  Code,
 } from 'lucide-react';
 
 // Service colors for waterfall bars
@@ -102,6 +104,7 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
   const [collapsedSpans, setCollapsedSpans] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'waterfall' | 'method-profile'>('waterfall');
 
   const trace = useMemo(() => generateTrace(traceId), [traceId]);
 
@@ -126,6 +129,8 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
     trace.spans.forEach((s) => svcSet.add(s.service));
     return Array.from(svcSet);
   }, [trace.spans]);
+
+  const methodProfile = useMemo(() => getMethodProfile(), []);
 
   const toggleCollapse = (spanId: string) => {
     setCollapsedSpans((prev) => {
@@ -192,8 +197,43 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
         ))}
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-[var(--border-default)]">
+        <button
+          onClick={() => setActiveTab('waterfall')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'waterfall'
+              ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
+              : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]',
+          )}
+        >
+          <Route size={12} />
+          Waterfall
+        </button>
+        <button
+          onClick={() => setActiveTab('method-profile')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'method-profile'
+              ? 'text-[var(--accent-primary)] border-[var(--accent-primary)]'
+              : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]',
+          )}
+        >
+          <Code size={12} />
+          Method Profile
+        </button>
+      </div>
+
+      {/* Method Profile Tab */}
+      {activeTab === 'method-profile' && (
+        <Card>
+          <MethodCallTree profile={methodProfile} />
+        </Card>
+      )}
+
       {/* Waterfall Timeline */}
-      <Card padding="none">
+      {activeTab === 'waterfall' && <Card padding="none">
         {/* Time axis */}
         <div className="flex items-center h-7 px-3 bg-[var(--bg-tertiary)] border-b border-[var(--border-default)] text-[10px] text-[var(--text-muted)]">
           <div className="w-[280px] shrink-0 font-medium">Service / Operation</div>
@@ -277,10 +317,10 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
             );
           })}
         </div>
-      </Card>
+      </Card>}
 
       {/* Span Detail Panel */}
-      {selectedSpan && (
+      {activeTab === 'waterfall' && selectedSpan && (
         <Card>
           <div className="flex items-start justify-between mb-3">
             <div>

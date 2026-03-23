@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1423,4 +1423,46 @@ export function getSyntheticProbes(): SyntheticProbe[] {
     { id: 'sp-04', name: 'RAG Search Quality', type: 'rag', target: 'https://api.aitop.io/v1/rag/search', interval: '15m', status: 'healthy', uptime: 99.5, avgLatencyMs: 820, lastCheck: now - 600_000, qualityScore: 0.82 },
     { id: 'sp-05', name: 'Summarizer Endpoint', type: 'llm', target: 'https://api.aitop.io/v1/summarize', interval: '10m', status: 'down', uptime: 85.3, avgLatencyMs: 0, lastCheck: now - 180_000, lastError: 'Connection refused — service restarting' },
   ];
+}
+
+// ══ Phase 24: Method Profiling — Mock Data ══════════════════════════
+
+export function getMethodProfile(): MethodProfile {
+  return {
+    traceId: 'trace-java-001',
+    language: 'java',
+    serviceName: 'api-gateway',
+    totalMethods: 28,
+    slowQueries: 2,
+    totalDurationMs: 342,
+    rootNode: {
+      id: 'mp-01', name: 'handleRequest()', className: 'com.aitop.api.QueryController', durationMs: 342, selfTimeMs: 5, slow: false, children: [
+        { id: 'mp-02', name: 'authenticate()', className: 'com.aitop.auth.JwtFilter', durationMs: 8, selfTimeMs: 8, slow: false, children: [] },
+        { id: 'mp-03', name: 'processQuery()', className: 'com.aitop.service.QueryService', durationMs: 325, selfTimeMs: 12, slow: false, children: [
+          { id: 'mp-04', name: 'findUser()', className: 'com.aitop.repository.UserRepository', durationMs: 15, selfTimeMs: 2, slow: false, children: [
+            { id: 'mp-05', name: 'executeQuery()', className: 'org.springframework.jdbc.core.JdbcTemplate', durationMs: 13, selfTimeMs: 13, slow: false, children: [],
+              sql: { query: 'SELECT id, name, role FROM users WHERE id = ?', bindings: [42], executionMs: 13, rowCount: 1, slow: false } },
+          ]},
+          { id: 'mp-06', name: 'searchDocuments()', className: 'com.aitop.service.RAGService', durationMs: 180, selfTimeMs: 8, slow: true, children: [
+            { id: 'mp-07', name: 'generateEmbedding()', className: 'com.aitop.client.EmbeddingClient', durationMs: 45, selfTimeMs: 5, slow: false, children: [
+              { id: 'mp-08', name: 'callLLM()', className: 'com.aitop.client.HttpLLMClient', durationMs: 40, selfTimeMs: 40, slow: false, children: [],
+                http: { method: 'POST', url: 'http://embedding-service:8000/embed', statusCode: 200, durationMs: 40 } },
+            ]},
+            { id: 'mp-09', name: 'vectorSearch()', className: 'com.aitop.repository.VectorRepository', durationMs: 120, selfTimeMs: 5, slow: true, children: [
+              { id: 'mp-10', name: 'executeQuery()', className: 'org.springframework.jdbc.core.JdbcTemplate', durationMs: 115, selfTimeMs: 115, slow: true, children: [],
+                sql: { query: 'SELECT d.id, d.content, d.embedding <=> ? AS distance FROM documents d WHERE d.project_id = ? ORDER BY distance LIMIT ?', bindings: ['[0.12, 0.85, ...]', 'proj-ai-prod', 10], executionMs: 115, rowCount: 10, slow: true } },
+            ]},
+          ]},
+          { id: 'mp-11', name: 'callLLMInference()', className: 'com.aitop.client.LLMClient', durationMs: 110, selfTimeMs: 5, slow: true, children: [
+            { id: 'mp-12', name: 'httpPost()', className: 'com.aitop.client.HttpLLMClient', durationMs: 105, selfTimeMs: 105, slow: true, children: [],
+              http: { method: 'POST', url: 'http://rag-service:8000/v1/chat/completions', statusCode: 200, durationMs: 105 } },
+          ]},
+        ]},
+        { id: 'mp-13', name: 'saveAuditLog()', className: 'com.aitop.audit.AuditService', durationMs: 4, selfTimeMs: 1, slow: false, children: [
+          { id: 'mp-14', name: 'insert()', className: 'com.aitop.repository.AuditRepository', durationMs: 3, selfTimeMs: 3, slow: false, children: [],
+            sql: { query: 'INSERT INTO audit_log (user_id, action, resource, timestamp) VALUES (?, ?, ?, ?)', bindings: [42, 'QUERY', '/api/v1/rag/query', '2026-03-23T10:30:00Z'], executionMs: 3, rowCount: 1, slow: false } },
+        ]},
+      ],
+    },
+  };
 }

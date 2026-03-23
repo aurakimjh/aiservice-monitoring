@@ -766,3 +766,50 @@ export interface ProbeResult {
   qualityScore?: number;
   error?: string;
 }
+
+// ── Phase 24: Java/.NET SDK + Method Profiling ──────────────────────
+
+export interface SqlBindingInfo {
+  query: string;
+  bindings: (string | number | null)[];
+  executionMs: number;
+  rowCount: number;
+  slow: boolean;
+}
+
+export interface HttpCallInfo {
+  method: string;
+  url: string;
+  statusCode: number;
+  durationMs: number;
+}
+
+export interface FileIoInfo {
+  path: string;
+  operation: 'read' | 'write';
+  sizeBytes: number;
+  durationMs: number;
+}
+
+export interface MethodProfileNode {
+  id: string;
+  name: string;
+  className: string;
+  durationMs: number;
+  selfTimeMs: number;
+  children: MethodProfileNode[];
+  sql?: SqlBindingInfo;
+  http?: HttpCallInfo;
+  fileIo?: FileIoInfo;
+  slow: boolean;
+}
+
+export interface MethodProfile {
+  traceId: string;
+  language: 'java' | 'dotnet' | 'python' | 'go' | 'nodejs';
+  serviceName: string;
+  rootNode: MethodProfileNode;
+  totalMethods: number;
+  slowQueries: number;
+  totalDurationMs: number;
+}
