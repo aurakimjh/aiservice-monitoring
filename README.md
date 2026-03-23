@@ -43,7 +43,7 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 │                              │ REST API                                 │
 │  ┌─── Collection Server ────┴──────────────────────────────────────┐   │
 │  │  gRPC Receiver · Validation Gateway · Fleet Controller           │   │
-│  │  PostgreSQL · S3/MinIO · Event Bus                               │   │
+│  │  PostgreSQL · LocalStorage/S3 · Event Bus                         │   │
 │  └──────────────┬─────────────────────────┬────────────────────────┘   │
 │                  │ gRPC/HTTPS               │ Prometheus Remote Write   │
 │  ┌─── AITOP Agent (Go) ──┐   ┌─── OTel Collector ─────────────────┐   │
@@ -53,8 +53,8 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 │  └────────────────────────┘   └─────────────────────────────────────┘   │
 │                                            │                            │
 │  ┌─── Storage Layer ──────────────────────┴────────────────────────┐   │
-│  │  Prometheus (Metrics) · Tempo (Traces) · Loki (Logs)            │   │
-│  │  S3/MinIO (Evidence) · PostgreSQL (State)                       │   │
+│  │  Prometheus (Metrics) · Jaeger (Traces)                          │   │
+│  │  LocalStorage/S3 (Evidence) · PostgreSQL (State)                │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -154,7 +154,7 @@ aiservice-monitoring/
 │   └── go/                              # Go 서비스 OTel 초기화
 │
 ├── dashboards/                            # 대시보드
-│   ├── grafana/                          # Grafana JSON (5개)
+│   ├── grafana/                          # Grafana JSON (레거시, 개발 참조용)
 │   └── xlog-heatmap/                     # Canvas 기반 XLog/HeatMap
 │
 ├── demo/rag-service/                      # RAG 데모 서비스 (FastAPI)
@@ -277,10 +277,26 @@ Phase 17:    UI 통합 테스트 (에이전트 실데이터 연동)             
 |------|------|
 | **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, ECharts 6, D3.js 7 |
 | **Agent** | Go 1.25, gRPC, SQLite, mTLS |
-| **Backend** | OTel Collector, Prometheus, Tempo, Loki, PostgreSQL |
+| **Backend** | OTel Collector, Prometheus, Jaeger, PostgreSQL |
 | **SDK** | Python (FastAPI, vLLM, LangChain), Node.js, Go |
 | **Infra** | Docker Compose, Kubernetes, Helm, GitHub Actions |
 | **보안** | RBAC, JWT, mTLS, PII Sanitizer, 코드 서명 |
+
+### 상용 배포 금지 라이브러리 (AGPL-3.0)
+
+아래 라이브러리는 **AGPL-3.0** 라이선스로, 상용 제품에 번들/배포 시 전체 소스코드 공개 의무가 발생합니다.
+**상용 배포 시 절대 포함하지 마세요.**
+
+| 라이브러리 | 라이선스 | 용도 | 대체 솔루션 |
+|-----------|---------|------|-----------|
+| **Grafana** (`grafana/grafana`) | AGPL-3.0 | 시각화 대시보드 | 자체 Next.js UI (구현 완료) |
+| **Grafana Tempo** (`grafana/tempo`) | AGPL-3.0 | 분산 트레이싱 저장 | Jaeger (Apache 2.0) |
+| **Grafana Loki** (`grafana/loki`) | AGPL-3.0 | 로그 집계/저장 | 자체 로그 뷰어 + OTel debug exporter |
+| **MinIO** (`minio/minio`) | AGPL-3.0 | S3 호환 오브젝트 스토리지 | LocalBackend (자체 구현) / AWS S3 |
+
+> **참고**: `minio-go` SDK (Apache 2.0)는 안전합니다. MinIO **서버**만 AGPL-3.0입니다.
+> 개발/테스트 환경에서는 `docker-compose.yaml`로 사용 가능하나, 상용 배포 시 반드시 `docker-compose.commercial.yaml` 또는 `docker-compose.lite.yaml`을 사용하세요.
+> 상세: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) | [DOCS/SOLUTION_STRATEGY.md §8](DOCS/SOLUTION_STRATEGY.md)
 
 ---
 
