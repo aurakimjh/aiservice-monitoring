@@ -1,40 +1,54 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge, Select, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
 import { EChartsWrapper } from '@/components/charts';
-import { generateTransactions, generateHeatMapData } from '@/lib/demo-data';
+import { generateTransactions } from '@/lib/demo-data';
 import { formatDuration } from '@/lib/utils';
 import type { Transaction, TransactionStatus } from '@/types/monitoring';
+import { TimeRangePicker } from '@/components/monitoring/time-range-picker';
+import { TimeRangeArrows, type TimeRange } from '@/components/monitoring/time-range-arrows';
+import { ServerMultiSelector, type ServerOption } from '@/components/monitoring/server-multi-selector';
 import {
   Route,
   Activity,
   Grid3x3,
+  LayoutPanelLeft,
   X,
   Copy,
   Check,
   ChevronDown,
   ChevronUp,
   Filter,
+  Settings2,
 } from 'lucide-react';
 
 // ── Constants ──
 
-const VIEW_TABS = [
-  { id: 'xlog', label: 'XLog', icon: <Activity size={13} /> },
-  { id: 'heatmap', label: 'HeatMap', icon: <Grid3x3 size={13} /> },
+const SERVER_PALETTE = [
+  '#4A90D9', '#2ECC71', '#9B59B6', '#E67E22',
+  '#1ABC9C', '#E74C3C', '#3498DB', '#F39C12',
 ];
 
-const SERVICE_OPTIONS = [
-  { label: 'All Services', value: 'all' },
-  { label: 'rag-service', value: 'rag-service' },
-  { label: 'api-gateway', value: 'api-gateway' },
-  { label: 'embedding-service', value: 'embedding-service' },
-  { label: 'auth-service', value: 'auth-service' },
+const DEMO_SERVERS: ServerOption[] = [
+  { id: 'prod-api-01', label: 'prod-api-01' },
+  { id: 'prod-api-02', label: 'prod-api-02' },
+  { id: 'prod-gpu-01', label: 'prod-gpu-01' },
+  { id: 'prod-gpu-02', label: 'prod-gpu-02' },
+  { id: 'staging-api-01', label: 'staging-api-01' },
+  { id: 'staging-gpu-01', label: 'staging-gpu-01' },
 ];
+
+const VIEW_TABS = [
+  { id: 'xlog', label: 'XLog', icon: <Activity size={12} /> },
+  { id: 'heatmap', label: 'HeatMap', icon: <Grid3x3 size={12} /> },
+  { id: 'split', label: '분할', icon: <LayoutPanelLeft size={12} /> },
+] as const;
+
+type ViewMode = 'xlog' | 'heatmap' | 'split';
 
 const STATUS_FILTER_OPTIONS = [
   { id: 'all', label: 'All' },
@@ -45,10 +59,10 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 const STATUS_DOT_COLOR: Record<TransactionStatus, string> = {
-  normal: '#58A6FF',
-  slow: '#D29922',
+  normal: '#4A90D9',
+  slow: '#F5A623',
   very_slow: '#E8601C',
-  error: '#F85149',
+  error: '#D0021B',
 };
 
 const SPAN_COLORS: Record<string, string> = {
@@ -60,12 +74,36 @@ const SPAN_COLORS: Record<string, string> = {
 };
 
 const LATENCY_BUCKETS = ['0-100', '100-300', '300-500', '500-1K', '1K-2K', '2K-3K', '3K+'];
+const LATENCY_RANGES: [number, number][] = [
+  [0, 100], [100, 300], [300, 500], [500, 1000],
+  [1000, 2000], [2000, 3000], [3000, Infinity],
+];
+
+// ── Types ──
+
+interface TxnWithServer extends Transaction {
+  serverId: string;
+}
 
 // ── Page ──
 
 export default function TracesPage() {
-  const [viewMode, setViewMode] = useState('xlog');
-  const [serviceFilter, setServiceFilter] = useState('all');
+  // ── Time range ──
+  const [range, setRange] = useState<TimeRange>(() => {
+    const to = Date.now();
+    return { from: to - 15 * 60_000, to };
+  });
+  const [isLive, setIsLive] = useState(true);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // ── Server selection ──
+  const [selectedServers, setSelectedServers] = useState<string[]>([
+    'prod-api-01',
+    'prod-api-02',
+  ]);
+
+  // ── View + filter state ──
+  const [viewMode, setViewMode] = useState<ViewMode>('xlog');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedTxns, setSelectedTxns] = useState<Transaction[]>([]);
   const [selectedDetail, setSelectedDetail] = useState<Transaction | null>(null);
@@ -74,33 +112,200 @@ export default function TracesPage() {
   const [listSortBy, setListSortBy] = useState<'elapsed' | 'timestamp'>('elapsed');
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Generate transactions
-  const allTransactions = useMemo(
-    () => generateTransactions(300, serviceFilter !== 'all' ? serviceFilter : undefined),
-    [serviceFilter],
-  );
+  // Refs for heatmap brush handler access
+  const hmDataRef = useRef<[number, number, number][]>([]);
+  const hmBoundsRef = useRef({ minT: 0, bucketWidth: 1 });
 
-  const filteredTransactions = useMemo(() => {
+  // ── Live mode auto-advance ──
+  useEffect(() => {
+    if (!isLive) return;
+    const id = setInterval(() => {
+      setRange((prev) => {
+        const width = prev.to - prev.from;
+        const to = Date.now();
+        return { from: to - width, to };
+      });
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [isLive]);
+
+  const handleRangeChange = (r: TimeRange) => {
+    setIsLive(false);
+    setRange(r);
+  };
+
+  const handleToggleLive = () => {
+    setIsLive((v) => {
+      if (!v) {
+        // Re-enable live: snap to now
+        const to = Date.now();
+        setRange((prev) => ({ from: to - (prev.to - prev.from), to }));
+      }
+      return !v;
+    });
+  };
+
+  // ── Server color map ──
+  const serverColors = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    DEMO_SERVERS.forEach((srv, idx) => {
+      map[srv.id] = SERVER_PALETTE[idx % SERVER_PALETTE.length];
+    });
+    return map;
+  }, []);
+
+  // ── Transaction generation (time-range aware) ──
+  const allTransactions = useMemo<TxnWithServer[]>(() => {
+    const rangeMs = range.to - range.from;
+    const count = Math.max(100, Math.min(600, Math.round(rangeMs / 3_000)));
+    const raw = generateTransactions(count);
+
+    // Rescale timestamps into the selected range
+    const minTs = Math.min(...raw.map((t) => t.timestamp));
+    const maxTs = Math.max(...raw.map((t) => t.timestamp));
+    const span = (maxTs - minTs) || 1;
+
+    return raw.map((t, i) => ({
+      ...t,
+      timestamp: range.from + ((t.timestamp - minTs) / span) * rangeMs,
+      serverId: selectedServers.length > 0
+        ? selectedServers[i % selectedServers.length]
+        : DEMO_SERVERS[i % DEMO_SERVERS.length].id,
+    }));
+  }, [range.from, range.to, selectedServers]);
+
+  const filteredTransactions = useMemo<TxnWithServer[]>(() => {
     if (statusFilter === 'all') return allTransactions;
     return allTransactions.filter((t) => t.status === statusFilter);
   }, [allTransactions, statusFilter]);
 
-  // Stats
+  // ── Stats ──
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
     const errors = filteredTransactions.filter((t) => t.status === 'error').length;
-    const slow = filteredTransactions.filter((t) => t.status === 'slow' || t.status === 'very_slow').length;
-    const avgElapsed = total > 0 ? Math.round(filteredTransactions.reduce((s, t) => s + t.elapsed, 0) / total) : 0;
+    const slow = filteredTransactions.filter(
+      (t) => t.status === 'slow' || t.status === 'very_slow',
+    ).length;
+    const avgElapsed =
+      total > 0
+        ? Math.round(filteredTransactions.reduce((s, t) => s + t.elapsed, 0) / total)
+        : 0;
     return { total, errors, slow, avgElapsed };
   }, [filteredTransactions]);
 
-  // ── XLog Chart Option ──
+  // ── Heatmap data computation ──
+  const hmComputed = useMemo(() => {
+    const TIME_BUCKETS = 30;
+    if (filteredTransactions.length === 0) {
+      return { hmData: [], errorDots: [], minT: range.from, bucketWidth: 1 };
+    }
+    const minT = Math.min(...filteredTransactions.map((t) => t.timestamp));
+    const maxT = Math.max(...filteredTransactions.map((t) => t.timestamp));
+    const bucketWidth = (maxT - minT) / TIME_BUCKETS || 1;
+
+    const grid: number[][] = Array.from({ length: TIME_BUCKETS }, () =>
+      new Array(LATENCY_BUCKETS.length).fill(0),
+    );
+    const errGrid: number[][] = Array.from({ length: TIME_BUCKETS }, () =>
+      new Array(LATENCY_BUCKETS.length).fill(0),
+    );
+
+    for (const txn of filteredTransactions) {
+      const tIdx = Math.min(
+        Math.floor((txn.timestamp - minT) / bucketWidth),
+        TIME_BUCKETS - 1,
+      );
+      let lIdx: number;
+      if (txn.elapsed < 100) lIdx = 0;
+      else if (txn.elapsed < 300) lIdx = 1;
+      else if (txn.elapsed < 500) lIdx = 2;
+      else if (txn.elapsed < 1000) lIdx = 3;
+      else if (txn.elapsed < 2000) lIdx = 4;
+      else if (txn.elapsed < 3000) lIdx = 5;
+      else lIdx = 6;
+
+      grid[tIdx][lIdx]++;
+      if (txn.status === 'error') errGrid[tIdx][lIdx]++;
+    }
+
+    const hmData: [number, number, number][] = [];
+    for (let t = 0; t < TIME_BUCKETS; t++) {
+      for (let l = 0; l < LATENCY_BUCKETS.length; l++) {
+        if (grid[t][l] > 0) hmData.push([t, l, grid[t][l]]);
+      }
+    }
+
+    // Error dot cells: error ratio >= 10%
+    const errorDots: [number, number][] = [];
+    for (let t = 0; t < TIME_BUCKETS; t++) {
+      for (let l = 0; l < LATENCY_BUCKETS.length; l++) {
+        if (grid[t][l] > 0 && errGrid[t][l] / grid[t][l] >= 0.1) {
+          errorDots.push([t, l]);
+        }
+      }
+    }
+
+    return { hmData, errorDots, minT, bucketWidth };
+  }, [filteredTransactions, range.from]);
+
+  // Sync heatmap data to refs for use in brush handler
+  useEffect(() => {
+    hmDataRef.current = hmComputed.hmData;
+    hmBoundsRef.current = {
+      minT: hmComputed.minT,
+      bucketWidth: hmComputed.bucketWidth,
+    };
+  }, [hmComputed]);
+
+  // ── Time axis labels for heatmap ──
+  const hmTimeLabels = useMemo(() => {
+    const TIME_BUCKETS = 30;
+    const { minT, bucketWidth } = hmComputed;
+    const p = (n: number) => String(n).padStart(2, '0');
+    return Array.from({ length: TIME_BUCKETS }, (_, i) => {
+      const d = new Date(minT + i * bucketWidth);
+      return `${p(d.getHours())}:${p(d.getMinutes())}`;
+    });
+  }, [hmComputed]);
+
+  // ── XLog chart option ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const xlogOption = useMemo<any>(() => {
-    const groups: Record<TransactionStatus, number[][]> = { normal: [], slow: [], very_slow: [], error: [] };
-    for (const txn of filteredTransactions) {
-      groups[txn.status].push([txn.timestamp, txn.elapsed]);
+    const multiServer = selectedServers.length > 1;
+
+    let series: object[];
+
+    if (multiServer) {
+      // One series per server
+      const groups: Record<string, [number, number][]> = {};
+      for (const id of selectedServers) groups[id] = [];
+      for (const txn of filteredTransactions) {
+        const sid = txn.serverId;
+        if (groups[sid]) groups[sid].push([txn.timestamp, txn.elapsed]);
+      }
+      series = selectedServers.map((id) => ({
+        name: id,
+        type: 'scatter',
+        data: groups[id],
+        symbolSize: 5,
+        itemStyle: { color: serverColors[id], opacity: 0.75 },
+      }));
+    } else {
+      // Group by status
+      const groups: Record<TransactionStatus, [number, number][]> = {
+        normal: [], slow: [], very_slow: [], error: [],
+      };
+      for (const txn of filteredTransactions) {
+        groups[txn.status].push([txn.timestamp, txn.elapsed]);
+      }
+      series = [
+        { name: 'Normal', type: 'scatter', data: groups.normal, symbolSize: 4, itemStyle: { color: STATUS_DOT_COLOR.normal, opacity: 0.6 } },
+        { name: 'Slow', type: 'scatter', data: groups.slow, symbolSize: 5, itemStyle: { color: STATUS_DOT_COLOR.slow, opacity: 0.75 } },
+        { name: 'Very Slow', type: 'scatter', data: groups.very_slow, symbolSize: 6, itemStyle: { color: STATUS_DOT_COLOR.very_slow, opacity: 0.85 } },
+        { name: 'Error', type: 'scatter', data: groups.error, symbolSize: 7, z: 10, itemStyle: { color: STATUS_DOT_COLOR.error, opacity: 0.95, borderColor: '#fff', borderWidth: 1 } },
+      ];
     }
+
     return {
       animation: false,
       xAxis: { type: 'time' },
@@ -109,141 +314,175 @@ export default function TracesPage() {
         name: 'ms',
         nameTextStyle: { color: '#8B949E', fontSize: 10, padding: [0, 0, 0, -30] },
       },
-      series: [
-        { name: 'Normal', type: 'scatter', data: groups.normal, symbolSize: 4, itemStyle: { color: '#58A6FF', opacity: 0.6 } },
-        { name: 'Slow', type: 'scatter', data: groups.slow, symbolSize: 5, itemStyle: { color: '#D29922', opacity: 0.7 } },
-        { name: 'Very Slow', type: 'scatter', data: groups.very_slow, symbolSize: 6, itemStyle: { color: '#E8601C', opacity: 0.8 } },
-        { name: 'Error', type: 'scatter', data: groups.error, symbolSize: 6, itemStyle: { color: '#F85149', opacity: 0.9 } },
-      ],
+      series,
       tooltip: {
         trigger: 'item',
-        formatter: (p: { seriesName: string; data: number[] }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        formatter: (p: any) => {
           const time = new Date(p.data[0]).toLocaleTimeString();
           return `${p.seriesName}<br/>Response: ${Math.round(p.data[1])}ms<br/>Time: ${time}`;
         },
       },
-      legend: { show: true, bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 11 } },
-      grid: { left: 52, right: 16, top: 32, bottom: 36 },
-      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 52 }],
+      legend: {
+        show: true,
+        bottom: 0,
+        itemWidth: 10,
+        itemHeight: 10,
+        textStyle: { fontSize: 10, color: '#8B949E' },
+      },
+      grid: { left: 52, right: 16, top: 16, bottom: 48 },
+      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 14, bottom: 34 }],
       toolbox: {
-        feature: {
-          brush: { title: { rect: 'Box Select', clear: 'Clear' } },
-        },
+        feature: { brush: { title: { rect: 'Box Select', clear: 'Clear' } } },
         right: 16,
         top: 0,
       },
       brush: {
         toolbox: ['rect', 'clear'],
         xAxisIndex: 0,
-        brushStyle: { borderWidth: 1, color: 'rgba(74,144,217,0.15)', borderColor: 'rgba(74,144,217,0.5)' },
+        brushStyle: {
+          borderWidth: 1,
+          color: 'rgba(74,144,217,0.15)',
+          borderColor: 'rgba(74,144,217,0.5)',
+        },
       },
       markLine: {
         silent: true,
         symbol: 'none',
         data: [
-          { yAxis: 1000, lineStyle: { color: '#D29922', type: 'dashed', width: 1 }, label: { formatter: '1s', color: '#D29922', fontSize: 10 } },
-          { yAxis: 3000, lineStyle: { color: '#F85149', type: 'dashed', width: 1 }, label: { formatter: '3s', color: '#F85149', fontSize: 10 } },
+          { yAxis: 1000, lineStyle: { color: STATUS_DOT_COLOR.slow, type: 'dashed', width: 1 }, label: { formatter: '1s', color: STATUS_DOT_COLOR.slow, fontSize: 10 } },
+          { yAxis: 3000, lineStyle: { color: STATUS_DOT_COLOR.error, type: 'dashed', width: 1 }, label: { formatter: '3s', color: STATUS_DOT_COLOR.error, fontSize: 10 } },
         ],
       },
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, selectedServers, serverColors]);
 
-  // ── HeatMap Chart Option ──
+  // ── HeatMap chart option (WhaTap style) ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const heatmapOption = useMemo<any>(() => {
-    const hmData = generateHeatMapData(filteredTransactions, 30, LATENCY_BUCKETS);
-    const maxVal = Math.max(...hmData.map((d) => d[2]), 1);
+    const { hmData, errorDots } = hmComputed;
     return {
       animation: false,
       xAxis: {
         type: 'category',
-        data: Array.from({ length: 30 }, (_, i) => {
-          if (filteredTransactions.length === 0) return '';
-          const minT = Math.min(...filteredTransactions.map((t) => t.timestamp));
-          const maxT = Math.max(...filteredTransactions.map((t) => t.timestamp));
-          const t = minT + ((maxT - minT) / 30) * i;
-          return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }),
-        axisLabel: { interval: 4, fontSize: 10 },
+        data: hmTimeLabels,
+        axisLabel: { interval: 4, fontSize: 10, color: '#8B949E' },
       },
       yAxis: {
         type: 'category',
         data: LATENCY_BUCKETS,
-        axisLabel: { fontSize: 10 },
+        axisLabel: { fontSize: 10, color: '#8B949E' },
       },
+      // 4-stage WhaTap gradient (piecewise)
       visualMap: {
-        min: 0,
-        max: maxVal,
-        calculable: true,
+        type: 'piecewise',
+        pieces: [
+          { min: 1, max: 10, color: '#B3D9FF', label: '1~10' },
+          { min: 11, max: 50, color: '#4A90D9', label: '11~50' },
+          { min: 51, max: 200, color: '#F5A623', label: '51~200' },
+          { min: 201, color: '#D0021B', label: '201+' },
+        ],
+        outOfRange: { color: 'transparent' },
         orient: 'horizontal',
         left: 'center',
         bottom: 0,
-        itemWidth: 12,
-        itemHeight: 100,
+        itemWidth: 14,
+        itemHeight: 10,
         textStyle: { color: '#8B949E', fontSize: 10 },
-        inRange: { color: ['#0D1117', '#1F3A5F', '#58A6FF', '#D29922', '#F85149'] },
       },
-      series: [{
-        name: 'Transactions',
-        type: 'heatmap',
-        data: hmData,
-        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } },
-        itemStyle: { borderColor: '#0D1117', borderWidth: 1 },
-      }],
+      series: [
+        // Main heatmap
+        {
+          name: 'Transactions',
+          type: 'heatmap',
+          data: hmData,
+          emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.4)' } },
+          itemStyle: { borderColor: '#0D1117', borderWidth: 0.5 },
+        },
+        // Error dot overlay (red scatter on error cells)
+        {
+          name: 'Errors',
+          type: 'scatter',
+          data: errorDots,
+          symbolSize: 6,
+          z: 10,
+          itemStyle: { color: '#D0021B', opacity: 0.9 },
+          tooltip: {
+            formatter: 'Error cluster',
+          },
+        },
+      ],
       tooltip: {
-        formatter: (p: { data: number[] }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        formatter: (p: any) => {
+          if (p.seriesName === 'Errors') {
+            return `<strong>에러 집중 구간</strong>`;
+          }
           const bucket = LATENCY_BUCKETS[p.data[1]] ?? '';
-          return `${bucket}ms<br/>${p.data[2]} transactions`;
+          return `${hmTimeLabels[p.data[0]] ?? ''} | ${bucket}ms<br/>${p.data[2]} 트랜잭션`;
         },
       },
-      grid: { left: 60, right: 16, top: 16, bottom: 60 },
+      grid: { left: 60, right: 16, top: 8, bottom: 64 },
+      brush: {
+        toolbox: ['rect', 'clear'],
+        brushStyle: {
+          borderWidth: 1,
+          color: 'rgba(74,144,217,0.15)',
+          borderColor: 'rgba(74,144,217,0.5)',
+        },
+      },
+      toolbox: {
+        feature: { brush: { title: { rect: 'Drag Select', clear: 'Clear' } } },
+        right: 16,
+        top: 0,
+      },
     };
-  }, [filteredTransactions]);
+  }, [hmComputed, hmTimeLabels]);
 
-  // ── Brush selection handler ──
+  // ── Chart event handlers ──
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChartInit = useCallback((chart: any) => {
-    chart.on('brushSelected', (params: { batch?: { selected?: { dataIndex?: number[] }[] }[] }) => {
-      const batch = params.batch;
-      if (!batch || batch.length === 0) return;
-      const allIndices = new Set<number>();
-      for (const b of batch) {
-        if (!b.selected) continue;
-        for (const sel of b.selected) {
-          if (sel.dataIndex) {
-            for (const idx of sel.dataIndex) allIndices.add(idx);
-          }
-        }
-      }
-      if (allIndices.size === 0) return;
-      // Map indices back to transactions (indices span across all 4 series in order)
-      const groups: Transaction[][] = [[], [], [], []];
-      for (const txn of filteredTransactions) {
-        const idx = txn.status === 'normal' ? 0 : txn.status === 'slow' ? 1 : txn.status === 'very_slow' ? 2 : 3;
-        groups[idx].push(txn);
-      }
-      const selected: Transaction[] = [];
-      for (const b of batch) {
-        if (!b.selected) continue;
-        b.selected.forEach((sel, seriesIdx) => {
-          if (sel.dataIndex && seriesIdx < groups.length) {
-            for (const idx of sel.dataIndex) {
-              if (groups[seriesIdx][idx]) selected.push(groups[seriesIdx][idx]);
-            }
-          }
-        });
-      }
-      if (selected.length > 0) {
-        setSelectedTxns(selected);
-        setSelectedDetail(null);
-      }
-    });
+  const handleXLogInit = useCallback((chart: any) => {
+    chart.on(
+      'brushSelected',
+      (params: { batch?: { selected?: { dataIndex?: number[] }[] }[] }) => {
+        const batch = params.batch;
+        if (!batch || batch.length === 0) return;
 
-    chart.on('click', (params: { data?: number[] }) => {
+        const groups: TxnWithServer[][] = [[], [], [], []];
+        for (const txn of filteredTransactions) {
+          const idx =
+            txn.status === 'normal' ? 0
+            : txn.status === 'slow' ? 1
+            : txn.status === 'very_slow' ? 2
+            : 3;
+          groups[idx].push(txn);
+        }
+
+        const selected: TxnWithServer[] = [];
+        for (const b of batch) {
+          if (!b.selected) continue;
+          b.selected.forEach((sel, seriesIdx) => {
+            if (sel.dataIndex && seriesIdx < groups.length) {
+              for (const idx of sel.dataIndex) {
+                if (groups[seriesIdx][idx]) selected.push(groups[seriesIdx][idx]);
+              }
+            }
+          });
+        }
+        if (selected.length > 0) {
+          setSelectedTxns(selected);
+          setSelectedDetail(null);
+        }
+      },
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chart.on('click', (params: { data?: any }) => {
       if (!params.data) return;
-      const [ts, elapsed] = params.data;
+      const [ts, elapsed] = Array.isArray(params.data) ? params.data : [0, 0];
       const match = filteredTransactions.find(
-        (t) => Math.abs(t.timestamp - ts) < 100 && Math.abs(t.elapsed - elapsed) < 5,
+        (t) => Math.abs(t.timestamp - ts) < 200 && Math.abs(t.elapsed - elapsed) < 5,
       );
       if (match) {
         setSelectedTxns([match]);
@@ -252,37 +491,88 @@ export default function TracesPage() {
     });
   }, [filteredTransactions]);
 
-  // HeatMap click handler
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleHeatmapInit = useCallback((chart: any) => {
-    chart.on('click', (params: { data?: number[] }) => {
+    // Cell click → filter transactions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chart.on('click', (params: { seriesName?: string; data?: any }) => {
+      if (params.seriesName === 'Errors') return; // skip error dot clicks
       if (!params.data) return;
-      const [tIdx, lIdx] = params.data;
-      if (filteredTransactions.length === 0) return;
-      const minT = Math.min(...filteredTransactions.map((t) => t.timestamp));
-      const maxT = Math.max(...filteredTransactions.map((t) => t.timestamp));
-      const bucketWidth = (maxT - minT) / 30 || 1;
+      const [tIdx, lIdx] = Array.isArray(params.data) ? params.data : [0, 0];
+      const { minT, bucketWidth } = hmBoundsRef.current;
       const tStart = minT + tIdx * bucketWidth;
       const tEnd = tStart + bucketWidth;
-      const lRanges = [
-        [0, 100], [100, 300], [300, 500], [500, 1000], [1000, 2000], [2000, 3000], [3000, Infinity],
-      ];
-      const [lMin, lMax] = lRanges[lIdx] ?? [0, Infinity];
+      const [lMin, lMax] = LATENCY_RANGES[lIdx] ?? [0, Infinity];
       const matches = filteredTransactions.filter(
-        (t) => t.timestamp >= tStart && t.timestamp < tEnd && t.elapsed >= lMin && t.elapsed < lMax,
+        (t) =>
+          t.timestamp >= tStart &&
+          t.timestamp < tEnd &&
+          t.elapsed >= lMin &&
+          t.elapsed < lMax,
       );
       if (matches.length > 0) {
         setSelectedTxns(matches);
         setSelectedDetail(null);
       }
     });
+
+    // Brush drag → filter transactions
+    chart.on(
+      'brushSelected',
+      (params: { batch?: { selected?: { dataIndex?: number[] }[] }[] }) => {
+        const batch = params.batch;
+        if (!batch || batch.length === 0) return;
+        const { minT, bucketWidth } = hmBoundsRef.current;
+        const currentHmData = hmDataRef.current;
+
+        const selectedIndices = new Set<number>();
+        for (const b of batch) {
+          if (!b.selected || b.selected.length === 0) continue;
+          // Series 0 = heatmap data
+          const mainSel = b.selected[0];
+          if (mainSel?.dataIndex) {
+            for (const idx of mainSel.dataIndex) selectedIndices.add(idx);
+          }
+        }
+        if (selectedIndices.size === 0) return;
+
+        const cells = [...selectedIndices].map((i) => currentHmData[i]).filter(Boolean);
+        if (cells.length === 0) return;
+
+        const tIdxMin = Math.min(...cells.map((c) => c[0]));
+        const tIdxMax = Math.max(...cells.map((c) => c[0]));
+        const lIdxMin = Math.min(...cells.map((c) => c[1]));
+        const lIdxMax = Math.max(...cells.map((c) => c[1]));
+
+        const tStart = minT + tIdxMin * bucketWidth;
+        const tEnd = minT + (tIdxMax + 1) * bucketWidth;
+        const [lMin] = LATENCY_RANGES[lIdxMin] ?? [0, Infinity];
+        const [, lMax] = LATENCY_RANGES[lIdxMax] ?? [0, Infinity];
+
+        const matches = filteredTransactions.filter(
+          (t) =>
+            t.timestamp >= tStart &&
+            t.timestamp < tEnd &&
+            t.elapsed >= lMin &&
+            t.elapsed < lMax,
+        );
+        if (matches.length > 0) {
+          setSelectedTxns(matches);
+          setSelectedDetail(null);
+        }
+      },
+    );
   }, [filteredTransactions]);
 
-  // Sort transaction list
+  // ── Sort + helpers ──
+
   const sortedSelected = useMemo(() => {
     const sorted = [...selectedTxns];
     sorted.sort((a, b) => {
-      const cmp = listSortBy === 'elapsed' ? a.elapsed - b.elapsed : a.timestamp - b.timestamp;
+      const cmp =
+        listSortBy === 'elapsed'
+          ? a.elapsed - b.elapsed
+          : a.timestamp - b.timestamp;
       return listSortDir === 'desc' ? -cmp : cmp;
     });
     return sorted;
@@ -292,7 +582,13 @@ export default function TracesPage() {
     if (listSortBy === col) setListSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setListSortBy(col); setListSortDir('desc'); }
   };
-  const listSortIcon = (col: typeof listSortBy) => listSortBy === col ? (listSortDir === 'asc' ? <ChevronUp size={12} className="inline" /> : <ChevronDown size={12} className="inline" />) : null;
+
+  const sortIcon = (col: typeof listSortBy) =>
+    listSortBy === col
+      ? listSortDir === 'asc'
+        ? <ChevronUp size={11} className="inline" />
+        : <ChevronDown size={11} className="inline" />
+      : null;
 
   const copyTraceId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -308,14 +604,19 @@ export default function TracesPage() {
 
   const selectedSpan = selectedDetail?.spans.find((s) => s.spanId === selectedSpanId) ?? null;
 
+  // Chart height based on layout
+  const chartH = selectedTxns.length > 0 ? 260 : 340;
+
   return (
     <div className="space-y-3">
-      <Breadcrumb items={[
-        { label: 'Home', href: '/' },
-        { label: 'Traces', icon: <Route size={14} /> },
-      ]} />
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Traces', icon: <Route size={14} /> },
+        ]}
+      />
 
-      {/* Header + Filters */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">XLog / HeatMap</h1>
         <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
@@ -326,13 +627,58 @@ export default function TracesPage() {
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* Time range + server toolbar */}
+      <Card padding="sm">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Server multi-selector */}
+          <ServerMultiSelector
+            servers={DEMO_SERVERS}
+            selected={selectedServers}
+            serverColors={serverColors}
+            onChange={(s) => { setSelectedServers(s); clearSelection(); }}
+          />
+
+          <div className="w-px h-5 bg-[var(--border-default)] mx-1 shrink-0" />
+
+          {/* Compact time range arrows */}
+          <TimeRangeArrows
+            range={range}
+            isLive={isLive}
+            onRangeChange={handleRangeChange}
+            onToggleLive={handleToggleLive}
+          />
+
+          {/* Expand picker toggle */}
+          <button
+            onClick={() => setShowPicker((v) => !v)}
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded transition-colors',
+              showPicker
+                ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]',
+            )}
+            title="상세 시간 범위 설정"
+          >
+            <Settings2 size={11} />
+            상세
+          </button>
+        </div>
+
+        {/* Expanded picker */}
+        {showPicker && (
+          <div className="mt-2 pt-2 border-t border-[var(--border-muted)]">
+            <TimeRangePicker
+              range={range}
+              isLive={isLive}
+              onRangeChange={handleRangeChange}
+              onToggleLive={handleToggleLive}
+            />
+          </div>
+        )}
+      </Card>
+
+      {/* Filter + view mode toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Select
-          options={SERVICE_OPTIONS}
-          value={serviceFilter}
-          onChange={(e) => { setServiceFilter(e.target.value); clearSelection(); }}
-        />
         <div className="flex items-center gap-1">
           <Filter size={12} className="text-[var(--text-muted)]" />
           {STATUS_FILTER_OPTIONS.map((opt) => (
@@ -350,57 +696,143 @@ export default function TracesPage() {
             </button>
           ))}
         </div>
-        <div className="ml-auto">
-          <Tabs tabs={VIEW_TABS} activeTab={viewMode} onChange={(v) => { setViewMode(v); clearSelection(); }} variant="pill" />
+
+        <div className="ml-auto flex items-center gap-0.5 p-0.5 bg-[var(--bg-tertiary)] rounded-[var(--radius-md)]">
+          {VIEW_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setViewMode(tab.id); clearSelection(); }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-all',
+                viewMode === tab.id
+                  ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Chart Panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{viewMode === 'xlog' ? 'XLog Scatter Plot' : 'Response Time HeatMap'}</CardTitle>
-          {viewMode === 'xlog' && (
-            <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
-              {Object.entries(STATUS_DOT_COLOR).map(([status, color]) => (
-                <span key={status} className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                  {status}
+      {/* ── Chart Panel ── */}
+      {viewMode === 'split' ? (
+        /* Split view: XLog + HeatMap side by side */
+        <div className="grid grid-cols-2 gap-3">
+          <Card padding="none">
+            <CardHeader className="px-4 pt-3 pb-0">
+              <CardTitle className="text-xs">XLog 산점도</CardTitle>
+              <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
+                <span className="text-[10px]">시간 동기화 ON</span>
+              </div>
+            </CardHeader>
+            <EChartsWrapper
+              option={xlogOption}
+              height={chartH}
+              onInit={handleXLogInit}
+            />
+          </Card>
+          <Card padding="none">
+            <CardHeader className="px-4 pt-3 pb-0">
+              <CardTitle className="text-xs">응답시간 HeatMap</CardTitle>
+              <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D0021B' }} />
+                  에러 구간
                 </span>
-              ))}
-              <span className="ml-2">Use brush tool to select area</span>
-            </div>
+              </div>
+            </CardHeader>
+            <EChartsWrapper
+              option={heatmapOption}
+              height={chartH}
+              onInit={handleHeatmapInit}
+            />
+          </Card>
+        </div>
+      ) : (
+        /* Single view: XLog or HeatMap */
+        <Card padding="none">
+          <CardHeader className="px-4 pt-3 pb-0">
+            <CardTitle>
+              {viewMode === 'xlog' ? 'XLog 산점도' : '응답시간 HeatMap (WhaTap 스타일)'}
+            </CardTitle>
+            {viewMode === 'xlog' ? (
+              <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+                {selectedServers.length > 1
+                  ? selectedServers.map((id) => (
+                      <span key={id} className="flex items-center gap-1">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: serverColors[id] }}
+                        />
+                        {id}
+                      </span>
+                    ))
+                  : Object.entries(STATUS_DOT_COLOR).map(([status, color]) => (
+                      <span key={status} className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                        {status}
+                      </span>
+                    ))}
+                <span className="ml-2 text-[var(--text-muted)]">브러쉬 도구로 영역 선택</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+                {[
+                  { color: '#B3D9FF', label: '1~10' },
+                  { color: '#4A90D9', label: '11~50' },
+                  { color: '#F5A623', label: '51~200' },
+                  { color: '#D0021B', label: '201+' },
+                ].map((item) => (
+                  <span key={item.label} className="flex items-center gap-1">
+                    <span className="w-3 h-2.5 rounded-sm" style={{ backgroundColor: item.color }} />
+                    {item.label}건
+                  </span>
+                ))}
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D0021B' }} />
+                  에러 점
+                </span>
+                <span className="ml-1">드래그로 범위 선택</span>
+              </div>
+            )}
+          </CardHeader>
+          {viewMode === 'xlog' ? (
+            <EChartsWrapper
+              option={xlogOption}
+              height={selectedTxns.length > 0 ? 280 : 380}
+              onInit={handleXLogInit}
+            />
+          ) : (
+            <EChartsWrapper
+              option={heatmapOption}
+              height={selectedTxns.length > 0 ? 280 : 380}
+              onInit={handleHeatmapInit}
+            />
           )}
-        </CardHeader>
-        {viewMode === 'xlog' ? (
-          <EChartsWrapper
-            option={xlogOption}
-            height={selectedTxns.length > 0 ? 280 : 380}
-            onInit={handleChartInit}
-          />
-        ) : (
-          <EChartsWrapper
-            option={heatmapOption}
-            height={selectedTxns.length > 0 ? 280 : 380}
-            onInit={handleHeatmapInit}
-          />
-        )}
-      </Card>
+        </Card>
+      )}
 
-      {/* Transaction List Panel */}
+      {/* ── Transaction List Panel ── */}
       {selectedTxns.length > 0 && (
         <Card padding="none">
           <div className="px-4 py-2.5 border-b border-[var(--border-default)] flex items-center justify-between">
             <div className="flex items-center gap-3 text-xs">
               <span className="font-medium text-[var(--text-primary)]">
-                {selectedTxns.length} transaction{selectedTxns.length !== 1 && 's'} selected
+                {selectedTxns.length}건 선택됨
               </span>
               {selectedTxns.length > 1 && (
                 <span className="text-[var(--text-muted)]">
-                  {formatDuration(Math.min(...selectedTxns.map((t) => t.elapsed)))} ~ {formatDuration(Math.max(...selectedTxns.map((t) => t.elapsed)))}
+                  {formatDuration(Math.min(...selectedTxns.map((t) => t.elapsed)))} ~{' '}
+                  {formatDuration(Math.max(...selectedTxns.map((t) => t.elapsed)))}
                 </span>
               )}
             </div>
-            <button onClick={clearSelection} className="p-1 hover:bg-[var(--bg-tertiary)] rounded">
+            <button
+              onClick={clearSelection}
+              className="p-1 hover:bg-[var(--bg-tertiary)] rounded"
+            >
               <X size={14} className="text-[var(--text-muted)]" />
             </button>
           </div>
@@ -408,87 +840,124 @@ export default function TracesPage() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[var(--bg-secondary)] z-10">
                 <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
-                  <th className="px-3 py-2 font-medium w-8"></th>
+                  <th className="px-3 py-2 font-medium w-6" />
                   <th className="px-3 py-2 font-medium">Endpoint</th>
-                  <th className="px-3 py-2 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleListSort('elapsed')}>
-                    Response {listSortIcon('elapsed')}
+                  <th
+                    className="px-3 py-2 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]"
+                    onClick={() => handleListSort('elapsed')}
+                  >
+                    Response {sortIcon('elapsed')}
                   </th>
                   <th className="px-3 py-2 font-medium text-right">TTFT</th>
                   <th className="px-3 py-2 font-medium text-right">TPS</th>
-                  <th className="px-3 py-2 font-medium cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleListSort('timestamp')}>
-                    Time {listSortIcon('timestamp')}
+                  <th
+                    className="px-3 py-2 font-medium cursor-pointer select-none hover:text-[var(--text-secondary)]"
+                    onClick={() => handleListSort('timestamp')}
+                  >
+                    Time {sortIcon('timestamp')}
                   </th>
                   <th className="px-3 py-2 font-medium text-center">Guard</th>
+                  {selectedServers.length > 1 && (
+                    <th className="px-3 py-2 font-medium">Server</th>
+                  )}
                   <th className="px-3 py-2 font-medium">Trace ID</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedSelected.map((txn) => (
-                  <tr
-                    key={txn.traceId}
-                    onClick={() => { setSelectedDetail(txn); setSelectedSpanId(null); }}
-                    className={cn(
-                      'border-b border-[var(--border-muted)] cursor-pointer transition-colors',
-                      selectedDetail?.traceId === txn.traceId
-                        ? 'bg-[var(--accent-primary)]/10'
-                        : 'hover:bg-[var(--bg-tertiary)]',
-                    )}
-                  >
-                    <td className="px-3 py-2">
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: STATUS_DOT_COLOR[txn.status] }}
-                      />
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{txn.endpoint}</td>
-                    <td className={cn(
-                      'px-3 py-2 text-right tabular-nums font-medium',
-                      txn.status === 'error' ? 'text-[var(--status-critical)]' :
-                      txn.status === 'very_slow' ? 'text-[#E8601C]' :
-                      txn.status === 'slow' ? 'text-[var(--status-warning)]' :
-                      'text-[var(--text-secondary)]',
-                    )}>
-                      {formatDuration(txn.elapsed)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">
-                      {txn.metrics.ttft_ms > 0 ? `${txn.metrics.ttft_ms}ms` : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">
-                      {txn.metrics.tps > 0 ? `${txn.metrics.tps}` : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-[var(--text-muted)] tabular-nums">
-                      {new Date(txn.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions)}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {txn.metrics.guardrail_action === 'BLOCK' ? (
-                        <span className="text-[var(--status-critical)] font-bold">BLOCK</span>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">PASS</span>
+                {sortedSelected.map((txn) => {
+                  const t = txn as TxnWithServer;
+                  return (
+                    <tr
+                      key={txn.traceId}
+                      onClick={() => { setSelectedDetail(txn); setSelectedSpanId(null); }}
+                      className={cn(
+                        'border-b border-[var(--border-muted)] cursor-pointer transition-colors',
+                        selectedDetail?.traceId === txn.traceId
+                          ? 'bg-[var(--accent-primary)]/10'
+                          : 'hover:bg-[var(--bg-tertiary)]',
                       )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="flex items-center gap-1">
-                        <Link
-                          href={`/traces/${txn.traceId}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-mono text-[var(--accent-primary)] hover:underline"
-                        >
-                          {txn.traceId.slice(0, 8)}...
-                        </Link>
-                        <button onClick={(e) => { e.stopPropagation(); copyTraceId(txn.traceId); }} className="p-0.5 hover:bg-[var(--bg-tertiary)] rounded">
-                          {copiedId === txn.traceId ? <Check size={11} className="text-[var(--status-healthy)]" /> : <Copy size={11} className="text-[var(--text-muted)]" />}
-                        </button>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                    >
+                      <td className="px-3 py-2">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full"
+                          style={{ backgroundColor: STATUS_DOT_COLOR[txn.status] }}
+                        />
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{txn.endpoint}</td>
+                      <td
+                        className={cn(
+                          'px-3 py-2 text-right tabular-nums font-medium',
+                          txn.status === 'error'
+                            ? 'text-[var(--status-critical)]'
+                            : txn.status === 'very_slow'
+                              ? 'text-[#E8601C]'
+                              : txn.status === 'slow'
+                                ? 'text-[var(--status-warning)]'
+                                : 'text-[var(--text-secondary)]',
+                        )}
+                      >
+                        {formatDuration(txn.elapsed)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">
+                        {txn.metrics.ttft_ms > 0 ? `${txn.metrics.ttft_ms}ms` : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">
+                        {txn.metrics.tps > 0 ? txn.metrics.tps : '-'}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums text-[var(--text-muted)]">
+                        {new Date(txn.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        } as any)}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {txn.metrics.guardrail_action === 'BLOCK' ? (
+                          <span className="text-[var(--status-critical)] font-bold">BLOCK</span>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">PASS</span>
+                        )}
+                      </td>
+                      {selectedServers.length > 1 && (
+                        <td className="px-3 py-2">
+                          <span
+                            className="text-[10px] font-medium"
+                            style={{ color: serverColors[t.serverId] ?? '#8B949E' }}
+                          >
+                            {t.serverId}
+                          </span>
+                        </td>
+                      )}
+                      <td className="px-3 py-2">
+                        <span className="flex items-center gap-1">
+                          <Link
+                            href={`/traces/${txn.traceId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-mono text-[var(--accent-primary)] hover:underline"
+                          >
+                            {txn.traceId.slice(0, 8)}...
+                          </Link>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); copyTraceId(txn.traceId); }}
+                            className="p-0.5 hover:bg-[var(--bg-tertiary)] rounded"
+                          >
+                            {copiedId === txn.traceId
+                              ? <Check size={11} className="text-[var(--status-healthy)]" />
+                              : <Copy size={11} className="text-[var(--text-muted)]" />}
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       )}
 
-      {/* Detail Panel — Waterfall */}
+      {/* ── Detail Panel — Waterfall ── */}
       {selectedDetail && (
         <Card>
           <div className="flex items-start justify-between mb-3">
@@ -498,9 +967,20 @@ export default function TracesPage() {
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: STATUS_DOT_COLOR[selectedDetail.status] }}
                 />
-                <span className="font-mono text-sm font-medium text-[var(--text-primary)]">{selectedDetail.endpoint}</span>
+                <span className="font-mono text-sm font-medium text-[var(--text-primary)]">
+                  {selectedDetail.endpoint}
+                </span>
                 <Badge variant="tag">{selectedDetail.statusCode}</Badge>
-                <Badge variant="status" status={selectedDetail.status === 'error' ? 'critical' : selectedDetail.status === 'normal' ? 'healthy' : 'warning'}>
+                <Badge
+                  variant="status"
+                  status={
+                    selectedDetail.status === 'error'
+                      ? 'critical'
+                      : selectedDetail.status === 'normal'
+                        ? 'healthy'
+                        : 'warning'
+                  }
+                >
                   {selectedDetail.status}
                 </Badge>
               </div>
@@ -508,14 +988,24 @@ export default function TracesPage() {
                 <span>Service: {selectedDetail.service}</span>
                 <span>Duration: {formatDuration(selectedDetail.elapsed)}</span>
                 <span>Trace: {selectedDetail.traceId.slice(0, 16)}...</span>
-                {selectedDetail.metrics.ttft_ms > 0 && <span>TTFT: {selectedDetail.metrics.ttft_ms}ms</span>}
-                {selectedDetail.metrics.tps > 0 && <span>TPS: {selectedDetail.metrics.tps} tok/s</span>}
-                {selectedDetail.metrics.tokens_generated > 0 && <span>Tokens: {selectedDetail.metrics.tokens_generated}</span>}
+                {selectedDetail.metrics.ttft_ms > 0 && (
+                  <span>TTFT: {selectedDetail.metrics.ttft_ms}ms</span>
+                )}
+                {selectedDetail.metrics.tps > 0 && (
+                  <span>TPS: {selectedDetail.metrics.tps} tok/s</span>
+                )}
+                {selectedDetail.metrics.tokens_generated > 0 && (
+                  <span>Tokens: {selectedDetail.metrics.tokens_generated}</span>
+                )}
               </div>
             </div>
-            <button onClick={() => { setSelectedDetail(null); setSelectedSpanId(null); }} className="p-1 hover:bg-[var(--bg-tertiary)] rounded">
-              <X size={14} className="text-[var(--text-muted)]" />
-            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { setSelectedDetail(null); setSelectedSpanId(null); }}
+            >
+              <X size={14} />
+            </Button>
           </div>
 
           {/* Waterfall Timeline */}
@@ -531,19 +1021,14 @@ export default function TracesPage() {
             </div>
 
             {/* Root span */}
-            <div
-              className={cn(
-                'flex items-center h-8 px-3 border-b border-[var(--border-muted)] cursor-pointer transition-colors',
-                'hover:bg-[var(--bg-tertiary)]',
-              )}
-            >
+            <div className="flex items-center h-8 px-3 border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
               <span className="w-[180px] shrink-0 text-[11px] font-medium text-[var(--text-primary)] truncate">
                 {selectedDetail.service}.pipeline
               </span>
               <div className="flex-1 relative h-4">
                 <div
-                  className="absolute h-full rounded-sm opacity-30"
-                  style={{ left: 0, width: '100%', backgroundColor: '#8B949E' }}
+                  className="absolute h-full rounded-sm"
+                  style={{ left: 0, width: '100%', backgroundColor: '#8B949E', opacity: 0.3 }}
                 />
               </div>
             </div>
@@ -552,7 +1037,10 @@ export default function TracesPage() {
             {selectedDetail.spans.map((span) => {
               const leftPct = (span.startOffset / selectedDetail.elapsed) * 100;
               const widthPct = Math.max((span.duration / selectedDetail.elapsed) * 100, 0.5);
-              const color = span.status === 'error' ? '#E74C3C' : (SPAN_COLORS[span.name] ?? '#95A5A6');
+              const color =
+                span.status === 'error'
+                  ? '#E74C3C'
+                  : (SPAN_COLORS[span.name] ?? '#95A5A6');
               const isSelected = selectedSpanId === span.spanId;
 
               return (
@@ -561,16 +1049,20 @@ export default function TracesPage() {
                   onClick={() => setSelectedSpanId(isSelected ? null : span.spanId)}
                   className={cn(
                     'flex items-center h-8 px-3 border-b border-[var(--border-muted)] cursor-pointer transition-colors',
-                    isSelected ? 'bg-[var(--accent-primary)]/10' : 'hover:bg-[var(--bg-tertiary)]',
+                    isSelected
+                      ? 'bg-[var(--accent-primary)]/10'
+                      : 'hover:bg-[var(--bg-tertiary)]',
                   )}
                 >
                   <span className="w-[180px] shrink-0 text-[11px] text-[var(--text-secondary)] truncate pl-4">
                     {span.name.replace('rag.', '')}
-                    <span className="ml-1 text-[var(--text-muted)]">{formatDuration(span.duration)}</span>
+                    <span className="ml-1 text-[var(--text-muted)]">
+                      {formatDuration(span.duration)}
+                    </span>
                   </span>
                   <div className="flex-1 relative h-4">
                     <div
-                      className="absolute h-full rounded-sm transition-opacity hover:opacity-100"
+                      className="absolute h-full rounded-sm transition-opacity"
                       style={{
                         left: `${leftPct}%`,
                         width: `${widthPct}%`,
@@ -588,15 +1080,21 @@ export default function TracesPage() {
           {selectedSpan && (
             <div className="mt-3 pt-3 border-t border-[var(--border-muted)]">
               <div className="text-[10px] text-[var(--text-muted)] mb-2">
-                Span: <strong className="text-[var(--text-primary)]">{selectedSpan.name}</strong>
+                Span:{' '}
+                <strong className="text-[var(--text-primary)]">{selectedSpan.name}</strong>
                 <span className="ml-2">Duration: {formatDuration(selectedSpan.duration)}</span>
                 <span className="ml-2">Offset: +{formatDuration(selectedSpan.startOffset)}</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {Object.entries(selectedSpan.attributes).map(([key, value]) => (
-                  <div key={key} className="px-2 py-1.5 bg-[var(--bg-tertiary)] rounded-[var(--radius-sm)]">
+                  <div
+                    key={key}
+                    className="px-2 py-1.5 bg-[var(--bg-tertiary)] rounded-[var(--radius-sm)]"
+                  >
                     <div className="text-[10px] text-[var(--text-muted)]">{key}</div>
-                    <div className="text-xs font-medium text-[var(--text-primary)] tabular-nums">{String(value)}</div>
+                    <div className="text-xs font-medium text-[var(--text-primary)] tabular-nums">
+                      {String(value)}
+                    </div>
                   </div>
                 ))}
               </div>
