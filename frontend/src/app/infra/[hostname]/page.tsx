@@ -8,12 +8,13 @@ import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/u
 import { StatusIndicator, KPICard, GPUCard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
-import { getProjectHosts, generateTimeSeries } from '@/lib/demo-data';
+import { getProjectHosts, generateTimeSeries, getMiddlewareRuntimes } from '@/lib/demo-data';
 import { getRelativeTime, formatBytes } from '@/lib/utils';
-import { Server, Cpu, HardDrive, Network, Activity, Box, Terminal, ShieldCheck } from 'lucide-react';
+import { Server, Cpu, HardDrive, Network, Activity, Box, Terminal, ShieldCheck, Code } from 'lucide-react';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: <Activity size={13} /> },
+  { id: 'runtime', label: 'Runtime', icon: <Code size={13} /> },
   { id: 'processes', label: 'Processes', icon: <Terminal size={13} /> },
   { id: 'logs', label: 'Logs', icon: <Box size={13} /> },
 ];
@@ -36,6 +37,9 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
   const host = hosts.find((h) => h.hostname === hostname);
+
+  const runtimes = getMiddlewareRuntimes();
+  const hostRuntime = runtimes.find(r => r.hostname === hostname);
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -259,6 +263,190 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
                   </div>
                 </div>
               )}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ── Runtime Tab ── */}
+      {activeTab === 'runtime' && (
+        <div className="space-y-4">
+          {hostRuntime ? (
+            <>
+              {/* Language Badge */}
+              <div>
+                <Badge className={cn(
+                  'text-xs font-semibold',
+                  hostRuntime.language === 'java' && 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                  hostRuntime.language === 'dotnet' && 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                  hostRuntime.language === 'nodejs' && 'bg-green-500/20 text-green-400 border-green-500/30',
+                  hostRuntime.language === 'python' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                  hostRuntime.language === 'go' && 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+                )}>
+                  {hostRuntime.language.toUpperCase()}
+                </Badge>
+              </div>
+
+              {/* Thread Pools */}
+              {hostRuntime.threadPools && hostRuntime.threadPools.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Thread Pools</CardTitle></CardHeader>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                          <th className="px-3 py-2 font-medium">Pool Name</th>
+                          <th className="px-3 py-2 font-medium text-right">Active / Max</th>
+                          <th className="px-3 py-2 font-medium text-right">Queued</th>
+                          <th className="px-3 py-2 font-medium text-right">Completed</th>
+                          <th className="px-3 py-2 font-medium">Utilization</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hostRuntime.threadPools.map((tp) => {
+                          const pct = Math.round(tp.utilization * 100);
+                          return (
+                            <tr key={tp.name} className="border-b border-[var(--border-muted)]">
+                              <td className="px-3 py-2 font-medium text-[var(--text-primary)] font-mono">{tp.name}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{tp.activeThreads} / {tp.maxThreads}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{tp.queuedTasks}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{tp.completedTasks.toLocaleString()}</td>
+                              <td className="px-3 py-2 w-40">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-2 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+                                    <div
+                                      className={cn('h-full rounded-full', pct >= 80 ? 'bg-[var(--status-critical)]' : pct >= 50 ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-healthy)]')}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[var(--text-muted)] tabular-nums w-8 text-right">{pct}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Connection Pools */}
+              {hostRuntime.connectionPools && hostRuntime.connectionPools.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Connection Pools</CardTitle></CardHeader>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                          <th className="px-3 py-2 font-medium">Pool Name</th>
+                          <th className="px-3 py-2 font-medium text-right">Active</th>
+                          <th className="px-3 py-2 font-medium text-right">Idle</th>
+                          <th className="px-3 py-2 font-medium text-right">Max</th>
+                          <th className="px-3 py-2 font-medium text-right">Wait Count</th>
+                          <th className="px-3 py-2 font-medium">Utilization</th>
+                          <th className="px-3 py-2 font-medium text-center">Leak?</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hostRuntime.connectionPools.map((cp) => {
+                          const pct = Math.round(cp.utilization * 100);
+                          return (
+                            <tr key={cp.name} className="border-b border-[var(--border-muted)]">
+                              <td className="px-3 py-2 font-medium text-[var(--text-primary)] font-mono">{cp.name}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{cp.activeConnections}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{cp.idleConnections}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{cp.maxConnections}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-[var(--text-secondary)]">{cp.waitCount}</td>
+                              <td className="px-3 py-2 w-40">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-2 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+                                    <div
+                                      className={cn('h-full rounded-full', pct >= 80 ? 'bg-[var(--status-critical)]' : pct >= 50 ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-healthy)]')}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[var(--text-muted)] tabular-nums w-8 text-right">{pct}%</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {cp.leakSuspected && (
+                                  <Badge variant="status" status="warning">Suspected</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Event Loop (Node.js) */}
+              {hostRuntime.eventLoop && (
+                <Card>
+                  <CardHeader><CardTitle>Event Loop</CardTitle></CardHeader>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Lag</div>
+                      <div className="font-medium text-[var(--text-primary)] tabular-nums">{hostRuntime.eventLoop.lagMs} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[var(--text-muted)] mb-0.5">P99 Lag</div>
+                      <div className="font-medium text-[var(--text-primary)] tabular-nums">{hostRuntime.eventLoop.lagP99Ms} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Active Handles</div>
+                      <div className="font-medium text-[var(--text-primary)] tabular-nums">{hostRuntime.eventLoop.activeHandles}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Active Requests</div>
+                      <div className="font-medium text-[var(--text-primary)] tabular-nums">{hostRuntime.eventLoop.activeRequests}</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* Goroutines (Go) */}
+              {hostRuntime.goroutines != null && (
+                <Card>
+                  <CardHeader><CardTitle>Goroutines</CardTitle></CardHeader>
+                  <div className="flex items-center justify-center py-4">
+                    <div className="text-center">
+                      <div className="text-4xl font-bold text-[var(--text-primary)] tabular-nums">{hostRuntime.goroutines.toLocaleString()}</div>
+                      <div className="text-xs text-[var(--text-muted)] mt-1">active goroutines</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* Workers (Python) */}
+              {hostRuntime.workers && (
+                <Card>
+                  <CardHeader><CardTitle>Workers</CardTitle></CardHeader>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-[var(--status-healthy)] tabular-nums">{hostRuntime.workers.active}</div>
+                      <div className="text-xs text-[var(--text-muted)] mt-0.5">Active</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{hostRuntime.workers.max}</div>
+                      <div className="text-xs text-[var(--text-muted)] mt-0.5">Max</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-[var(--text-muted)] tabular-nums">{hostRuntime.workers.idle}</div>
+                      <div className="text-xs text-[var(--text-muted)] mt-0.5">Idle</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card>
+              <div className="text-center py-8 text-sm text-[var(--text-muted)]">
+                No runtime metrics available for this host
+              </div>
             </Card>
           )}
         </div>

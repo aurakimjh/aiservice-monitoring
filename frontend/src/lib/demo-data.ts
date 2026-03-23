@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile, AgentConfig, ConfigRevision, SDKDetection, GroupDashboard } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile, AgentConfig, ConfigRevision, SDKDetection, GroupDashboard, MiddlewareRuntime, RedisMetrics, MessageQueueMetrics } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1533,4 +1533,62 @@ export function getGroupDashboard(groupId: string): GroupDashboard {
     ]},
   };
   return groups[groupId] || { groupId, groupName: 'Unknown', agentCount: 0, healthyCount: 0, avgCpu: 0, avgMemory: 0, agents: [] };
+}
+
+// ══ Phase 26: Middleware Runtime + Redis/Cache + MQ — Mock Data ═════
+
+export function getMiddlewareRuntimes(): MiddlewareRuntime[] {
+  return [
+    { hostId: 'h-api-01', hostname: 'prod-api-01', language: 'java',
+      threadPools: [
+        { name: 'tomcat-exec', activeThreads: 45, maxThreads: 200, queuedTasks: 3, completedTasks: 128400, utilization: 0.225 },
+        { name: 'async-pool', activeThreads: 8, maxThreads: 50, queuedTasks: 0, completedTasks: 45200, utilization: 0.16 },
+      ],
+      connectionPools: [
+        { name: 'HikariCP-primary', activeConnections: 12, idleConnections: 8, maxConnections: 20, waitCount: 0, utilization: 0.6, leakSuspected: false },
+        { name: 'HikariCP-readonly', activeConnections: 5, idleConnections: 10, maxConnections: 15, waitCount: 0, utilization: 0.33, leakSuspected: false },
+      ],
+    },
+    { hostId: 'h-api-02', hostname: 'prod-api-02', language: 'nodejs',
+      eventLoop: { lagMs: 2.4, lagP99Ms: 12.8, activeHandles: 42, activeRequests: 8 },
+      connectionPools: [
+        { name: 'pg-pool', activeConnections: 6, idleConnections: 4, maxConnections: 10, waitCount: 1, utilization: 0.6, leakSuspected: false },
+      ],
+    },
+    { hostId: 'h-gpu-01', hostname: 'prod-gpu-01', language: 'python',
+      workers: { active: 4, max: 8, idle: 4 },
+      connectionPools: [
+        { name: 'SQLAlchemy-pool', activeConnections: 3, idleConnections: 2, maxConnections: 5, waitCount: 0, utilization: 0.6, leakSuspected: false },
+      ],
+    },
+    { hostId: 'h-api-03', hostname: 'prod-api-03', language: 'go',
+      goroutines: 1284,
+      connectionPools: [
+        { name: 'sql.DB', activeConnections: 8, idleConnections: 12, maxConnections: 25, waitCount: 0, utilization: 0.32, leakSuspected: false },
+      ],
+    },
+    { hostId: 'h-api-04', hostname: 'prod-api-04', language: 'dotnet',
+      threadPools: [
+        { name: 'CLR-ThreadPool', activeThreads: 24, maxThreads: 100, queuedTasks: 0, completedTasks: 89200, utilization: 0.24 },
+      ],
+      connectionPools: [
+        { name: 'EF-Core-Pool', activeConnections: 7, idleConnections: 3, maxConnections: 10, waitCount: 0, utilization: 0.7, leakSuspected: false },
+      ],
+    },
+  ];
+}
+
+export function getRedisMetrics(): RedisMetrics[] {
+  return [
+    { id: 'redis-01', name: 'prod-redis-main', engine: 'redis', version: '7.2.4', host: 'prod-redis-01', port: 6379, status: 'healthy', memoryUsedMB: 1840, memoryMaxMB: 4096, memoryPercent: 44.9, hitRate: 94.2, evictions: 0, connectedClients: 42, opsPerSec: 12500, slowlogCount: 3, role: 'master', uptimeHours: 720 },
+    { id: 'redis-02', name: 'prod-redis-replica', engine: 'redis', version: '7.2.4', host: 'prod-redis-02', port: 6379, status: 'healthy', memoryUsedMB: 1820, memoryMaxMB: 4096, memoryPercent: 44.4, hitRate: 94.0, evictions: 0, connectedClients: 18, opsPerSec: 8200, slowlogCount: 1, replicationLag: 0.2, role: 'replica', uptimeHours: 720 },
+    { id: 'redis-03', name: 'session-cache', engine: 'keydb', version: '6.3.4', host: 'prod-cache-01', port: 6380, status: 'warning', memoryUsedMB: 3200, memoryMaxMB: 4096, memoryPercent: 78.1, hitRate: 87.5, evictions: 245, connectedClients: 65, opsPerSec: 18400, slowlogCount: 12, role: 'standalone', uptimeHours: 168 },
+  ];
+}
+
+export function getMessageQueues(): MessageQueueMetrics[] {
+  return [
+    { id: 'mq-01', name: 'prod-kafka', type: 'kafka', status: 'healthy', brokers: 3, topics: 24, totalMessages: 4_500_000, messagesPerSec: 8500, consumerGroups: 12, consumerLag: 150, partitions: 72, replicationFactor: 3 },
+    { id: 'mq-02', name: 'event-rabbitmq', type: 'rabbitmq', status: 'warning', brokers: 2, topics: 8, totalMessages: 125_000, messagesPerSec: 420, consumerGroups: 5, consumerLag: 3200 },
+  ];
 }

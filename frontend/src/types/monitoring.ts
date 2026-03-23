@@ -871,3 +871,78 @@ export interface GroupDashboard {
   avgMemory: number;
   agents: { id: string; hostname: string; status: string; version: string; cpu: number; memory: number; lastHeartbeat: number }[];
 }
+
+// ── Phase 26: Middleware Runtime + Redis/Cache + Message Queue ───────
+
+export interface ThreadPoolMetrics {
+  name: string;
+  activeThreads: number;
+  maxThreads: number;
+  queuedTasks: number;
+  completedTasks: number;
+  utilization: number;
+}
+
+export interface ConnectionPoolMetrics {
+  name: string;
+  activeConnections: number;
+  idleConnections: number;
+  maxConnections: number;
+  waitCount: number;
+  utilization: number;
+  leakSuspected: boolean;
+}
+
+export interface EventLoopMetrics {
+  lagMs: number;
+  lagP99Ms: number;
+  activeHandles: number;
+  activeRequests: number;
+}
+
+export interface MiddlewareRuntime {
+  hostId: string;
+  hostname: string;
+  language: 'java' | 'dotnet' | 'nodejs' | 'python' | 'go';
+  threadPools?: ThreadPoolMetrics[];
+  connectionPools?: ConnectionPoolMetrics[];
+  eventLoop?: EventLoopMetrics;
+  goroutines?: number;
+  workers?: { active: number; max: number; idle: number };
+}
+
+export interface RedisMetrics {
+  id: string;
+  name: string;
+  engine: 'redis' | 'valkey' | 'keydb' | 'dragonfly' | 'memcached';
+  version: string;
+  host: string;
+  port: number;
+  status: 'healthy' | 'warning' | 'critical';
+  memoryUsedMB: number;
+  memoryMaxMB: number;
+  memoryPercent: number;
+  hitRate: number;
+  evictions: number;
+  connectedClients: number;
+  opsPerSec: number;
+  slowlogCount: number;
+  replicationLag?: number;
+  role: 'master' | 'replica' | 'standalone';
+  uptimeHours: number;
+}
+
+export interface MessageQueueMetrics {
+  id: string;
+  name: string;
+  type: 'kafka' | 'rabbitmq' | 'activemq';
+  status: 'healthy' | 'warning' | 'critical';
+  brokers: number;
+  topics: number;
+  totalMessages: number;
+  messagesPerSec: number;
+  consumerGroups: number;
+  consumerLag: number;
+  partitions?: number;
+  replicationFactor?: number;
+}
