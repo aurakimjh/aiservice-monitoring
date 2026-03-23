@@ -8,3 +8,4 @@ export { ServiceMap } from './service-map';
 export { TimeRangeArrows, type TimeRange } from './time-range-arrows';
 export { TimeRangePicker } from './time-range-picker';
 export { ServerMultiSelector, type ServerOption } from './server-multi-selector';
+export { AnomalyChart } from './anomaly-chart';

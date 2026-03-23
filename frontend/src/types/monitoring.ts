@@ -686,3 +686,83 @@ export interface BudgetAlert {
   enabled: boolean;
   lastTriggered?: number;
 }
+
+// ── Phase 20: 운영 고도화 ───────────────────────────────────────────
+
+// 20-1: Anomaly Detection
+export type AnomalySeverity = 'critical' | 'warning' | 'info';
+export type AnomalyStatus = 'active' | 'resolved' | 'acknowledged';
+
+export interface Anomaly {
+  id: string;
+  metric: string;
+  service: string;
+  severity: AnomalySeverity;
+  status: AnomalyStatus;
+  detectedAt: number;
+  resolvedAt?: number;
+  value: number;
+  expected: number;
+  deviation: number;
+  rootCause?: string;
+  recommendation?: string;
+}
+
+export interface DynamicThreshold {
+  metric: string;
+  timestamps: number[];
+  values: number[];
+  upperBand: number[];
+  lowerBand: number[];
+  baseline: number[];
+  anomalyRanges: { start: number; end: number }[];
+}
+
+// 20-2: Report Generation
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: 'weekly' | 'monthly' | 'diagnostic' | 'custom';
+  sections: string[];
+  estimatedPages: number;
+}
+
+export interface GeneratedReport {
+  id: string;
+  templateId: string;
+  templateName: string;
+  generatedAt: number;
+  period: string;
+  pages: number;
+  format: 'pdf' | 'html';
+  status: 'completed' | 'generating' | 'failed';
+  sizeKB: number;
+}
+
+// 20-3: Synthetic Monitoring
+export type ProbeStatus = 'healthy' | 'degraded' | 'down';
+
+export interface SyntheticProbe {
+  id: string;
+  name: string;
+  type: 'http' | 'llm' | 'rag' | 'api';
+  target: string;
+  interval: string;
+  status: ProbeStatus;
+  uptime: number;
+  avgLatencyMs: number;
+  lastCheck: number;
+  lastError?: string;
+  qualityScore?: number;
+}
+
+export interface ProbeResult {
+  probeId: string;
+  timestamp: number;
+  success: boolean;
+  latencyMs: number;
+  statusCode?: number;
+  qualityScore?: number;
+  error?: string;
+}

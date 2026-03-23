@@ -20,6 +20,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  AlertTriangle,
 } from 'lucide-react';
 import { Tooltip } from '@/components/ui';
 
@@ -40,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Search, i18nKey: 'nav.traces', href: '/traces' },
   { icon: FileText, i18nKey: 'nav.logs', href: '/logs' },
   { icon: ClipboardList, i18nKey: 'nav.diagnostics', href: '/diagnostics', dividerBefore: true },
+  { icon: AlertTriangle, i18nKey: 'nav.anomalies', href: '/anomalies' },
   { icon: Bell, i18nKey: 'nav.alerts', href: '/alerts' },
   { icon: Cpu, i18nKey: 'nav.agents', href: '/agents' },
   { icon: Settings, i18nKey: 'nav.settings', href: '/settings', dividerBefore: true },

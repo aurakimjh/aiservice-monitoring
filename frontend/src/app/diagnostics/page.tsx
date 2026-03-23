@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
-import { getDiagnosticRuns, getDiagnosticItems } from '@/lib/demo-data';
+import { getDiagnosticRuns, getDiagnosticItems, getReportTemplates, getGeneratedReports } from '@/lib/demo-data';
 import { getRelativeTime } from '@/lib/utils';
 import type { DiagnosticItem } from '@/types/monitoring';
 import {
@@ -17,6 +17,9 @@ import {
   XCircle,
   Lightbulb,
   FileText,
+  Download,
+  Plus,
+  Clock,
 } from 'lucide-react';
 
 const SCOPE_LABELS: Record<string, string> = { full: 'Full Scan', ai: 'AI Services', infra: 'Infrastructure' };
@@ -31,11 +34,26 @@ const CATEGORY_LABELS: Record<string, string> = {
   os: 'OS', middleware: 'Middleware', gpu: 'GPU', llm: 'LLM', vectordb: 'VectorDB', guardrail: 'Guardrail', agent: 'Agent',
 };
 
+const TABS = [
+  { id: 'diagnostics', label: 'Diagnostics', icon: <Stethoscope size={14} /> },
+  { id: 'reports', label: 'Reports', icon: <FileText size={14} /> },
+] as const;
+
+const REPORT_TYPE_COLORS: Record<string, string> = {
+  weekly: 'bg-blue-500/15 text-blue-400',
+  monthly: 'bg-purple-500/15 text-purple-400',
+  diagnostic: 'bg-orange-500/15 text-orange-400',
+  custom: 'bg-gray-500/15 text-gray-400',
+};
+
 export default function DiagnosticsPage() {
   const runs = useMemo(() => getDiagnosticRuns(), []);
+  const [activeTab, setActiveTab] = useState<string>('diagnostics');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(runs[0]?.id ?? null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const reportTemplates = useMemo(() => getReportTemplates(), []);
+  const generatedReports = useMemo(() => getGeneratedReports(), []);
 
   const selectedRun = runs.find((r) => r.id === selectedRunId);
   const items = useMemo(() => selectedRunId ? getDiagnosticItems(selectedRunId) : [], [selectedRunId]);
@@ -67,6 +85,115 @@ export default function DiagnosticsPage() {
 
       <h1 className="text-lg font-semibold text-[var(--text-primary)]">AITOP Diagnostics</h1>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-[var(--border-default)]">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-[1px]',
+              activeTab === tab.id
+                ? 'border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
+            )}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'reports' && (
+        <div className="space-y-4">
+          {/* Report Templates */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Report Templates</h2>
+            <button className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 rounded-[var(--radius-sm)] hover:bg-[var(--accent-primary)]/20 transition-colors">
+              <Plus size={12} /> New Template
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {reportTemplates.map((tpl) => (
+              <Card key={tpl.id}>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText size={14} className="text-[var(--accent-primary)]" />
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">{tpl.name}</span>
+                  </div>
+                  <span className={cn('px-2 py-0.5 text-[10px] font-medium rounded-full', REPORT_TYPE_COLORS[tpl.type])}>
+                    {tpl.type}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mb-3">{tpl.description}</p>
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {tpl.sections.map((s) => (
+                    <span key={s} className="px-1.5 py-0.5 text-[10px] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-[var(--radius-sm)]">{s}</span>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-[var(--text-muted)]">~{tpl.estimatedPages} pages</span>
+                  <button className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] bg-[var(--bg-tertiary)] rounded-[var(--radius-sm)] hover:bg-[var(--accent-primary)]/10 hover:text-[var(--accent-primary)] transition-colors">
+                    <FileText size={11} /> Generate
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Generated Reports */}
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Generated Reports</h2>
+          <Card padding="none">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2 font-medium">Template Name</th>
+                    <th className="px-4 py-2 font-medium">Period</th>
+                    <th className="px-4 py-2 font-medium text-right">Pages</th>
+                    <th className="px-4 py-2 font-medium">Format</th>
+                    <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium text-right">Size</th>
+                    <th className="px-4 py-2 font-medium">Generated At</th>
+                    <th className="px-4 py-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {generatedReports.map((rpt) => (
+                    <tr key={rpt.id} className="border-b border-[var(--border-muted)]">
+                      <td className="px-4 py-2 text-[var(--text-primary)] font-medium">{rpt.templateName}</td>
+                      <td className="px-4 py-2 text-[var(--text-secondary)] tabular-nums">{rpt.period}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{rpt.pages || '—'}</td>
+                      <td className="px-4 py-2"><Badge>{rpt.format.toUpperCase()}</Badge></td>
+                      <td className="px-4 py-2">
+                        <span className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full',
+                          rpt.status === 'completed' && 'bg-[var(--status-healthy)]/15 text-[var(--status-healthy)]',
+                          rpt.status === 'generating' && 'bg-blue-500/15 text-blue-400',
+                          rpt.status === 'failed' && 'bg-[var(--status-critical)]/15 text-[var(--status-critical)]',
+                        )}>
+                          {rpt.status === 'generating' && <Clock size={10} className="animate-spin" />}
+                          {rpt.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{rpt.sizeKB ? `${(rpt.sizeKB / 1024).toFixed(1)} MB` : '—'}</td>
+                      <td className="px-4 py-2 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(rpt.generatedAt))}</td>
+                      <td className="px-4 py-2">
+                        {rpt.status === 'completed' && (
+                          <button className="p-1 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors">
+                            <Download size={13} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'diagnostics' && <>
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard title="IT Items" value={55} subtitle="OS, Middleware, Network" />
@@ -181,6 +308,7 @@ export default function DiagnosticsPage() {
           ))}
         </div>
       )}
+      </>}
     </div>
   );
 }

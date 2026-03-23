@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
-import { cn } from '@/lib/utils';
+import { useState, useMemo } from 'react';
+import { cn, getRelativeTime } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
-import { getSLODefinitions, generateTimeSeries } from '@/lib/demo-data';
-import { Target, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { getSLODefinitions, generateTimeSeries, getSyntheticProbes } from '@/lib/demo-data';
+import { Target, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Radio, Wifi, WifiOff } from 'lucide-react';
 
 const STATUS_CONFIG = {
   met: { label: 'Met', color: 'text-[var(--status-healthy)]', bg: 'bg-[var(--status-healthy-bg)]', icon: <CheckCircle2 size={13} /> },
@@ -15,8 +15,28 @@ const STATUS_CONFIG = {
   breached: { label: 'Breached', color: 'text-[var(--status-critical)]', bg: 'bg-[var(--status-critical-bg)]', icon: <XCircle size={13} /> },
 };
 
+const SLO_TABS = [
+  { id: 'slo', label: 'SLO Management', icon: <Target size={14} /> },
+  { id: 'probes', label: 'Synthetic Probes', icon: <Radio size={14} /> },
+] as const;
+
+const PROBE_STATUS_CONFIG = {
+  healthy: { color: 'bg-[var(--status-healthy)]', text: 'text-[var(--status-healthy)]', bg: 'bg-[var(--status-healthy)]/15' },
+  degraded: { color: 'bg-[var(--status-warning)]', text: 'text-[var(--status-warning)]', bg: 'bg-[var(--status-warning)]/15' },
+  down: { color: 'bg-[var(--status-critical)]', text: 'text-[var(--status-critical)]', bg: 'bg-[var(--status-critical)]/15' },
+};
+
+const PROBE_TYPE_COLORS: Record<string, string> = {
+  http: 'bg-blue-500/15 text-blue-400',
+  llm: 'bg-purple-500/15 text-purple-400',
+  rag: 'bg-orange-500/15 text-orange-400',
+  api: 'bg-green-500/15 text-green-400',
+};
+
 export default function SLOPage() {
   const slos = useMemo(() => getSLODefinitions(), []);
+  const [activeTab, setActiveTab] = useState<string>('slo');
+  const probes = useMemo(() => getSyntheticProbes(), []);
 
   const stats = useMemo(() => {
     const met = slos.filter((s) => s.status === 'met').length;
@@ -35,6 +55,90 @@ export default function SLOPage() {
 
       <h1 className="text-lg font-semibold text-[var(--text-primary)]">SLO Management</h1>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-[var(--border-default)]">
+        {SLO_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-[1px]',
+              activeTab === tab.id
+                ? 'border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
+            )}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'probes' && (
+        <div className="space-y-4">
+          {/* Probe KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KPICard title="Total Probes" value={probes.length} subtitle="Synthetic monitors" />
+            <KPICard title="Healthy" value={probes.filter((p) => p.status === 'healthy').length} status="healthy" subtitle="Operating normally" />
+            <KPICard title="Degraded" value={probes.filter((p) => p.status === 'degraded').length} status={probes.some((p) => p.status === 'degraded') ? 'warning' : 'healthy'} subtitle="Performance issues" />
+            <KPICard title="Down" value={probes.filter((p) => p.status === 'down').length} status={probes.some((p) => p.status === 'down') ? 'critical' : 'healthy'} subtitle="Unreachable" />
+          </div>
+
+          {/* Probe List */}
+          <Card padding="none">
+            <div className="px-4 py-2.5 border-b border-[var(--border-default)]">
+              <span className="text-xs font-medium text-[var(--text-primary)]">Probe Status</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2 font-medium">Name</th>
+                    <th className="px-4 py-2 font-medium">Type</th>
+                    <th className="px-4 py-2 font-medium">Target</th>
+                    <th className="px-4 py-2 font-medium">Interval</th>
+                    <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium text-right">Uptime</th>
+                    <th className="px-4 py-2 font-medium text-right">Avg Latency</th>
+                    <th className="px-4 py-2 font-medium text-right">Quality</th>
+                    <th className="px-4 py-2 font-medium">Last Check</th>
+                    <th className="px-4 py-2 font-medium">Last Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {probes.map((probe) => {
+                    const statusCfg = PROBE_STATUS_CONFIG[probe.status];
+                    return (
+                      <tr key={probe.id} className="border-b border-[var(--border-muted)]">
+                        <td className="px-4 py-2 text-[var(--text-primary)] font-medium">{probe.name}</td>
+                        <td className="px-4 py-2">
+                          <span className={cn('px-2 py-0.5 text-[10px] font-medium rounded-full', PROBE_TYPE_COLORS[probe.type])}>
+                            {probe.type.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-[var(--text-muted)] font-mono text-[10px] max-w-[200px] truncate">{probe.target}</td>
+                        <td className="px-4 py-2 text-[var(--text-secondary)] tabular-nums">{probe.interval}</td>
+                        <td className="px-4 py-2">
+                          <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-medium rounded-full', statusCfg.bg, statusCfg.text)}>
+                            <span className={cn('w-1.5 h-1.5 rounded-full', statusCfg.color)} />
+                            {probe.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{probe.uptime}%</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{probe.avgLatencyMs > 0 ? `${probe.avgLatencyMs}ms` : '—'}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{probe.qualityScore != null ? probe.qualityScore.toFixed(2) : '—'}</td>
+                        <td className="px-4 py-2 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(probe.lastCheck))}</td>
+                        <td className="px-4 py-2 text-[var(--status-critical)] text-[10px] max-w-[200px] truncate">{probe.lastError ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'slo' && <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard title="Total SLOs" value={slos.length} subtitle={`${stats.met} met`} status="healthy" />
         <KPICard title="Avg Compliance" value={`${stats.avgCompliance.toFixed(1)}%`} status={stats.avgCompliance >= 99 ? 'healthy' : 'warning'} />
@@ -108,6 +212,7 @@ export default function SLOPage() {
           );
         })}
       </div>
+      </>}
     </div>
   );
 }

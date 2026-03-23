@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1355,5 +1355,72 @@ export function getBudgetAlerts(): BudgetAlert[] {
     { id: 'ba-02', name: 'Weekly GPU Compute', threshold: 350, currentSpend: 280, period: 'weekly', enabled: true },
     { id: 'ba-03', name: 'Monthly Total AI Cost', threshold: 2000, currentSpend: 1420, period: 'monthly', enabled: true },
     { id: 'ba-04', name: 'Per-Service Alert (RAG)', threshold: 25, currentSpend: 18.60, period: 'daily', enabled: false },
+  ];
+}
+
+// ══ Phase 20: 운영 고도화 — Mock Data ═══════════════════════════════
+
+export function getAnomalies(): Anomaly[] {
+  return [
+    { id: 'ano-01', metric: 'TTFT P95', service: 'rag-service', severity: 'critical', status: 'active', detectedAt: now - 1800_000, value: 4200, expected: 1800, deviation: 133, rootCause: 'GPU VRAM 92% — 모델 스왑 발생으로 첫 토큰 지연 급증', recommendation: 'GPU VRAM 확보: 불필요한 모델 언로드 또는 GPU 추가 할당' },
+    { id: 'ano-02', metric: 'Error Rate', service: 'api-gateway', severity: 'warning', status: 'active', detectedAt: now - 3600_000, value: 2.8, expected: 0.5, deviation: 460, rootCause: 'Upstream rag-service 타임아웃 증가 → 502 게이트웨이 에러', recommendation: 'rag-service TTFT 이상 해결 시 자동 복구 예상' },
+    { id: 'ano-03', metric: 'Token Cost/h', service: 'code-assistant', severity: 'warning', status: 'acknowledged', detectedAt: now - 7200_000, value: 28.5, expected: 15.0, deviation: 90, rootCause: '프롬프트 길이 증가 — 새 버전 배포 후 context window 확대', recommendation: '프롬프트 최적화 또는 GPT-4o-mini로 경량 쿼리 라우팅' },
+    { id: 'ano-04', metric: 'CPU Usage', service: 'prod-gpu-01', severity: 'info', status: 'resolved', detectedAt: now - 86400_000, resolvedAt: now - 82800_000, value: 92, expected: 45, deviation: 104, rootCause: '배치 학습 작업 실행 중 일시적 CPU 스파이크', recommendation: '배치 작업 스케줄을 비피크 시간대로 이동' },
+    { id: 'ano-05', metric: 'Cache Hit Rate', service: 'rag-service', severity: 'info', status: 'resolved', detectedAt: now - 172800_000, resolvedAt: now - 169200_000, value: 12, expected: 38, deviation: -68, rootCause: '캐시 서버 재시작 후 웜업 미완료', recommendation: '캐시 프리워밍 스크립트 배포 파이프라인에 추가' },
+  ];
+}
+
+export function getDynamicThresholds(): DynamicThreshold[] {
+  const points = 48;
+  const baseTime = now - points * 1800_000;
+  const timestamps = Array.from({ length: points }, (_, i) => baseTime + i * 1800_000);
+
+  return [
+    {
+      metric: 'TTFT P95 (ms)',
+      timestamps,
+      values: timestamps.map((_, i) => i < 40 ? 1600 + Math.sin(i / 5) * 200 + Math.random() * 100 : 2800 + Math.random() * 1500),
+      upperBand: timestamps.map(() => 2400),
+      lowerBand: timestamps.map(() => 800),
+      baseline: timestamps.map(() => 1600),
+      anomalyRanges: [{ start: baseTime + 40 * 1800_000, end: now }],
+    },
+    {
+      metric: 'Error Rate (%)',
+      timestamps,
+      values: timestamps.map((_, i) => i < 38 ? 0.3 + Math.random() * 0.3 : 1.5 + Math.random() * 2),
+      upperBand: timestamps.map(() => 1.0),
+      lowerBand: timestamps.map(() => 0),
+      baseline: timestamps.map(() => 0.4),
+      anomalyRanges: [{ start: baseTime + 38 * 1800_000, end: now }],
+    },
+  ];
+}
+
+export function getReportTemplates(): ReportTemplate[] {
+  return [
+    { id: 'tpl-01', name: 'Weekly Operations Report', description: 'SLO compliance, incident summary, resource utilization trends', type: 'weekly', sections: ['Executive Summary', 'SLO Compliance', 'Incident Timeline', 'Resource Trends', 'Recommendations'], estimatedPages: 12 },
+    { id: 'tpl-02', name: 'Monthly SLO Report', description: 'Monthly SLO target achievement, error budget burn-down, trend analysis', type: 'monthly', sections: ['SLO Overview', 'Error Budget', 'Service Breakdown', 'Trend Analysis', 'Action Items'], estimatedPages: 18 },
+    { id: 'tpl-03', name: 'AI Performance Diagnostic', description: 'LLM TTFT/TPS analysis, GPU utilization, cost efficiency, RAG pipeline health', type: 'diagnostic', sections: ['AI Service Health', 'LLM Performance', 'GPU Cluster', 'RAG Pipeline', 'Cost Analysis', 'Recommendations'], estimatedPages: 24 },
+    { id: 'tpl-04', name: 'Incident Post-Mortem', description: 'Root cause analysis, timeline, impact assessment, corrective actions', type: 'custom', sections: ['Incident Summary', 'Timeline', 'Root Cause', 'Impact', 'Corrective Actions', 'Prevention Plan'], estimatedPages: 8 },
+  ];
+}
+
+export function getGeneratedReports(): GeneratedReport[] {
+  return [
+    { id: 'rpt-01', templateId: 'tpl-01', templateName: 'Weekly Operations Report', generatedAt: now - 86400_000, period: '2026-03-10 ~ 2026-03-16', pages: 12, format: 'pdf', status: 'completed', sizeKB: 2840 },
+    { id: 'rpt-02', templateId: 'tpl-03', templateName: 'AI Performance Diagnostic', generatedAt: now - 172800_000, period: '2026-03-01 ~ 2026-03-15', pages: 24, format: 'pdf', status: 'completed', sizeKB: 5120 },
+    { id: 'rpt-03', templateId: 'tpl-02', templateName: 'Monthly SLO Report', generatedAt: now - 259200_000, period: '2026-02', pages: 18, format: 'pdf', status: 'completed', sizeKB: 3650 },
+    { id: 'rpt-04', templateId: 'tpl-01', templateName: 'Weekly Operations Report', generatedAt: now - 600_000, period: '2026-03-17 ~ 2026-03-23', pages: 0, format: 'pdf', status: 'generating', sizeKB: 0 },
+  ];
+}
+
+export function getSyntheticProbes(): SyntheticProbe[] {
+  return [
+    { id: 'sp-01', name: 'RAG QA Endpoint', type: 'llm', target: 'https://api.aitop.io/v1/rag/query', interval: '5m', status: 'healthy', uptime: 99.7, avgLatencyMs: 1450, lastCheck: now - 120_000, qualityScore: 0.87 },
+    { id: 'sp-02', name: 'Code Assistant API', type: 'llm', target: 'https://api.aitop.io/v1/code/review', interval: '10m', status: 'degraded', uptime: 97.2, avgLatencyMs: 3200, lastCheck: now - 300_000, qualityScore: 0.91, lastError: 'Response time exceeded 3s threshold' },
+    { id: 'sp-03', name: 'API Gateway Health', type: 'http', target: 'https://api.aitop.io/health', interval: '1m', status: 'healthy', uptime: 99.99, avgLatencyMs: 45, lastCheck: now - 30_000 },
+    { id: 'sp-04', name: 'RAG Search Quality', type: 'rag', target: 'https://api.aitop.io/v1/rag/search', interval: '15m', status: 'healthy', uptime: 99.5, avgLatencyMs: 820, lastCheck: now - 600_000, qualityScore: 0.82 },
+    { id: 'sp-05', name: 'Summarizer Endpoint', type: 'llm', target: 'https://api.aitop.io/v1/summarize', interval: '10m', status: 'down', uptime: 85.3, avgLatencyMs: 0, lastCheck: now - 180_000, lastError: 'Connection refused — service restarting' },
   ];
 }
