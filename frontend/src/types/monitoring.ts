@@ -1004,3 +1004,114 @@ export interface FlameGraphDiff {
   target_profile_id: string;
   root: FlameGraphDiffNode;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AI Copilot Types (Phase 22-1)
+// ═══════════════════════════════════════════════════════════════
+
+export type CopilotMessageRole = 'user' | 'assistant' | 'system';
+
+export interface CopilotMessage {
+  id: string;
+  role: CopilotMessageRole;
+  content: string;
+  timestamp: number;
+  promql?: string;
+  chartData?: { label: string; data: [number, number][] }[];
+  suggestions?: string[];
+  metricRefs?: string[];
+}
+
+export interface CopilotSuggestion {
+  id: string;
+  text: string;
+  category: 'performance' | 'cost' | 'reliability' | 'gpu';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Topology Auto-Discovery Types (Phase 22-2)
+// ═══════════════════════════════════════════════════════════════
+
+export type DiscoveryProtocol = 'http' | 'grpc' | 'sql' | 'redis' | 'kafka' | 'unknown';
+
+export interface TopologyChange {
+  id: string;
+  timestamp: number;
+  type: 'connection_added' | 'connection_removed' | 'service_added' | 'service_removed';
+  sourceService: string;
+  targetService?: string;
+  protocol?: DiscoveryProtocol;
+  description: string;
+}
+
+export interface DiscoveredEdge {
+  source: string;
+  target: string;
+  rpm: number;
+  errorRate: number;
+  p95: number;
+  protocol: DiscoveryProtocol;
+  firstSeen: number;
+  isNew: boolean;
+  isRemoved: boolean;
+}
+
+export interface DiscoveredTopology {
+  nodes: { id: string; name: string; layer: string; status: Status; rpm: number; errorRate: number; p95: number; framework?: string }[];
+  edges: DiscoveredEdge[];
+  lastScanAt: number;
+  totalConnections: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Fine-tuning Monitoring Types (Phase 22-3)
+// ═══════════════════════════════════════════════════════════════
+
+export type TrainingJobStatus = 'running' | 'completed' | 'failed' | 'queued' | 'paused';
+
+export interface TrainingJob {
+  id: string;
+  name: string;
+  model: string;
+  baseModel: string;
+  dataset: string;
+  status: TrainingJobStatus;
+  startedAt: number;
+  completedAt?: number;
+  currentEpoch: number;
+  totalEpochs: number;
+  currentStep: number;
+  totalSteps: number;
+  learningRate: number;
+  batchSize: number;
+  gpuIds: string[];
+  trainLoss: number;
+  valLoss: number;
+  trainAccuracy: number;
+  valAccuracy: number;
+  gpuUtilization: number;
+  gpuMemoryUsed: number;
+  tokensPerSecond: number;
+  estimatedTimeRemaining?: number;
+}
+
+export interface TrainingCheckpoint {
+  id: string;
+  jobId: string;
+  epoch: number;
+  step: number;
+  trainLoss: number;
+  valLoss: number;
+  valAccuracy: number;
+  sizeBytes: number;
+  createdAt: number;
+  deployed: boolean;
+}
+
+export interface TrainVsInference {
+  metric: string;
+  trainValue: number;
+  inferenceValue: number;
+  unit: string;
+  delta: number;
+}

@@ -1678,3 +1678,129 @@ export function getSSOProviders(): { id: string; name: string; protocol: string;
     { id: 'sso-google', name: 'Google Workspace', protocol: 'oidc', enabled: false, buttonLabel: 'Sign in with Google' },
   ];
 }
+
+// ── AI Copilot (Phase 22-1) ─────────────────────────────────────────────
+
+export function getCopilotSuggestions(): import('@/types/monitoring').CopilotSuggestion[] {
+  return [
+    { id: 'cs-1', text: 'TTFT가 높은 서비스는?', category: 'performance' },
+    { id: 'cs-2', text: 'GPU 사용률 추이를 보여줘', category: 'gpu' },
+    { id: 'cs-3', text: '에러율이 가장 높은 엔드포인트', category: 'reliability' },
+    { id: 'cs-4', text: '지난 1시간 비용 분석', category: 'cost' },
+    { id: 'cs-5', text: 'RAG 파이프라인 지연 원인', category: 'performance' },
+    { id: 'cs-6', text: '현재 활성 알림 요약', category: 'reliability' },
+    { id: 'cs-7', text: '벡터DB 검색 지연 추이', category: 'performance' },
+    { id: 'cs-8', text: '가드레일 차단률 분석', category: 'reliability' },
+  ];
+}
+
+// ── Topology Auto-Discovery (Phase 22-2) ────────────────────────────────
+
+export function getDiscoveredTopology(): import('@/types/monitoring').DiscoveredTopology {
+  const now = Date.now();
+  return {
+    nodes: [
+      { id: 'client', name: 'client', layer: 'ui', status: 'healthy', rpm: 1200, errorRate: 0.1, p95: 45, framework: 'React' },
+      { id: 'api-gateway', name: 'api-gateway', layer: 'ui', status: 'healthy', rpm: 3200, errorRate: 0.3, p95: 120, framework: 'Go/net-http' },
+      { id: 'auth-service', name: 'auth-service', layer: 'ui', status: 'healthy', rpm: 800, errorRate: 0.05, p95: 25, framework: 'Go/gin' },
+      { id: 'rag-service', name: 'rag-service', layer: 'agent', status: 'warning', rpm: 450, errorRate: 1.2, p95: 1800, framework: 'Python/FastAPI' },
+      { id: 'embedding-svc', name: 'embedding-svc', layer: 'agent', status: 'healthy', rpm: 600, errorRate: 0.1, p95: 85, framework: 'Python/FastAPI' },
+      { id: 'guardrail', name: 'guardrail', layer: 'agent', status: 'healthy', rpm: 450, errorRate: 0.0, p95: 30, framework: 'Python/NeMo' },
+      { id: 'vllm', name: 'vLLM Inference', layer: 'llm', status: 'healthy', rpm: 200, errorRate: 0.5, p95: 1200, framework: 'vLLM' },
+      { id: 'qdrant', name: 'Qdrant', layer: 'data', status: 'healthy', rpm: 600, errorRate: 0.0, p95: 12, framework: 'Qdrant' },
+      { id: 'postgres', name: 'PostgreSQL', layer: 'data', status: 'healthy', rpm: 1500, errorRate: 0.0, p95: 5, framework: 'PostgreSQL' },
+      { id: 'redis', name: 'Redis', layer: 'data', status: 'healthy', rpm: 4000, errorRate: 0.0, p95: 1, framework: 'Redis 7' },
+    ],
+    edges: [
+      { source: 'client', target: 'api-gateway', rpm: 1200, errorRate: 0.1, p95: 45, protocol: 'http', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'api-gateway', target: 'auth-service', rpm: 800, errorRate: 0.05, p95: 25, protocol: 'grpc', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'api-gateway', target: 'rag-service', rpm: 450, errorRate: 1.2, p95: 1800, protocol: 'http', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'rag-service', target: 'embedding-svc', rpm: 600, errorRate: 0.1, p95: 85, protocol: 'grpc', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'rag-service', target: 'guardrail', rpm: 450, errorRate: 0.0, p95: 30, protocol: 'grpc', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'rag-service', target: 'vllm', rpm: 200, errorRate: 0.5, p95: 1200, protocol: 'http', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'rag-service', target: 'qdrant', rpm: 600, errorRate: 0.0, p95: 12, protocol: 'http', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'api-gateway', target: 'postgres', rpm: 1500, errorRate: 0.0, p95: 5, protocol: 'sql', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      { source: 'auth-service', target: 'redis', rpm: 4000, errorRate: 0.0, p95: 1, protocol: 'redis', firstSeen: now - 86400000 * 30, isNew: false, isRemoved: false },
+      // New: recently discovered
+      { source: 'rag-service', target: 'redis', rpm: 120, errorRate: 0.0, p95: 2, protocol: 'redis', firstSeen: now - 3600000, isNew: true, isRemoved: false },
+      { source: 'api-gateway', target: 'embedding-svc', rpm: 50, errorRate: 0.0, p95: 90, protocol: 'grpc', firstSeen: now - 7200000, isNew: true, isRemoved: false },
+      // Removed: no longer active
+      { source: 'guardrail', target: 'postgres', rpm: 0, errorRate: 0, p95: 0, protocol: 'sql', firstSeen: now - 86400000 * 7, isNew: false, isRemoved: true },
+    ],
+    lastScanAt: now,
+    totalConnections: 11,
+  };
+}
+
+export function getTopologyChanges(): import('@/types/monitoring').TopologyChange[] {
+  const now = Date.now();
+  return [
+    { id: 'tc-1', timestamp: now - 3600000, type: 'connection_added', sourceService: 'rag-service', targetService: 'redis', protocol: 'redis', description: 'New Redis cache connection detected from rag-service' },
+    { id: 'tc-2', timestamp: now - 7200000, type: 'connection_added', sourceService: 'api-gateway', targetService: 'embedding-svc', protocol: 'grpc', description: 'Direct gRPC connection from api-gateway to embedding-svc' },
+    { id: 'tc-3', timestamp: now - 86400000, type: 'connection_removed', sourceService: 'guardrail', targetService: 'postgres', protocol: 'sql', description: 'SQL connection from guardrail to PostgreSQL no longer active' },
+    { id: 'tc-4', timestamp: now - 86400000 * 2, type: 'service_added', sourceService: 'embedding-svc', description: 'New service embedding-svc discovered on port 8090' },
+    { id: 'tc-5', timestamp: now - 86400000 * 3, type: 'connection_added', sourceService: 'rag-service', targetService: 'guardrail', protocol: 'grpc', description: 'gRPC connection established between rag-service and guardrail' },
+  ];
+}
+
+// ── Fine-tuning Monitoring (Phase 22-3) ─────────────────────────────────
+
+export function getTrainingJobs(): import('@/types/monitoring').TrainingJob[] {
+  const now = Date.now();
+  return [
+    { id: 'train-001', name: 'chatbot-finetune-v2', model: 'chatbot-v2', baseModel: 'GPT-4-Turbo', dataset: 'customer-support-50k', status: 'running', startedAt: now - 14400000, currentEpoch: 7, totalEpochs: 10, currentStep: 3500, totalSteps: 5000, learningRate: 0.0001, batchSize: 32, gpuIds: ['gpu-01','gpu-02'], trainLoss: 0.42, valLoss: 0.48, trainAccuracy: 88.5, valAccuracy: 86.2, gpuUtilization: 94, gpuMemoryUsed: 72, tokensPerSecond: 2800, estimatedTimeRemaining: 5400 },
+    { id: 'train-002', name: 'rag-embedding-retrain', model: 'embed-v3', baseModel: 'text-embedding-3-large', dataset: 'docs-120k', status: 'completed', startedAt: now - 86400000, completedAt: now - 72000000, currentEpoch: 5, totalEpochs: 5, currentStep: 12000, totalSteps: 12000, learningRate: 0.00005, batchSize: 64, gpuIds: ['gpu-03'], trainLoss: 0.18, valLoss: 0.22, trainAccuracy: 94.1, valAccuracy: 92.8, gpuUtilization: 89, gpuMemoryUsed: 58, tokensPerSecond: 4200 },
+    { id: 'train-003', name: 'guardrail-classifier-v3', model: 'guard-v3', baseModel: 'DeBERTa-v3', dataset: 'safety-labels-30k', status: 'queued', startedAt: 0, currentEpoch: 0, totalEpochs: 8, currentStep: 0, totalSteps: 6000, learningRate: 0.0002, batchSize: 16, gpuIds: [], trainLoss: 0, valLoss: 0, trainAccuracy: 0, valAccuracy: 0, gpuUtilization: 0, gpuMemoryUsed: 0, tokensPerSecond: 0 },
+    { id: 'train-004', name: 'code-assistant-lora', model: 'code-lora-v1', baseModel: 'CodeLlama-34B', dataset: 'code-review-80k', status: 'failed', startedAt: now - 172800000, currentEpoch: 3, totalEpochs: 8, currentStep: 1800, totalSteps: 4800, learningRate: 0.0003, batchSize: 8, gpuIds: ['gpu-01','gpu-02','gpu-03','gpu-04'], trainLoss: 1.85, valLoss: 2.41, trainAccuracy: 45.2, valAccuracy: 38.9, gpuUtilization: 0, gpuMemoryUsed: 0, tokensPerSecond: 0 },
+  ];
+}
+
+export function getTrainingLossCurve(jobId: string): [number, number][] {
+  const points: [number, number][] = [];
+  const steps = jobId === 'train-002' ? 12000 : jobId === 'train-004' ? 1800 : 3500;
+  for (let i = 0; i <= steps; i += Math.max(1, Math.floor(steps / 60))) {
+    const t = i / steps;
+    const loss = 2.5 * Math.exp(-3 * t) + 0.2 + (Math.random() - 0.5) * 0.1;
+    points.push([i, Math.max(0.1, loss)]);
+  }
+  return points;
+}
+
+export function getTrainingAccuracyCurve(jobId: string): [number, number][] {
+  const points: [number, number][] = [];
+  const steps = jobId === 'train-002' ? 12000 : jobId === 'train-004' ? 1800 : 3500;
+  for (let i = 0; i <= steps; i += Math.max(1, Math.floor(steps / 60))) {
+    const t = i / steps;
+    const acc = 95 / (1 + Math.exp(-8 * (t - 0.3))) + (Math.random() - 0.5) * 2;
+    points.push([i, Math.min(99, Math.max(0, acc))]);
+  }
+  return points;
+}
+
+export function getTrainingCheckpoints(jobId: string): import('@/types/monitoring').TrainingCheckpoint[] {
+  const now = Date.now();
+  const epochs = jobId === 'train-002' ? 5 : jobId === 'train-004' ? 3 : 7;
+  return Array.from({ length: epochs }, (_, i) => ({
+    id: `cp-${jobId}-${i + 1}`,
+    jobId,
+    epoch: i + 1,
+    step: (i + 1) * 500,
+    trainLoss: 2.5 * Math.exp(-3 * ((i + 1) / 10)) + 0.2,
+    valLoss: 2.5 * Math.exp(-2.8 * ((i + 1) / 10)) + 0.25,
+    valAccuracy: 95 / (1 + Math.exp(-8 * ((i + 1) / 10 - 0.3))),
+    sizeBytes: 2_500_000_000 + i * 100_000_000,
+    createdAt: now - (epochs - i) * 1800000,
+    deployed: i === epochs - 1 && jobId === 'train-002',
+  }));
+}
+
+export function getTrainVsInference(): import('@/types/monitoring').TrainVsInference[] {
+  return [
+    { metric: 'Latency P95', trainValue: 0, inferenceValue: 1200, unit: 'ms', delta: 0 },
+    { metric: 'Throughput', trainValue: 2800, inferenceValue: 42, unit: 'tok/s', delta: -98.5 },
+    { metric: 'GPU Utilization', trainValue: 94, inferenceValue: 72, unit: '%', delta: -23.4 },
+    { metric: 'Memory Usage', trainValue: 76, inferenceValue: 58, unit: 'GB', delta: -23.7 },
+    { metric: 'Accuracy', trainValue: 91.5, inferenceValue: 89.2, unit: '%', delta: -2.5 },
+    { metric: 'Batch Size', trainValue: 32, inferenceValue: 1, unit: '', delta: -96.9 },
+  ];
+}

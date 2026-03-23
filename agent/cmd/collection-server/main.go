@@ -812,6 +812,98 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
+	// ── AI Copilot API (Phase 22-1) ──────────────────────────────────────────
+
+	mux.HandleFunc("POST /api/v1/copilot/chat", func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Message string `json:"message"` }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"message":"invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"response": map[string]interface{}{
+				"id": fmt.Sprintf("msg-%d", time.Now().UnixMilli()), "role": "assistant",
+				"content": "Based on the current metrics, the TTFT P95 for rag-service is 1.8s (SLO: <2s). GPU utilization is at 72% across the cluster.", "timestamp": time.Now().UnixMilli(),
+				"promql": `histogram_quantile(0.95, rate(llm_ttft_seconds_bucket{service="rag-service"}[5m]))`,
+				"suggestions": []string{"Show GPU trend", "Compare with last week", "Check error rate"},
+			},
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/copilot/suggestions", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "cs-1", "text": "TTFT가 높은 서비스는?", "category": "performance"},
+			{"id": "cs-2", "text": "GPU 사용률 추이를 보여줘", "category": "gpu"},
+			{"id": "cs-3", "text": "에러율이 가장 높은 엔드포인트", "category": "reliability"},
+			{"id": "cs-4", "text": "지난 1시간 비용 분석", "category": "cost"},
+		}})
+	})
+
+	mux.HandleFunc("POST /api/v1/copilot/query", func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Query string `json:"query"` }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"promql": `histogram_quantile(0.95, rate(llm_ttft_seconds_bucket[5m]))`,
+			"data":   map[string]interface{}{"series": []map[string]interface{}{{"label": "rag-service", "values": []float64{1.2, 1.5, 1.8, 1.4, 1.6}}}},
+		})
+	})
+
+	// ── Topology API (Phase 22-2) ────────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/topology", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"nodes": []map[string]interface{}{
+				{"id": "api-gateway", "name": "api-gateway", "layer": "ui", "status": "healthy", "rpm": 3200, "errorRate": 0.3, "p95": 120},
+				{"id": "rag-service", "name": "rag-service", "layer": "agent", "status": "warning", "rpm": 450, "errorRate": 1.2, "p95": 1800},
+				{"id": "vllm", "name": "vLLM Inference", "layer": "llm", "status": "healthy", "rpm": 200, "errorRate": 0.5, "p95": 1200},
+				{"id": "redis", "name": "Redis", "layer": "data", "status": "healthy", "rpm": 4000, "errorRate": 0.0, "p95": 1},
+			},
+			"edges": []map[string]interface{}{
+				{"source": "api-gateway", "target": "rag-service", "rpm": 450, "protocol": "http", "isNew": false},
+				{"source": "rag-service", "target": "vllm", "rpm": 200, "protocol": "http", "isNew": false},
+				{"source": "rag-service", "target": "redis", "rpm": 120, "protocol": "redis", "isNew": true},
+			},
+			"lastScanAt": time.Now().UnixMilli(), "totalConnections": 3,
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/topology/changes", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "tc-1", "timestamp": time.Now().Add(-1 * time.Hour).UnixMilli(), "type": "connection_added", "sourceService": "rag-service", "targetService": "redis", "protocol": "redis", "description": "New Redis cache connection detected"},
+			{"id": "tc-2", "timestamp": time.Now().Add(-24 * time.Hour).UnixMilli(), "type": "connection_removed", "sourceService": "guardrail", "targetService": "postgres", "protocol": "sql", "description": "SQL connection no longer active"},
+		}})
+	})
+
+	// ── Training API (Phase 22-3) ────────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/training/jobs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "train-001", "name": "chatbot-finetune-v2", "baseModel": "GPT-4-Turbo", "dataset": "customer-support-50k", "status": "running", "currentEpoch": 7, "totalEpochs": 10, "trainLoss": 0.42, "valAccuracy": 86.2, "gpuUtilization": 94},
+			{"id": "train-002", "name": "rag-embedding-retrain", "baseModel": "text-embedding-3-large", "dataset": "docs-120k", "status": "completed", "currentEpoch": 5, "totalEpochs": 5, "trainLoss": 0.18, "valAccuracy": 92.8, "gpuUtilization": 89},
+		}})
+	})
+
+	mux.HandleFunc("GET /api/v1/training/jobs/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/training/jobs/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) >= 2 && parts[1] == "checkpoints" {
+			if len(parts) >= 4 && parts[3] == "deploy" {
+				writeJSON(w, http.StatusOK, map[string]string{"status": "deployed"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+				{"id": "cp-1", "epoch": 1, "trainLoss": 2.1, "valLoss": 2.3, "valAccuracy": 35.2, "deployed": false},
+				{"id": "cp-7", "epoch": 7, "trainLoss": 0.42, "valLoss": 0.48, "valAccuracy": 86.2, "deployed": false},
+			}})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"id": parts[0], "name": "chatbot-finetune-v2", "status": "running", "currentEpoch": 7, "totalEpochs": 10,
+		})
+	})
+
 	// ── Terraform Resource CRUD API (Phase 21-2) ────────────────────────────
 
 	// Alert Policies CRUD

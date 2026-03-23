@@ -22,6 +22,8 @@ import {
   PanelLeftOpen,
   AlertTriangle,
   Flame,
+  GitFork,
+  MessageSquareText,
 } from 'lucide-react';
 import { Tooltip } from '@/components/ui';
 
@@ -42,11 +44,13 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Search, i18nKey: 'nav.traces', href: '/traces' },
   { icon: Flame, i18nKey: 'nav.profiling', href: '/profiling' },
   { icon: FileText, i18nKey: 'nav.logs', href: '/logs' },
+  { icon: GitFork, i18nKey: 'nav.topology', href: '/topology' },
   { icon: ClipboardList, i18nKey: 'nav.diagnostics', href: '/diagnostics', dividerBefore: true },
   { icon: AlertTriangle, i18nKey: 'nav.anomalies', href: '/anomalies' },
   { icon: Bell, i18nKey: 'nav.alerts', href: '/alerts' },
   { icon: Cpu, i18nKey: 'nav.agents', href: '/agents' },
-  { icon: Settings, i18nKey: 'nav.settings', href: '/settings', dividerBefore: true },
+  { icon: MessageSquareText, i18nKey: 'nav.copilot', href: '/copilot', dividerBefore: true },
+  { icon: Settings, i18nKey: 'nav.settings', href: '/settings' },
 ];
 
 export function Sidebar() {

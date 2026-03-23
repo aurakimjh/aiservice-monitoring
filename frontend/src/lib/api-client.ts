@@ -420,4 +420,47 @@ export const ssoApi = {
     apiFetch<{ status: string; message: string }>(`/settings/sso/${id}/test`, { method: 'POST' }),
 };
 
+// ── AI Copilot API (Phase 22-1) ────────────────────────────────────────
+
+export const copilotApi = {
+  chat: (message: string) =>
+    apiFetch<{ response: import('@/types/monitoring').CopilotMessage }>('/copilot/chat', {
+      method: 'POST', body: JSON.stringify({ message }),
+    }),
+  suggestions: () =>
+    apiFetch<{ items: import('@/types/monitoring').CopilotSuggestion[] }>('/copilot/suggestions'),
+  query: (query: string) =>
+    apiFetch<{ promql: string; data: Record<string, unknown> }>('/copilot/query', {
+      method: 'POST', body: JSON.stringify({ query }),
+    }),
+};
+
+// ── Topology API (Phase 22-2) ──────────────────────────────────────────
+
+export const topologyApi = {
+  getTopology: () =>
+    apiFetch<import('@/types/monitoring').DiscoveredTopology>('/topology'),
+  getChanges: (since?: number) =>
+    apiFetch<{ items: import('@/types/monitoring').TopologyChange[] }>(
+      `/topology/changes${since ? `?since=${since}` : ''}`,
+    ),
+};
+
+// ── Training API (Phase 22-3) ──────────────────────────────────────────
+
+export const trainingApi = {
+  listJobs: (status?: string) =>
+    apiFetch<{ items: import('@/types/monitoring').TrainingJob[] }>(
+      `/training/jobs${status ? `?status=${status}` : ''}`,
+    ),
+  getJob: (jobId: string) =>
+    apiFetch<import('@/types/monitoring').TrainingJob>(`/training/jobs/${jobId}`),
+  listCheckpoints: (jobId: string) =>
+    apiFetch<{ items: import('@/types/monitoring').TrainingCheckpoint[] }>(`/training/jobs/${jobId}/checkpoints`),
+  deployCheckpoint: (jobId: string, checkpointId: string) =>
+    apiFetch<{ status: string }>(`/training/jobs/${jobId}/checkpoints/${checkpointId}/deploy`, {
+      method: 'POST',
+    }),
+};
+
 export { apiFetch };
