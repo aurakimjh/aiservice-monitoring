@@ -85,6 +85,7 @@ services:
     restart: unless-stopped
 
   # ── Grafana Tempo (트레이스 백엔드) ────────────────────────────────
+  # LICENSE: AGPL-3.0 — 상용 배포 시 docker-compose.commercial.yaml 사용 (Jaeger 대체)
   tempo:
     image: grafana/tempo:2.5.0
     container_name: tempo
@@ -102,6 +103,7 @@ services:
     restart: unless-stopped
 
   # ── Grafana Loki (로그 백엔드) ─────────────────────────────────────
+  # LICENSE: AGPL-3.0 — 상용 배포 시 docker-compose.commercial.yaml 사용 (Loki 미포함)
   loki:
     image: grafana/loki:3.1.0
     container_name: loki
@@ -117,6 +119,7 @@ services:
     restart: unless-stopped
 
   # ── Grafana (통합 시각화 대시보드) ────────────────────────────────
+  # LICENSE: AGPL-3.0 — 상용 배포 시 docker-compose.commercial.yaml 사용 (자체 Next.js UI 대체)
   grafana:
     image: grafana/grafana:11.1.0
     container_name: grafana

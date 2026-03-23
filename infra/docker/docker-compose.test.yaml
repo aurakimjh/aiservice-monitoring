@@ -64,6 +64,7 @@ services:
 
   # ═══════════════════════════════════════════════════════════
   # 3. MinIO — S3 호환 Evidence 저장소
+  # LICENSE: AGPL-3.0 — 상용 배포 시 LocalBackend(AITOP_STORAGE_TYPE=local) 사용
   # ═══════════════════════════════════════════════════════════
   minio:
     image: minio/minio:latest
@@ -135,6 +136,7 @@ services:
       timeout: 5s
       retries: 3
 
+  # LICENSE: AGPL-3.0 — 상용 배포 시 Jaeger(Apache 2.0) 사용
   tempo:
     image: grafana/tempo:2.5.0
     ports:
@@ -145,6 +147,7 @@ services:
     networks:
       - aitop-test
 
+  # LICENSE: AGPL-3.0 — 상용 배포 시 미포함
   loki:
     image: grafana/loki:3.1.0
     ports:

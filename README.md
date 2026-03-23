@@ -199,9 +199,15 @@ aiservice-monitoring/
 git clone https://github.com/aura-kimjh/aiservice-monitoring.git
 cd aiservice-monitoring
 
-# OTel Collector + Prometheus + Tempo + Loki + Grafana + Jaeger
+# 개발/테스트 — 전체 스택 (Grafana/Tempo/Loki 포함)
 docker compose -f infra/docker/docker-compose.yaml up -d
+
+# 상용 배포 — AGPL-free 스택 (Jaeger/Prometheus/PostgreSQL)
+docker compose -f infra/docker/docker-compose.commercial.yaml up -d
 ```
+
+> **라이선스 안내**: 상용 배포 시 AGPL 컴포넌트(Grafana/Tempo/Loki/MinIO)를 포함하지 않는
+> `docker-compose.commercial.yaml`을 사용하세요. 상세: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
 
 ### 2. 프론트엔드 실행
 

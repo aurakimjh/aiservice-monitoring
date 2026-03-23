@@ -1,0 +1,85 @@
+# OTel Collector — Commercial (AGPL-free)
+#
+# Tempo → Jaeger OTLP, Loki → 제거 (로그는 stdout/파일)
+# 모든 컴포넌트 Apache 2.0
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ["*"]
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  transform/normalize:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, "llm.time_to_first_token") where name == "vllm:time_to_first_token_seconds"
+          - set(name, "llm.tokens_per_second") where name == "vllm:generation_tokens_per_second"
+          - set(unit, "ms") where name == "llm.time_to_first_token"
+          - set(unit, "tok/s") where name == "llm.tokens_per_second"
+
+  batch:
+    send_batch_size: 256
+    timeout: 5s
+
+exporters:
+  # Prometheus (Apache 2.0)
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "aiservice"
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Jaeger via OTLP (Apache 2.0) — Tempo 대체
+  otlp/jaeger:
+    endpoint: "jaeger:4317"
+    tls:
+      insecure: true
+
+  # 로그: stdout 출력 (Loki 대체 — 향후 자체 로그 저장 구현)
+  debug/logs:
+    verbosity: normal
+    sampling_initial: 10
+    sampling_thereafter: 500
+
+service:
+  extensions: [health_check]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: basic
+      address: 0.0.0.0:8888
+
+  pipelines:
+    traces:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [otlp/jaeger]
+
+    metrics:
+      receivers:  [otlp]
+      processors: [memory_limiter, transform/normalize, batch]
+      exporters:  [prometheus]
+
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [debug/logs]

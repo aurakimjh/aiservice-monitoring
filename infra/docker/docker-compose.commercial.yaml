@@ -1,0 +1,165 @@
+# AITOP Commercial Stack — AGPL-free 상용 배포용
+#
+# 모든 컴포넌트 라이선스: Apache 2.0 / BSD / PostgreSQL License
+# AGPL 컴포넌트(Grafana, Tempo, Loki, MinIO) 미포함
+#
+# 포함:
+#   - OTel Collector (Apache 2.0) — 텔레메트리 수집·처리
+#   - Prometheus (Apache 2.0) — 메트릭 저장
+#   - Jaeger (Apache 2.0) — 트레이스 저장·시각화
+#   - PostgreSQL (PostgreSQL License) — 메타데이터 저장
+#   - Collection Server (자체 코드) — 에이전트 데이터 수신
+#   - Frontend (자체 코드) — Next.js 모니터링 UI
+#
+# 실행:
+#   docker compose -f infra/docker/docker-compose.commercial.yaml up -d
+#
+# 접속:
+#   AITOP UI:    http://localhost:3000
+#   Jaeger UI:   http://localhost:16686
+#   Prometheus:  http://localhost:9090
+#   OTel Health: http://localhost:13133
+
+networks:
+  aitop:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  postgres_data:
+  aitop_data:
+
+services:
+
+  # ── OTel Collector (Apache 2.0) ──────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otelcol-commercial.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+      - "8889:8889"    # Prometheus scrape endpoint
+      - "13133:13133"  # Health check
+    networks:
+      - aitop
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Prometheus (Apache 2.0) ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-remote-write-receiver"
+      - "--enable-feature=exemplar-storage"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules.yaml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - aitop
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Jaeger (Apache 2.0) — Tempo 대체 ────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+      - BADGER_SPAN_STORE_TTL=168h
+    volumes:
+      - ./jaeger-data:/badger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4320:4317"    # OTLP gRPC (Collector → Jaeger)
+    networks:
+      - aitop
+    restart: unless-stopped
+
+  # ── PostgreSQL (PostgreSQL License) ──────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: aitop_collection
+      POSTGRES_USER: aitop
+      POSTGRES_PASSWORD: aitop
+    volumes:
+      - ../../agent/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ../../agent/migrations/002_storage_path_migration.sql:/docker-entrypoint-initdb.d/002_storage_path_migration.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - aitop
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitop -d aitop_collection"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Collection Server (자체 코드) ────────────────────────────────────
+  collection-server:
+    build:
+      context: ../../agent
+      dockerfile: ../infra/docker/Dockerfile.collection-server
+    container_name: collection-server
+    ports:
+      - "8080:8080"
+    environment:
+      - AITOP_LISTEN_ADDR=:8080
+      - AITOP_LOG_LEVEL=info
+      - AITOP_STORAGE_TYPE=local
+      - AITOP_STORAGE_PATH=/var/aitop/data
+      - AITOP_STORAGE_RETENTION_DAYS=30
+      - AITOP_DB_URL=postgres://aitop:aitop@postgres:5432/aitop_collection?sslmode=disable
+    volumes:
+      - aitop_data:/var/aitop/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aitop
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Frontend (자체 코드 — Next.js) ───────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://collection-server:8080/api/v1
+      - NODE_ENV=production
+    depends_on:
+      - collection-server
+    networks:
+      - aitop
+    restart: unless-stopped
