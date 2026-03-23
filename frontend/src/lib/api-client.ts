@@ -463,4 +463,44 @@ export const trainingApi = {
     }),
 };
 
+// ── Cloud API (Phase 23-1) ─────────────────────────────────────────────
+
+export const cloudApi = {
+  getCostSummaries: () =>
+    apiFetch<{ items: import('@/types/monitoring').CloudCostSummary[] }>('/cloud/costs'),
+  getResources: (provider?: string) =>
+    apiFetch<{ items: import('@/types/monitoring').CloudResource[] }>(`/cloud/resources${provider ? `?provider=${provider}` : ''}`),
+};
+
+// ── Pipeline API (Phase 23-3) ──────────────────────────────────────────
+
+export const pipelineApi = {
+  list: () =>
+    apiFetch<{ items: import('@/types/monitoring').Pipeline[] }>('/pipelines'),
+  get: (id: string) =>
+    apiFetch<import('@/types/monitoring').Pipeline>(`/pipelines/${id}`),
+};
+
+// ── Business KPI API (Phase 23-4) ──────────────────────────────────────
+
+export const businessApi = {
+  getKPIs: () =>
+    apiFetch<{ items: import('@/types/monitoring').BusinessKPI[] }>('/business/kpis'),
+  getCorrelation: () =>
+    apiFetch<{ items: import('@/types/monitoring').CorrelationPoint[] }>('/business/correlation'),
+  getROI: () =>
+    apiFetch<{ items: import('@/types/monitoring').ROIEntry[] }>('/business/roi'),
+};
+
+// ── Marketplace API (Phase 23-5) ───────────────────────────────────────
+
+export const marketplaceApi = {
+  list: (type?: string) =>
+    apiFetch<{ items: import('@/types/monitoring').MarketplaceItem[] }>(`/marketplace${type ? `?type=${type}` : ''}`),
+  get: (id: string) =>
+    apiFetch<import('@/types/monitoring').MarketplaceItem>(`/marketplace/${id}`),
+  publish: (data: Record<string, unknown>) =>
+    apiFetch<{ id: string }>('/marketplace', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 export { apiFetch };

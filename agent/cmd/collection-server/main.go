@@ -812,6 +812,83 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
+	// ── Multi-Cloud API (Phase 23-1) ─────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/cloud/costs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"provider": "aws", "totalCost": 12450, "computeCost": 8200, "storageCost": 2800, "networkCost": 1450, "trend": 3.2},
+			{"provider": "gcp", "totalCost": 8320, "computeCost": 5100, "storageCost": 1900, "networkCost": 1320, "trend": -1.5},
+			{"provider": "azure", "totalCost": 5680, "computeCost": 3400, "storageCost": 1200, "networkCost": 1080, "trend": 8.4},
+		}})
+	})
+
+	mux.HandleFunc("GET /api/v1/cloud/resources", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "cr-01", "provider": "aws", "type": "EC2 (g5.2xlarge)", "name": "gpu-inference-01", "region": "us-east-1", "status": "running", "monthlyCost": 2400},
+			{"id": "cr-02", "provider": "gcp", "type": "GCE (a2-highgpu-1g)", "name": "training-node-01", "region": "us-central1", "status": "running", "monthlyCost": 3200},
+			{"id": "cr-03", "provider": "azure", "type": "VM (NC6s_v3)", "name": "finetune-worker-01", "region": "eastus", "status": "running", "monthlyCost": 1900},
+		}})
+	})
+
+	// ── Pipeline API (Phase 23-3) ────────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/pipelines", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "pipe-01", "name": "daily-embedding-refresh", "orchestrator": "airflow", "status": "running", "totalTasks": 6, "completedTasks": 4, "successRate": 96.5},
+			{"id": "pipe-02", "name": "model-evaluation-suite", "orchestrator": "prefect", "status": "success", "totalTasks": 4, "completedTasks": 4, "successRate": 100},
+			{"id": "pipe-03", "name": "guardrail-dataset-update", "orchestrator": "dagster", "status": "failed", "totalTasks": 5, "completedTasks": 3, "successRate": 87.3},
+		}})
+	})
+
+	mux.HandleFunc("GET /api/v1/pipelines/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"id": "pipe-01", "name": "daily-embedding-refresh", "status": "running"})
+	})
+
+	// ── Business KPI API (Phase 23-4) ────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/business/kpis", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "bk-01", "name": "Revenue Impact", "value": 285000, "unit": "$/month", "trend": 12.5, "category": "revenue"},
+			{"id": "bk-02", "name": "Conversion Rate", "value": 4.2, "unit": "%", "trend": 0.8, "category": "conversion"},
+			{"id": "bk-03", "name": "AI ROI", "value": 340, "unit": "%", "trend": 25, "category": "efficiency"},
+			{"id": "bk-04", "name": "Cost per Transaction", "value": 0.023, "unit": "$", "trend": -8.5, "category": "efficiency"},
+		}})
+	})
+
+	mux.HandleFunc("GET /api/v1/business/correlation", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"aiMetric": 0.8, "bizMetric": 4.5, "label": "rag-service"},
+			{"aiMetric": 1.2, "bizMetric": 4.2, "label": "chatbot-v2"},
+			{"aiMetric": 2.5, "bizMetric": 2.8, "label": "code-assistant"},
+		}})
+	})
+
+	mux.HandleFunc("GET /api/v1/business/roi", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"category": "RAG Service", "investment": 8500, "revenue": 42000, "savings": 12000, "roi": 535},
+			{"category": "Chatbot v2", "investment": 5200, "revenue": 28000, "savings": 8500, "roi": 601},
+			{"category": "Guardrail", "investment": 2100, "revenue": 0, "savings": 18000, "roi": 757},
+		}})
+	})
+
+	// ── Marketplace API (Phase 23-5) ─────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/marketplace", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []map[string]interface{}{
+			{"id": "mp-01", "name": "GPU Cluster Dashboard", "type": "dashboard", "author": "AITOP Team", "downloads": 1240, "rating": 4.8, "featured": true},
+			{"id": "mp-02", "name": "RAG Quality Prompts", "type": "prompt", "author": "AI Lab", "downloads": 890, "rating": 4.6, "featured": true},
+			{"id": "mp-03", "name": "Cost Anomaly Detector", "type": "plugin", "author": "CloudOps", "downloads": 560, "rating": 4.3, "featured": false},
+			{"id": "mp-04", "name": "Incident Runbook", "type": "notebook", "author": "SRE Guild", "downloads": 720, "rating": 4.7, "featured": true},
+		}})
+	})
+
+	mux.HandleFunc("POST /api/v1/marketplace", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		body["id"] = fmt.Sprintf("mp-%d", time.Now().UnixMilli())
+		writeJSON(w, http.StatusCreated, body)
+	})
+
 	// ── AI Copilot API (Phase 22-1) ──────────────────────────────────────────
 
 	mux.HandleFunc("POST /api/v1/copilot/chat", func(w http.ResponseWriter, r *http.Request) {

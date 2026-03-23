@@ -1804,3 +1804,116 @@ export function getTrainVsInference(): import('@/types/monitoring').TrainVsInfer
     { metric: 'Batch Size', trainValue: 32, inferenceValue: 1, unit: '', delta: -96.9 },
   ];
 }
+
+// ── Multi-Cloud (Phase 23-1) ────────────────────────────────────────────
+
+export function getCloudCostSummaries(): import('@/types/monitoring').CloudCostSummary[] {
+  return [
+    { provider: 'aws', totalCost: 12450, computeCost: 8200, storageCost: 2800, networkCost: 1450, trend: 3.2 },
+    { provider: 'gcp', totalCost: 8320, computeCost: 5100, storageCost: 1900, networkCost: 1320, trend: -1.5 },
+    { provider: 'azure', totalCost: 5680, computeCost: 3400, storageCost: 1200, networkCost: 1080, trend: 8.4 },
+  ];
+}
+
+export function getCloudResources(): import('@/types/monitoring').CloudResource[] {
+  return [
+    { id: 'cr-01', provider: 'aws', type: 'EC2 (g5.2xlarge)', name: 'gpu-inference-01', region: 'us-east-1', status: 'running', monthlyCost: 2400, cpuUsage: 72, memoryUsage: 85 },
+    { id: 'cr-02', provider: 'aws', type: 'EC2 (m6i.xlarge)', name: 'api-gateway-01', region: 'us-east-1', status: 'running', monthlyCost: 280, cpuUsage: 45, memoryUsage: 62 },
+    { id: 'cr-03', provider: 'aws', type: 'RDS (r6g.large)', name: 'prod-postgres', region: 'us-east-1', status: 'running', monthlyCost: 520, cpuUsage: 38, memoryUsage: 71 },
+    { id: 'cr-04', provider: 'gcp', type: 'GCE (a2-highgpu-1g)', name: 'training-node-01', region: 'us-central1', status: 'running', monthlyCost: 3200, cpuUsage: 94, memoryUsage: 88 },
+    { id: 'cr-05', provider: 'gcp', type: 'GKE Cluster', name: 'ml-pipeline-cluster', region: 'us-central1', status: 'running', monthlyCost: 1800, cpuUsage: 65, memoryUsage: 58 },
+    { id: 'cr-06', provider: 'azure', type: 'VM (NC6s_v3)', name: 'finetune-worker-01', region: 'eastus', status: 'running', monthlyCost: 1900, cpuUsage: 88, memoryUsage: 76 },
+    { id: 'cr-07', provider: 'azure', type: 'AKS Cluster', name: 'rag-cluster', region: 'eastus', status: 'running', monthlyCost: 1400, cpuUsage: 52, memoryUsage: 64 },
+    { id: 'cr-08', provider: 'aws', type: 'S3 Bucket', name: 'aitop-evidence', region: 'us-east-1', status: 'running', monthlyCost: 180, cpuUsage: 0, memoryUsage: 0 },
+    { id: 'cr-09', provider: 'gcp', type: 'Cloud SQL', name: 'analytics-db', region: 'us-central1', status: 'running', monthlyCost: 450, cpuUsage: 28, memoryUsage: 55 },
+    { id: 'cr-10', provider: 'aws', type: 'EC2 (t3.medium)', name: 'dev-server', region: 'ap-northeast-2', status: 'stopped', monthlyCost: 0, cpuUsage: 0, memoryUsage: 0 },
+  ];
+}
+
+// ── Data Pipeline (Phase 23-3) ──────────────────────────────────────────
+
+export function getPipelines(): import('@/types/monitoring').Pipeline[] {
+  const now = Date.now();
+  return [
+    { id: 'pipe-01', name: 'daily-embedding-refresh', orchestrator: 'airflow', status: 'running', totalTasks: 6, completedTasks: 4, durationMs: 1200000, lastRunAt: now - 600000, schedule: '0 2 * * *', successRate: 96.5,
+      tasks: [
+        { id: 't1', name: 'extract_documents', status: 'success', durationMs: 120000, startedAt: now - 1200000 },
+        { id: 't2', name: 'chunk_text', status: 'success', durationMs: 180000, startedAt: now - 1080000 },
+        { id: 't3', name: 'generate_embeddings', status: 'success', durationMs: 420000, startedAt: now - 900000 },
+        { id: 't4', name: 'upsert_vectordb', status: 'success', durationMs: 240000, startedAt: now - 480000 },
+        { id: 't5', name: 'validate_quality', status: 'running', durationMs: 0, startedAt: now - 240000 },
+        { id: 't6', name: 'notify_completion', status: 'pending', durationMs: 0, startedAt: 0 },
+      ] },
+    { id: 'pipe-02', name: 'model-evaluation-suite', orchestrator: 'prefect', status: 'success', totalTasks: 4, completedTasks: 4, durationMs: 900000, lastRunAt: now - 3600000, schedule: '0 */6 * * *', successRate: 100,
+      tasks: [
+        { id: 't1', name: 'load_test_dataset', status: 'success', durationMs: 60000, startedAt: now - 3600000 },
+        { id: 't2', name: 'run_inference', status: 'success', durationMs: 540000, startedAt: now - 3540000 },
+        { id: 't3', name: 'compute_metrics', status: 'success', durationMs: 180000, startedAt: now - 3000000 },
+        { id: 't4', name: 'publish_report', status: 'success', durationMs: 120000, startedAt: now - 2820000 },
+      ] },
+    { id: 'pipe-03', name: 'guardrail-dataset-update', orchestrator: 'dagster', status: 'failed', totalTasks: 5, completedTasks: 3, durationMs: 450000, lastRunAt: now - 7200000, schedule: '0 0 * * 1', successRate: 87.3,
+      tasks: [
+        { id: 't1', name: 'fetch_labels', status: 'success', durationMs: 60000, startedAt: now - 7200000 },
+        { id: 't2', name: 'preprocess', status: 'success', durationMs: 120000, startedAt: now - 7140000 },
+        { id: 't3', name: 'train_classifier', status: 'success', durationMs: 240000, startedAt: now - 7020000 },
+        { id: 't4', name: 'evaluate', status: 'failed', durationMs: 30000, startedAt: now - 6780000 },
+        { id: 't5', name: 'deploy', status: 'skipped', durationMs: 0, startedAt: 0 },
+      ] },
+    { id: 'pipe-04', name: 'weekly-cost-report', orchestrator: 'airflow', status: 'queued', totalTasks: 3, completedTasks: 0, durationMs: 0, lastRunAt: now - 86400000 * 7, schedule: '0 9 * * 1', successRate: 100,
+      tasks: [
+        { id: 't1', name: 'aggregate_costs', status: 'pending', durationMs: 0, startedAt: 0 },
+        { id: 't2', name: 'generate_report', status: 'pending', durationMs: 0, startedAt: 0 },
+        { id: 't3', name: 'send_email', status: 'pending', durationMs: 0, startedAt: 0 },
+      ] },
+  ];
+}
+
+// ── Business KPI (Phase 23-4) ───────────────────────────────────────────
+
+export function getBusinessKPIs(): import('@/types/monitoring').BusinessKPI[] {
+  return [
+    { id: 'bk-01', name: 'Revenue Impact', value: 285000, unit: '$/month', trend: 12.5, category: 'revenue' },
+    { id: 'bk-02', name: 'Conversion Rate', value: 4.2, unit: '%', trend: 0.8, category: 'conversion' },
+    { id: 'bk-03', name: 'AI ROI', value: 340, unit: '%', trend: 25, category: 'efficiency' },
+    { id: 'bk-04', name: 'Cost per Transaction', value: 0.023, unit: '$', trend: -8.5, category: 'efficiency' },
+    { id: 'bk-05', name: 'Customer Retention', value: 94.2, unit: '%', trend: 1.2, category: 'retention' },
+    { id: 'bk-06', name: 'Support Deflection', value: 68, unit: '%', trend: 15, category: 'efficiency' },
+  ];
+}
+
+export function getCorrelationData(): import('@/types/monitoring').CorrelationPoint[] {
+  return [
+    { aiMetric: 0.8, bizMetric: 4.5, label: 'rag-service (Low TTFT → High Conversion)' },
+    { aiMetric: 1.2, bizMetric: 4.2, label: 'chatbot-v2 (Med TTFT → Med Conversion)' },
+    { aiMetric: 2.5, bizMetric: 2.8, label: 'code-assistant (High TTFT → Low Conversion)' },
+    { aiMetric: 0.5, bizMetric: 4.8, label: 'embedding-svc (Very Low TTFT → Very High)' },
+    { aiMetric: 1.8, bizMetric: 3.5, label: 'guardrail (Med-High TTFT → Med Conversion)' },
+    { aiMetric: 3.0, bizMetric: 2.2, label: 'legacy-model (Very High TTFT → Low)' },
+  ];
+}
+
+export function getROIData(): import('@/types/monitoring').ROIEntry[] {
+  return [
+    { category: 'RAG Service', investment: 8500, revenue: 42000, savings: 12000, roi: 535 },
+    { category: 'Chatbot v2', investment: 5200, revenue: 28000, savings: 8500, roi: 601 },
+    { category: 'Code Assistant', investment: 3800, revenue: 15000, savings: 6200, roi: 457 },
+    { category: 'Guardrail', investment: 2100, revenue: 0, savings: 18000, roi: 757 },
+    { category: 'Embedding', investment: 1800, revenue: 8000, savings: 4500, roi: 594 },
+  ];
+}
+
+// ── Marketplace (Phase 23-5) ────────────────────────────────────────────
+
+export function getMarketplaceItems(): import('@/types/monitoring').MarketplaceItem[] {
+  const now = Date.now();
+  return [
+    { id: 'mp-01', name: 'GPU Cluster Dashboard', description: 'Comprehensive GPU monitoring with VRAM, temperature, and utilization charts', type: 'dashboard', author: 'AITOP Team', downloads: 1240, rating: 4.8, tags: ['gpu', 'monitoring', 'official'], createdAt: now - 86400000 * 30, featured: true },
+    { id: 'mp-02', name: 'RAG Quality Prompts', description: 'Evaluation prompts for RAG pipeline quality assessment', type: 'prompt', author: 'AI Lab', downloads: 890, rating: 4.6, tags: ['rag', 'evaluation', 'quality'], createdAt: now - 86400000 * 20, featured: true },
+    { id: 'mp-03', name: 'Cost Anomaly Detector', description: 'Plugin that detects unusual cost spikes across cloud providers', type: 'plugin', author: 'CloudOps', downloads: 560, rating: 4.3, tags: ['cost', 'anomaly', 'cloud'], createdAt: now - 86400000 * 15, featured: false },
+    { id: 'mp-04', name: 'Incident Runbook', description: 'Notebook template for structured incident response and post-mortem', type: 'notebook', author: 'SRE Guild', downloads: 720, rating: 4.7, tags: ['incident', 'runbook', 'sre'], createdAt: now - 86400000 * 10, featured: true },
+    { id: 'mp-05', name: 'LLM Performance Suite', description: 'Dashboard with TTFT, TPS, token cost tracking per model', type: 'dashboard', author: 'AI Lab', downloads: 1050, rating: 4.9, tags: ['llm', 'performance', 'cost'], createdAt: now - 86400000 * 25, featured: true },
+    { id: 'mp-06', name: 'Security Guardrail Pack', description: 'Pre-configured prompts for PII, injection, and toxicity detection', type: 'prompt', author: 'Security Team', downloads: 430, rating: 4.4, tags: ['security', 'guardrail', 'compliance'], createdAt: now - 86400000 * 8, featured: false },
+    { id: 'mp-07', name: 'Slack Alert Router', description: 'Plugin for intelligent alert routing to Slack channels by severity', type: 'plugin', author: 'DevOps Pro', downloads: 380, rating: 4.1, tags: ['slack', 'alerts', 'routing'], createdAt: now - 86400000 * 5, featured: false },
+    { id: 'mp-08', name: 'Training Monitor Notebook', description: 'Interactive notebook for tracking fine-tuning jobs with loss curves', type: 'notebook', author: 'ML Team', downloads: 290, rating: 4.5, tags: ['training', 'fine-tuning', 'notebook'], createdAt: now - 86400000 * 3, featured: false },
+  ];
+}

@@ -1115,3 +1115,106 @@ export interface TrainVsInference {
   unit: string;
   delta: number;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Multi-Cloud Types (Phase 23-1)
+// ═══════════════════════════════════════════════════════════════
+
+export type CloudProvider = 'aws' | 'gcp' | 'azure';
+
+export interface CloudResource {
+  id: string;
+  provider: CloudProvider;
+  type: string;
+  name: string;
+  region: string;
+  status: 'running' | 'stopped' | 'terminated';
+  monthlyCost: number;
+  cpuUsage: number;
+  memoryUsage: number;
+}
+
+export interface CloudCostSummary {
+  provider: CloudProvider;
+  totalCost: number;
+  computeCost: number;
+  storageCost: number;
+  networkCost: number;
+  trend: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Data Pipeline Types (Phase 23-3)
+// ═══════════════════════════════════════════════════════════════
+
+export type PipelineOrchestrator = 'airflow' | 'prefect' | 'dagster';
+export type PipelineStatus = 'running' | 'success' | 'failed' | 'queued' | 'paused';
+export type TaskStatus = 'running' | 'success' | 'failed' | 'pending' | 'skipped';
+
+export interface PipelineTask {
+  id: string;
+  name: string;
+  status: TaskStatus;
+  durationMs: number;
+  startedAt: number;
+}
+
+export interface Pipeline {
+  id: string;
+  name: string;
+  orchestrator: PipelineOrchestrator;
+  status: PipelineStatus;
+  tasks: PipelineTask[];
+  totalTasks: number;
+  completedTasks: number;
+  durationMs: number;
+  lastRunAt: number;
+  schedule: string;
+  successRate: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Business KPI Types (Phase 23-4)
+// ═══════════════════════════════════════════════════════════════
+
+export interface BusinessKPI {
+  id: string;
+  name: string;
+  value: number;
+  unit: string;
+  trend: number;
+  category: 'revenue' | 'conversion' | 'retention' | 'efficiency';
+}
+
+export interface CorrelationPoint {
+  aiMetric: number;
+  bizMetric: number;
+  label: string;
+}
+
+export interface ROIEntry {
+  category: string;
+  investment: number;
+  revenue: number;
+  savings: number;
+  roi: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Marketplace Types (Phase 23-5)
+// ═══════════════════════════════════════════════════════════════
+
+export type MarketplaceItemType = 'dashboard' | 'prompt' | 'plugin' | 'notebook';
+
+export interface MarketplaceItem {
+  id: string;
+  name: string;
+  description: string;
+  type: MarketplaceItemType;
+  author: string;
+  downloads: number;
+  rating: number;
+  tags: string[];
+  createdAt: number;
+  featured: boolean;
+}
