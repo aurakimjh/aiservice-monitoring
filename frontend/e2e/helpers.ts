@@ -54,6 +54,15 @@ export async function assertPageLoaded(page: Page) {
 }
 
 /**
+ * 페이지 로딩 완료 대기 (a11y/visual 테스트용)
+ */
+export async function waitForPageReady(page: Page) {
+  await page.waitForLoadState('domcontentloaded');
+  // 동적 콘텐츠가 렌더링될 시간 확보
+  await page.waitForTimeout(1000);
+}
+
+/**
  * KPI 카드가 표시되는지 확인
  */
 export async function assertKPIVisible(page: Page, count: number = 1) {

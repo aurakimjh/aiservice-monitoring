@@ -51,9 +51,10 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { label: string; value: string }[];
 }
 
-export function Select({ options, className, ...props }: SelectProps) {
+export function Select({ options, className, 'aria-label': ariaLabel, ...props }: SelectProps) {
   return (
     <select
+      aria-label={ariaLabel ?? 'Select option'}
       className={cn(
         'h-8 rounded-[var(--radius-md)]',
         'bg-[var(--bg-tertiary)] border border-[var(--border-default)]',
