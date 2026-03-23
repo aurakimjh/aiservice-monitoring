@@ -483,9 +483,31 @@ REST API, gRPC, 소켓 호출도 메소드 콜 트리 안에 **인라인으로**
 - **추가 정보**: URL, HTTP 메소드, 상태코드, 요청/응답 크기, 응답시간 — 콜 트리 노드에 인라인 표시
 - **Python LLM 연결**: OTel Trace Context 전파(W3C TraceContext)로 자식 Trace와 자동 연결
 
+#### 파일 I/O 호출 프로파일링
+
+파일 읽기/쓰기도 메소드 콜 트리 안에 **인라인으로** 표시됩니다.
+
+```
+메소드 콜 트리 내 파일 I/O 인라인 표시
+──────────────────────────────────────────────────────────
+▼ ReportService.export()                      ■■■ 78ms
+  ▶ DataFetcher.load()                        ■ 3ms
+    [🗄 SQL] SELECT * FROM report_data  →  3ms
+  ▶ FileWriter.save()                         ■■ 75ms  ⚠️
+    [📁 File] WRITE /data/reports/2026-03.csv    ← 파일 아이콘
+              크기: 4.2KB  소요시간: 75ms  ⚠️ 슬로우 I/O
+──────────────────────────────────────────────────────────
+```
+
+**캡처 원리**:
+- **Java**: `java.io.FileInputStream/FileOutputStream`, `java.nio.channels.FileChannel`, `BufferedReader/Writer`를 ByteBuddy로 후킹 → 파일 경로 + open/close + 읽기/쓰기 바이트 수 + 소요 시간 캡처
+- **.NET**: `System.IO.FileStream`, `StreamReader/StreamWriter`, `File.ReadAllText` 등을 CLR Profiler로 캡처 → 동일하게 파일 경로 + 바이트 수 + 소요 시간
+- **슬로우 파일 I/O 자동 감지**: 기본 50ms 초과 시 XLog에 ⚠️ 표시 + 슬로우 I/O 목록 집계
+
 #### 콜 트리 인라인 표시의 중요성
 
 > Scouter/Pinpoint는 SQL과 외부 호출을 **메소드 콜 트리 내에 인라인**으로 보여줍니다.
+> AITOP은 여기에 **파일 I/O**까지 추가하여 🗄️ DB · 🌐 HTTP · 📁 파일 I/O 3대 관점을 한 화면에서 제공합니다.
 > 이것이 별도 "DB 탭"이나 "외부 호출 탭"보다 강력한 이유:
 
 | 표시 방식 | DB 탭 / 외부 호출 탭 분리 | **콜 트리 인라인 (AITOP 방식)** |
@@ -493,6 +515,7 @@ REST API, gRPC, 소켓 호출도 메소드 콜 트리 안에 **인라인으로**
 | **문맥 파악** | 어떤 메소드에서 발생했는지 알기 어려움 | 정확히 어느 메소드가 DB/외부 호출을 했는지 즉시 파악 |
 | **병목 진단** | 탭 이동 필요 | 콜 트리를 따라가면 병목 위치가 바로 보임 |
 | **중첩 호출** | 표현 불가 | 루프 안의 N+1 쿼리, 중첩 HTTP 호출 시각화 |
+| **파일 I/O** | 별도 탭 또는 미지원 | 🗄️ DB + 🌐 HTTP + 📁 파일 I/O 3대 관점을 한 화면에서 비교 |
 | **개발자 경험** | 단편적 정보 | 실행 흐름 전체를 한 화면에서 파악 |
 
 ### 7.4 XLog 트랜잭션 상세 — 프로파일링 표시 예시

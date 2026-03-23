@@ -1602,6 +1602,26 @@ abs(
 | `method.sql.count` | Counter | 1 | `language`, `method` | 메소드당 SQL 호출 수 |
 | `method.sql.duration` | Histogram | ms | `language`, `method` | 메소드 내 SQL 총 소요 시간 |
 
+### 12.3-A 파일 I/O 메트릭 (Java/.NET 공통)
+
+> **수집 방법**: ByteBuddy(Java) / CLR Profiler(.NET) — `java.io` / `java.nio`(Java), `System.IO`(.NET) 계열 클래스 후킹
+> **슬로우 감지 임계치**: 50ms 초과 시 `file.io.slow.count` 증가 (설정: `aitop.fileio.slow-call.threshold-ms`)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|--------|------|
+| `file.io.duration` | Histogram | ms | `language`, `operation`, `path_pattern` | 파일 I/O 소요 시간 분포 (open/read/write/close) |
+| `file.io.bytes` | Counter | bytes | `language`, `operation` | 파일 읽기/쓰기 누적 바이트 수 |
+| `file.io.operations` | Counter | 1 | `language`, `operation` (open/read/write/close) | 파일 I/O 작업 유형별 호출 횟수 |
+| `file.io.slow.count` | Counter | 1 | `language`, `operation`, `path_pattern` | 슬로우 파일 I/O 발생 횟수 (50ms 초과) |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `file.io.duration` P95 | > 50ms | > 200ms | Slack #oncall |
+| `file.io.slow.count` rate/5m | > 10 | > 50 | PagerDuty |
+| `file.io.bytes` rate/1m | > 100MB | > 500MB | Slack #oncall |
+
 ### 12.4 Agent 진단 항목 확장 (Java/.NET)
 
 기존 WAS(IT) 진단 항목(15개)에 Java/.NET 특화 항목을 추가합니다:

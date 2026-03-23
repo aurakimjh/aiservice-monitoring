@@ -1528,6 +1528,13 @@ RecommendCtrl         SELECT * FROM users
 │      │    → URL + 메소드 + 상태코드 + 응답시간 캡처             │ │
 │      │    → LLM 서비스 감지 → 자식 Trace 연결 준비              │ │
 │      │                                                         │ │
+│      ├─── [FileStream 훅] ──────────────────────────────────── ┤ │
+│      │    java.io.FileInputStream / FileOutputStream           │ │
+│      │    java.nio.channels.FileChannel                        │ │
+│      │    System.IO.FileStream / StreamReader / StreamWriter   │ │
+│      │    → 파일 경로 + open/close + 바이트 수 + 소요시간 캡처  │ │
+│      │    → 50ms 초과 시 슬로우 파일 I/O로 자동 감지            │ │
+│      │                                                         │ │
 │      ▼                                                         │ │
 │  응답 반환                                                      │ │
 │      │                                                         │ │
@@ -1585,11 +1592,16 @@ Java + Python LLM 통합 시나리오의 완전한 프로파일링 표시:
 │      ▶ CacheService.put()                            ■ 2ms         │
 │        [📦 Redis] SET recommend:u-42 EX 300  →  1.8ms             │
 │                                                                    │
+│      ▶ ResultExporter.save()                         ■■■ 75ms      │
+│        [📁 File] WRITE /data/results/u-42.json                    │
+│                  크기: 4.2KB  소요시간: 75ms  ⚠️ 슬로우 I/O       │
+│                                                                    │
 │    ▼ ResponseMapper.toJSON()                         ■ 3ms         │
 │                                                                    │
 ├─ 요약 ─────────────────────────────────────────────────────────────┤
 │  SQL 3건 / 총 50ms  │  슬로우 쿼리: 없음                           │
 │  HTTP 외부 1건 / 총 150ms (전체의 36%) → LLM 서비스               │
+│  File I/O 1건 / 총 75ms  ⚠️ 슬로우 I/O 1건 (75ms > 50ms 임계치) │
 │  Redis 2건 / 총 3ms  │  예외: 없음  │  GC 정지: 0회               │
 ├─ Python LLM Trace 연결 (▶ 클릭 시 확장) ─────────────────────────┤
 │  [Python] python-llm-service  153ms  200 OK                        │
@@ -1612,6 +1624,61 @@ Java + Python LLM 통합 시나리오의 완전한 프로파일링 표시:
 | `aitop.jdbc.capture-bindings` | `AITOP_DB_CAPTURE_BINDINGS` | `true` | SQL 바인딩 파라미터 수집 |
 | `aitop.http.slow-call.threshold-ms` | `AITOP_HTTP_SLOW_THRESHOLD_MS` | `1000` | 슬로우 HTTP 호출 임계치 (ms) |
 | `aitop.http.llm-service-pattern` | `AITOP_HTTP_LLM_PATTERN` | `llm\|predict\|inference` | LLM 서비스 감지 패턴 |
+| `aitop.fileio.slow-call.threshold-ms` | `AITOP_FILEIO_SLOW_THRESHOLD_MS` | `50` | 슬로우 파일 I/O 임계치 (ms) |
+| `aitop.fileio.capture-path` | `AITOP_FILEIO_CAPTURE_PATH` | `true` | 파일 경로 수집 여부 |
+
+### 9.5 파일 I/O 호출 프로파일링
+
+파일 읽기/쓰기 작업도 DB 호출, HTTP 호출과 동일하게 메소드 콜 트리에 **인라인으로** 표시됩니다.
+
+#### Java — ByteBuddy 후킹 대상
+
+| 클래스 / 인터페이스 | 훅 메소드 | 캡처 정보 |
+|--------------------|-----------|----------|
+| `java.io.FileInputStream` | `read()`, `read(byte[])` | 파일 경로, 읽은 바이트 수, 소요 시간 |
+| `java.io.FileOutputStream` | `write(byte[])`, `flush()` | 파일 경로, 쓴 바이트 수, 소요 시간 |
+| `java.io.BufferedReader` | `readLine()`, `lines()` | 파일 경로, 읽은 라인 수, 소요 시간 |
+| `java.io.BufferedWriter` | `write()`, `flush()` | 파일 경로, 쓴 바이트 수, 소요 시간 |
+| `java.nio.channels.FileChannel` | `read()`, `write()`, `transferTo()` | 파일 경로, 바이트 수, NIO 모드 |
+
+#### .NET — CLR Profiler 후킹 대상
+
+| 클래스 | 후킹 메소드 | 캡처 정보 |
+|--------|------------|----------|
+| `System.IO.FileStream` | `Read()`, `Write()`, `ReadAsync()`, `WriteAsync()` | 파일 경로, 바이트 수, 소요 시간 |
+| `System.IO.StreamReader` | `ReadLine()`, `ReadToEnd()` | 파일 경로, 읽은 문자 수, 소요 시간 |
+| `System.IO.StreamWriter` | `Write()`, `WriteLine()` | 파일 경로, 쓴 문자 수, 소요 시간 |
+| `System.IO.File` (정적) | `ReadAllText()`, `WriteAllText()`, `ReadAllBytes()` | 파일 경로, 바이트 수, 소요 시간 |
+
+#### XLog 콜 트리 표시 형식
+
+```
+메소드 콜 트리 내 파일 I/O 인라인 표시
+──────────────────────────────────────────────────────────
+▼ ReportService.export()                      ■■■ 78ms
+  ▶ DataFetcher.load()                        ■ 3ms
+    [🗄 SQL] SELECT * FROM report_data  →  3ms
+  ▶ FileWriter.save()                         ■■ 75ms  ⚠️
+    [📁 File] WRITE /data/reports/2026-03.csv    ← 파일 아이콘
+              크기: 4.2KB  소요시간: 75ms  ⚠️ 슬로우 I/O
+──────────────────────────────────────────────────────────
+```
+
+#### 3대 I/O 관점 시각적 구분
+
+XLog 콜 트리에서 DB, HTTP, 파일 I/O는 아이콘으로 즉시 구분됩니다:
+
+| 관점 | 아이콘 | 표시 정보 |
+|------|--------|----------|
+| **DB 호출** | 🗄️ | SQL 미리보기 + 바인딩 파라미터 + 실행 시간 |
+| **외부 HTTP 호출** | 🌐 | URL + HTTP 메소드 + 상태코드 + 응답 시간 |
+| **파일 I/O** | 📁 | 파일 경로 + 읽기/쓰기 크기 + 소요 시간 |
+
+#### 슬로우 파일 I/O 자동 감지
+
+- **임계치**: 기본 50ms 초과 시 `⚠️ 슬로우 I/O` 표시 (설정: `aitop.fileio.slow-call.threshold-ms`)
+- **대용량 감지**: 읽기/쓰기 바이트 수 1MB 초과 시 별도 표시
+- **집계**: XLog 요약에 "File I/O N건 / 총 Xms ⚠️ 슬로우 N건" 형식으로 포함
 
 ---
 
