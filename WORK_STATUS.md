@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-23 (Session 33 — 수집 서버 데이터 저장 전략 반영 — StorageBackend 인터페이스, S3/Local/Dual 구현체, 설정 스키마)
+> **최종 업데이트**: 2026-03-23 (Session 35 — TO-DO Phase 순서 최적화 재정렬 — 의존성·가치·난이도 기반, 의존성 다이어그램 추가)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -25,41 +25,83 @@
 
 ```
 ═══════════════════════════════════════════════════════════════════════
-  완료된 작업 (Phase 1~16, Session 1~22)
+  완료된 작업 (Phase 1~6, 10~18)
 ═══════════════════════════════════════════════════════════════════════
 Phase 1~6:   OTel 인프라 + SDK + 대시보드 + Helm + CI/CD    ████████████ 100% ✅
 Phase 10~14: 상용 솔루션 UI (26개 화면)                       ████████████ 100% ✅
 Phase 15:    Agent MVP (Core+Collector+Fleet+gRPC+DB+S3)     ████████████ 100% ✅
 Phase 16:    Agent GA (IT/AI Collector+CLI+OTA+Fleet 콘솔)   ████████████ 100% ✅
+Phase 17:    Backend API + 실데이터 통합                       ████████████ 100% ✅
+Phase 18:    프론트엔드 품질 + 자동 테스트                     ████████████ 100% ✅
 
 ═══════════════════════════════════════════════════════════════════════
-  진행 중 / 예정 작업
+  TO-DO — 코드 작업 (최적화 순서, 의존성 다이어그램 참조)
 ═══════════════════════════════════════════════════════════════════════
 
-── 단기 (1~3개월) — 상용화 기반 ─────────────────────────────────────
-Phase 17: Backend API + 실데이터 통합    [██████████] 100%  ✅
-Phase 18: 프론트엔드 품질 + 자동 테스트  [██████████] 100%  ✅
-Phase 7': E2E 통합 검증 (재설계)         [███░░░░░░░]  30%  🔄 🔧
-Phase 8': Kubernetes 통합 배포           [░░░░░░░░░░]   0%  📋 🔧
-Phase 9': SLO 튜닝 + 운영 안정화        [░░░░░░░░░░]   0%  📋 🔧
+── 즉시 실행 가능 (인프라 불필요, 순수 코드 작업) ────────────────────────
+[01] Phase 27: StorageBackend 구현 (S3/Local/Dual)            [░░░░░░░░░░]   0%  📋
+[02] Phase 19: AI 가치 강화 (LLM 평가·Prompt Hub·비용 최적화)   [░░░░░░░░░░]   0%  📋
+[03] Phase 20: 운영 고도화 (이상 탐지·PDF 보고서·합성 모니터링)  [░░░░░░░░░░]   0%  📋
+[04] Phase 24: Java/.NET SDK + 메소드 프로파일링               [░░░░░░░░░░]   0%  📋
+[05] Phase 25: 서버 그룹 + SDK 자동 인식 + 중앙 설정 편집      [░░░░░░░░░░]   0%  📋
+[06] Phase 26: 미들웨어 런타임 모니터링 + Redis/Cache          [░░░░░░░░░░]   0%  📋
+[07] Phase 21: 엔터프라이즈 기능 (Profiling·Terraform·SSO)    [░░░░░░░░░░]   0%  📋
+[08] Phase 22: AI Copilot + 자동 탐색                         [░░░░░░░░░░]   0%  📋
+[09] Phase 23: 멀티 클라우드 + 모바일                          [░░░░░░░░░░]   0%  📋
 
-── 중기 (3~6개월) — 경쟁력 강화 ──────────────────────────────────────
-Phase 19: AI 가치 강화                   [░░░░░░░░░░]   0%  📋
-Phase 20: 운영 고도화                    [░░░░░░░░░░]   0%  📋
-Phase 21: 엔터프라이즈 기능              [░░░░░░░░░░]   0%  📋
-
-── 장기 (6~12개월) — 시장 리더십 ─────────────────────────────────────
-Phase 22: AI Copilot + 자동 탐색         [░░░░░░░░░░]   0%  📋
-Phase 23: 멀티 클라우드 + 모바일          [░░░░░░░░░░]   0%  📋
-Phase 24: Java/.NET SDK + 메소드 프로파일링[░░░░░░░░░░]   0%  📋
-Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 [░░░░░░░░░░]   0%  📋
-Phase 26: 미들웨어 런타임 모니터링                       [░░░░░░░░░░]   0%  📋
-Phase 27: Collection Server 저장 계층 구현               [░░░░░░░░░░]   0%  📋
+── 수작업 필요 (실제 인프라 환경, 코드 작업과 병렬/순차 진행) ───────────────
+[10] Phase  7': E2E 통합 검증 (병렬 진행 중)                   [███░░░░░░░]  30%  🔄 🔧
+[11] Phase  8': Kubernetes 통합 배포 (Phase 7' 완료 후)        [░░░░░░░░░░]   0%  📋 🔧
+[12] Phase  9': SLO 튜닝 + 운영 안정화 (Phase 8' 후 1~2주)    [░░░░░░░░░░]   0%  📋 🔧
 ```
 
 ---
 
-## Phase 17: Backend API + 실데이터 통합 🔄
+## Phase 의존성 다이어그램
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [완료 베이스]  →  [코드 TO-DO 순서]                    [수작업 TO-DO 🔧]       │
+│                                                                             │
+│  Phase 17 ✅ ──────────────────────► [01] Phase 27 (StorageBackend)         │
+│                                                                             │
+│  Phase 17 ✅ ─► [10] Phase 7' (🔧 30%) ──► [11] Phase 8' ──► [12] Phase 9' │
+│                                                                             │
+│  Phase 18 ✅ ──┬─► [02] Phase 19 (AI 가치) ─────────────────────────────┐  │
+│               │                                                          │  │
+│               └─► [03] Phase 20 (운영 고도화) ──────────────────────────┤  │
+│                                                                          ▼  │
+│                                                            [08] Phase 22    │
+│                                                                   │         │
+│                                                                   ▼         │
+│                                                            [09] Phase 23    │
+│                                                                             │
+│  (독립) ─► [04] Phase 24 (Java/.NET SDK) ──► [05] Phase 25 ──► [06] Phase 26│
+│                                                    │                        │
+│                                                    └──────► [07] Phase 21   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**순서 최적화 근거:**
+
+| 순번 | Phase | 배치 근거 |
+|------|-------|----------|
+| [01] | Phase 27 | Phase 17(✅) 기반 순수 Go 코드 — 즉시 시작 가능. K8s 배포(Phase 8') 전 스토리지 추상화 완성 필요. 가장 낮은 의존성·높은 즉시 가치 |
+| [02] | Phase 19 | 상용화 핵심 AI 차별화 — Arize/LangSmith 대비 경쟁 우위. Phase 22 Copilot의 LLM 평가·Prompt Hub 기반 선행 필요 |
+| [03] | Phase 20 | 이상 탐지 엔진이 Phase 22 Copilot 자연어 분석의 기반. PDF 보고서·합성 모니터링은 초기 고객 유지에 직결 |
+| [04] | Phase 24 | 엔터프라이즈 APM 시장(Java 45%+.NET 25%) 진입 — Phase 25 SDK 자동 인식의 선행 조건. 독립 레이어라 병행 가능 |
+| [05] | Phase 25 | Phase 24 SDK 언어 탐지 기반 — 서버 그룹 관리는 Phase 26 미들웨어 Collector 언어별 활성화의 선행 조건 |
+| [06] | Phase 26 | Phase 25 에이전트 그룹 + 중앙 설정 완료 후 언어별 Collector 자동 활성화 가능. Redis/Cache 포함 |
+| [07] | Phase 21 | Phase 24/25 SDK 기반 Profiling 구현 가능. SSO는 대기업 판매 필수 조건 — 앞선 SDK 기능 완성 후 세일즈 가속 |
+| [08] | Phase 22 | Phase 19 AI 가치 + Phase 20 이상 탐지 기반이 갖춰진 후 Copilot 구현 효과 극대화 |
+| [09] | Phase 23 | 글로벌 확장은 국내 상용화 안정 후 진행. Phase 22 Copilot 완성 후 차별화 강화 상태에서 진행 적합 |
+| [10] | Phase 7' | 인프라 필요(🔧) — 코드 작업과 병렬 진행 가능. E2E 스크립트 완성(30%), 실제 Docker 환경에서 실행만 대기 |
+| [11] | Phase 8' | Phase 7' E2E 검증 통과 후 K8s 배포. 수작업 특성상 코드 기능 완성 후 배포해야 재배포 최소화 |
+| [12] | Phase 9' | Phase 8' 프로덕션 배포 + 1~2주 운영 데이터 확보 후에만 SLO 임계치 튜닝 가능 — 항상 마지막 |
+
+---
+
+## Phase 17: Backend API + 실데이터 통합 ✅
 
 > **목표**: Collection Server를 본격 Backend API로 발전시키고, Frontend 전체 화면을 실데이터로 검증
 > **현재**: 테스트 환경 + API 훅 + E2E 시나리오 + 계약 테스트 완료 (40%)
@@ -155,86 +197,46 @@ npm run test:i18n     # i18n 커버리지 감사
 
 ---
 
-## Phase 7': E2E 통합 검증 (재설계) 🔄 🔧
+## [01] Phase 27: Collection Server 저장 계층 구현 📋
 
-> **목표**: 새 UI + Agent 기준으로 전체 시스템 E2E 검증
-> **전제**: Phase 17 Backend API 완성 후 진행
-> **원래**: Phase 7 (Grafana 기반) → Next.js UI로 교체됨에 따라 재설계
-> **참조**: [DOCS/E2E_REDESIGN.md](DOCS/E2E_REDESIGN.md) — 재설계 배경 + 검증 범위 + 성공 기준
+> **목표**: StorageBackend 인터페이스를 실제 Go 코드로 구현하고 Collection Server에 통합
+> **배경**: AGENT_DESIGN.md §7.6 설계 완료 (Session 33). 이제 구현 차례.
+> **의존성**: Phase 17 (Collection Server 기반) 완료 상태
+> **배치 근거**: Phase 17(✅) 기반 순수 Go 코드로 즉시 시작 가능. K8s 배포(Phase 8') 전 스토리지 추상화를 완성해야 프로덕션 전환이 매끄러움. 전체 TO-DO 중 의존성이 가장 낮고 구현 범위가 명확.
 
-| # | 작업 | 검증 항목 | 상태 |
-|---|------|----------|------|
-| 7'-1 | 로컬 Docker 통합 테스트 | 전체 스택 기동, 헬스체크, 텔레메트리 수집 확인 | ⚠️ 🔧 |
-| 7'-2 | 부하 테스트 + 샘플링 | Locust 4 시나리오, Tail Sampling 보존율, 비용 절감 효과 | ⚠️ 🔧 |
-| 7'-3 | Trace 연속성 검증 | 5 레이어 Trace ID 연속, Baggage 전달, Metric↔Log 상관관계 | ⚠️ 🔧 |
-| 7'-4 | 보안 감사 | OWASP Top 10, PII 마스킹 검증, mTLS 인증서 검증 | ⚠️ 🔧 |
+### 27-1. StorageBackend 인터페이스 구현
 
-**신규 파일 (Session 27 — 파일 생성 완료, 실행은 실제 인프라 필요):**
-- `DOCS/E2E_REDESIGN.md` — Phase 7' 재설계 문서 (배경/범위/성공기준/연관파일)
-- `docker-compose.e2e.yaml` — 전체 스택 E2E 환경 (10개 서비스: Frontend + Collection Server + PostgreSQL + MinIO + OTel + Prometheus + Tempo + Loki + Demo RAG + Locust)
-- `infra/docker/otelcol-e2e.yaml` — OTel Collector E2E 설정 (Tail Sampling 5정책 포함)
-- `scripts/e2e/healthcheck.sh` — 9개 서비스 헬스체크 + OTel OTLP Span 전송 + MinIO 버킷 + PostgreSQL DB 확인
-- `scripts/e2e/trace-continuity.sh` — 5레이어 Trace 연속성 + W3C traceparent/Baggage + Tempo TraceQL + Metric↔Log 상관관계
-- `scripts/e2e/security-audit.sh` — OWASP A01~A10 체크리스트 + PII 마스킹 + mTLS + SQL/XSS/Command Injection
-- `locust/locustfile.py` — 4개 시나리오 (APIQueryUser 60% / AgentRegUser 10% / HeartbeatUser 20% / CollectTrigUser 10%)
-- `locust/locust.conf` — Locust 설정 (200 users, 10 spawn-rate, 10분 run-time)
-- `agent/Makefile` — e2e 타겟 8개 추가 (e2e-up/down/logs/ps/health/trace/security/load/load-ui/all)
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 27-1-1 | StorageBackend 인터페이스 + 팩토리 | `pkg/storage/backend.go`, `factory.go` — Type/Put/PutStream/Get/List/Delete/Purge | 0.5주 | 📋 |
+| 27-1-2 | LocalBackend 구현 | `pkg/storage/local_backend.go` — os 패키지 기반, 디렉터리 자동 생성, retention 정리 | 0.5주 | 📋 |
+| 27-1-3 | S3Backend 구현 | `pkg/storage/s3_backend.go` — minio-go SDK, AWS S3 + MinIO 호환, Purge(배치 삭제) | 1주 | 📋 |
+| 27-1-4 | DualBackend 구현 | `pkg/storage/dual_backend.go` — primary(S3) 성공 후 secondary(Local) 비동기 복사 | 0.5주 | 📋 |
+| 27-1-5 | 단위 테스트 | `pkg/storage/*_test.go` — LocalBackend(임시 디렉터리), S3Backend(MinIO mock), DualBackend | 1주 | 📋 |
 
-**실행 방법 (Docker 환경 필요):**
-```bash
-# 전체 스택 기동
-make -C agent e2e-up
+### 27-2. Collection Server 통합
 
-# 헬스체크 (서비스 기동 후 60초 대기)
-make -C agent e2e-health
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 27-2-1 | server.yaml 스키마 확장 | `config/config.go` — StorageConfig 구조체 추가, `storage.type` 유효성 검증 | 0.5주 | 📋 |
+| 27-2-2 | gRPC Receiver 연동 | Evidence 수신 시 `StorageBackend.Put()` 호출, `evidence_storage_path` DB 저장 | 0.5주 | 📋 |
+| 27-2-3 | DB 마이그레이션 | `collection_jobs.evidence_s3_path` → `evidence_storage_path` 컬럼명 변경 + 마이그레이션 스크립트 | 0.5주 | 📋 |
+| 27-2-4 | Purge 스케줄러 | Collection Server 내 주기적 정리 고루틴 (`local` 모드 retention-days 적용) | 0.5주 | 📋 |
 
-# Trace 연속성 검증
-make -C agent e2e-trace
+### 27-3. 테스트 환경 반영
 
-# 보안 감사
-make -C agent e2e-security
-
-# 부하 테스트 (locust 설치 필요: pip install locust)
-make -C agent e2e-load
-
-# 전체 순서 실행
-make -C agent e2e-all
-```
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 27-3-1 | docker-compose.test.yaml 수정 | `storage.type: "local"` 기본값으로 변경 — MinIO 컨테이너 선택적으로 전환 | 0.5주 | 📋 |
+| 27-3-2 | E2E 시나리오 갱신 | scripts/phase17-3/02-pipeline-verify.sh — local 모드에서 Evidence 파일 존재 확인 | 0.5주 | 📋 |
 
 ---
 
-## Phase 8': Kubernetes 통합 배포 📋 🔧
-
-> **목표**: Next.js Frontend + Collection Server + Agent를 Helm으로 통합 배포
-> **전제**: Phase 7' 검증 통과 후 진행
-
-| # | 작업 | 상세 | 상태 |
-|---|------|------|------|
-| 8'-1 | Frontend Dockerfile + Helm | Next.js 프로덕션 빌드 + Helm 서브차트 추가 | 📋 🔧 |
-| 8'-2 | Collection Server Helm | gRPC + REST + PostgreSQL + MinIO 연동 Helm 차트 | 📋 🔧 |
-| 8'-3 | Helm Dry-Run + 스테이징 | dev/prod dry-run, 스테이징 배포, Pod 상태 확인 | 📋 🔧 |
-| 8'-4 | 프로덕션 배포 | Thanos S3, Alertmanager → Slack/PagerDuty, Grafana Ingress+TLS | 📋 🔧 |
-| 8'-5 | DEB/RPM 패키지 실빌드 | nfpm → DEB/RPM 실제 빌드 + 설치 검증 | 📋 🔧 |
-
----
-
-## Phase 9': SLO 튜닝 + 운영 안정화 📋 🔧
-
-> **목표**: 프로덕션 운영 데이터 기반 임계치 튜닝
-> **전제**: Phase 8' 프로덕션 배포 후 1~2주 운영 데이터 확보
-
-| # | 작업 | 상세 | 상태 |
-|---|------|------|------|
-| 9'-1 | SLO 임계치 튜닝 | TTFT/TPS/가드레일/GPU/에러율 실측 후 ±20% 조정 | 📋 🔧 |
-| 9'-2 | Tail Sampling 최적화 | 정책별 보존율 확인, 비용 목표 달성 (~$200/월 @1K RPS) | 📋 🔧 |
-| 9'-3 | 대시보드 커스터마이징 | 팀별 필터, 비즈니스 KPI, On-Call 링크 | 📋 🔧 |
-
----
-
-## Phase 19: AI 가치 강화 📋
+## [02] Phase 19: AI 가치 강화 📋
 
 > **목표**: 경쟁 솔루션(Arize, LangSmith) 대비 AI 기능 차별화 강화
 > **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.2 #1~2, #7
+> **배치 근거**: 상용화 핵심 AI 차별화 기능 — LLM 평가·Prompt Hub는 Phase 22 Copilot의 기반이 되므로 선행 필요. 경쟁사 대비 우위를 조기에 확보해야 영업 사이클에 반영 가능.
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
@@ -244,10 +246,11 @@ make -C agent e2e-all
 
 ---
 
-## Phase 20: 운영 고도화 📋
+## [03] Phase 20: 운영 고도화 📋
 
 > **목표**: 운영 효율성 + 자동화 수준 향상
 > **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.2 #3, #5~6
+> **배치 근거**: 이상 탐지 엔진(20-1)이 Phase 22 AI Copilot 자연어 분석의 핵심 기반. PDF 보고서(20-2)는 초기 고객 유지 및 계약 갱신에 직결. 합성 모니터링(20-3)은 SLO 프로브로 Phase 9' 튜닝에도 활용.
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
@@ -257,52 +260,12 @@ make -C agent e2e-all
 
 ---
 
-## Phase 21: 엔터프라이즈 기능 📋
-
-> **목표**: 대기업 고객 요구사항 충족
-> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.2 #4, §4.3 #6
-
-| # | 작업 | 상세 | 예상 공수 | 상태 |
-|---|------|------|----------|------|
-| 21-1 | Continuous Profiling | Go/Python/Java CPU/Memory Flame Graph → Trace 연결 | 3주 | 📋 |
-| 21-2 | Terraform Provider | AITOP 리소스 (알림, SLO, 대시보드)를 IaC로 관리 | 3주 | 📋 |
-| 21-3 | SSO (SAML/OIDC) | 엔터프라이즈 SSO 연동 (Okta, Azure AD, Google Workspace) | 2주 | 📋 |
-
----
-
-## Phase 22: AI Copilot + 자동 탐색 📋
-
-> **목표**: AI 기반 자동화로 사용자 경험 혁신
-> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.3 #1~2, #8
-
-| # | 작업 | 상세 | 예상 공수 | 상태 |
-|---|------|------|----------|------|
-| 22-1 | AI Copilot | "TTFT가 높은 서비스?" 자연어 → PromQL 변환, 대화형 분석 | 4주 | 📋 |
-| 22-2 | 토폴로지 자동 탐색 | 에이전트가 네트워크 연결 기반 서비스 의존관계 자동 발견 | 3주 | 📋 |
-| 22-3 | Fine-tuning 모니터링 | 학습 loss/accuracy 추적, 체크포인트 관리, 학습-추론 비교 | 4주 | 📋 |
-
----
-
-## Phase 23: 멀티 클라우드 + 모바일 📋
-
-> **목표**: 글로벌 시장 대응
-> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.3 #3~5, #7
-
-| # | 작업 | 상세 | 예상 공수 | 상태 |
-|---|------|------|----------|------|
-| 23-1 | 멀티 클라우드 통합 | AWS/GCP/Azure 리소스 비용 + 성능 통합 뷰 | 4주 | 📋 |
-| 23-2 | 모바일 앱 | iOS/Android 알림 + 기본 대시보드 | 6주 | 📋 |
-| 23-3 | Data Pipeline 모니터링 | Airflow, Prefect, Dagster ML 파이프라인 추적 | 3주 | 📋 |
-| 23-4 | 비즈니스 KPI 연동 | AI 메트릭 → 매출/전환율 상관관계 | 3주 | 📋 |
-| 23-5 | 글로벌 마켓플레이스 | 플러그인/대시보드/프롬프트 공유 | 4주 | 📋 |
-
----
-
-## Phase 24: Java/.NET SDK + 메소드 프로파일링 📋
+## [04] Phase 24: Java/.NET SDK + 메소드 프로파일링 📋
 
 > **목표**: 엔터프라이즈 APM 시장(Java 45% / .NET 25%)으로 확장, 기존 APM 대비 AI 통합 모니터링 차별화
 > **전제**: Phase 21~23 이후 진행 또는 병렬 진행 가능 (독립적인 SDK 레이어)
 > **참조**: [DOCS/JAVA_DOTNET_SDK_DESIGN.md](DOCS/JAVA_DOTNET_SDK_DESIGN.md) — 상세 설계 문서
+> **배치 근거**: 독립 SDK 레이어로 다른 Phase와 병렬 가능. Phase 25 SDK 자동 인식·언어 탐지의 선행 조건. 엔터프라이즈 고객 확보를 위한 Java/Spring → Python LLM 통합 트레이스는 업계 차별화 포인트.
 
 ### 24-1. Java SDK MVP
 
@@ -343,11 +306,12 @@ make -C agent e2e-all
 
 ---
 
-## Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 📋
+## [05] Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 📋
 
 > **목표**: 대규모 서버 환경에서 서버 그룹화 및 그룹 단위 관리, UI 기반 에이전트 설정 원격 편집, SDK/에이전트 자동 탐지 기능 구현
 > **선행 조건**: Phase 24 (Java/.NET SDK) 완료 또는 병행 가능 (독립 기능)
 > **참조**: [DOCS/AGENT_DESIGN.md §5.5~5.8](DOCS/AGENT_DESIGN.md) · [DOCS/UI_DESIGN.md §8.3~8.6](DOCS/UI_DESIGN.md)
+> **배치 근거**: Phase 24 SDK 언어 탐지(telemetry.sdk.language)를 기반으로 SDK 자동 인식이 완성됨. 서버 그룹 관리는 Phase 26 미들웨어 Collector 언어별 자동 활성화의 선행 조건.
 
 ### 25-1. SDK / 에이전트 자동 인식
 
@@ -388,11 +352,12 @@ make -C agent e2e-all
 
 ---
 
-## Phase 26: 미들웨어 런타임 모니터링 📋
+## [06] Phase 26: 미들웨어 런타임 모니터링 📋
 
 > **목표**: Java/..NET/Node.js/Python/Go 언어별 런타임 미들웨어(스레드 풀, 커넥션 풀, 이벤트 루프, 워커, 고루틴)를 실시간 수집·시각화하고, 메시지 큐(Kafka/RabbitMQ/ActiveMQ) 상태를 통합 모니터링한다.
 > **선행 조건**: Phase 25 (에이전트 그룹 관리 + 중앙 설정) 완료 후 진행
 > **참조**: [DOCS/AGENT_DESIGN.md §3.2.5](DOCS/AGENT_DESIGN.md) · [DOCS/UI_DESIGN.md §8.7](DOCS/UI_DESIGN.md) · [DOCS/METRICS_DESIGN.md §13](DOCS/METRICS_DESIGN.md)
+> **배치 근거**: Phase 25의 서버 그룹 관리·중앙 설정·언어 자동 감지가 완성돼야 언어별 Collector 자동 활성화가 가능. Redis/Cache Collector(26-5) 포함으로 데이터베이스 계층까지 통합 가시성 확보.
 
 ### 26-1. 언어별 미들웨어 Collector 구현
 
@@ -449,37 +414,126 @@ make -C agent e2e-all
 
 ---
 
-## Phase 27: Collection Server 저장 계층 구현 📋
+## [07] Phase 21: 엔터프라이즈 기능 📋
 
-> **목표**: StorageBackend 인터페이스를 실제 Go 코드로 구현하고 Collection Server에 통합
-> **배경**: AGENT_DESIGN.md §7.6 설계 완료 (Session 33). 이제 구현 차례.
-> **의존성**: Phase 17 (Collection Server 기반) 완료 상태
-
-### 27-1. StorageBackend 인터페이스 구현
+> **목표**: 대기업 고객 요구사항 충족
+> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.2 #4, §4.3 #6
+> **배치 근거**: Phase 24/25 SDK 기반이 완성돼야 Continuous Profiling 구현 가능. Terraform Provider는 Phase 26 미들웨어 리소스까지 포함해야 완전함. SSO는 대기업 판매 시 필수 조건 — SDK·미들웨어 기능 완성 후 세일즈 가속에 활용.
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 27-1-1 | StorageBackend 인터페이스 + 팩토리 | `pkg/storage/backend.go`, `factory.go` — Type/Put/PutStream/Get/List/Delete/Purge | 0.5주 | 📋 |
-| 27-1-2 | LocalBackend 구현 | `pkg/storage/local_backend.go` — os 패키지 기반, 디렉터리 자동 생성, retention 정리 | 0.5주 | 📋 |
-| 27-1-3 | S3Backend 구현 | `pkg/storage/s3_backend.go` — minio-go SDK, AWS S3 + MinIO 호환, Purge(배치 삭제) | 1주 | 📋 |
-| 27-1-4 | DualBackend 구현 | `pkg/storage/dual_backend.go` — primary(S3) 성공 후 secondary(Local) 비동기 복사 | 0.5주 | 📋 |
-| 27-1-5 | 단위 테스트 | `pkg/storage/*_test.go` — LocalBackend(임시 디렉터리), S3Backend(MinIO mock), DualBackend | 1주 | 📋 |
+| 21-1 | Continuous Profiling | Go/Python/Java CPU/Memory Flame Graph → Trace 연결 | 3주 | 📋 |
+| 21-2 | Terraform Provider | AITOP 리소스 (알림, SLO, 대시보드)를 IaC로 관리 | 3주 | 📋 |
+| 21-3 | SSO (SAML/OIDC) | 엔터프라이즈 SSO 연동 (Okta, Azure AD, Google Workspace) | 2주 | 📋 |
 
-### 27-2. Collection Server 통합
+---
 
-| # | 작업 | 상세 | 예상 공수 | 상태 |
-|---|------|------|----------|------|
-| 27-2-1 | server.yaml 스키마 확장 | `config/config.go` — StorageConfig 구조체 추가, `storage.type` 유효성 검증 | 0.5주 | 📋 |
-| 27-2-2 | gRPC Receiver 연동 | Evidence 수신 시 `StorageBackend.Put()` 호출, `evidence_storage_path` DB 저장 | 0.5주 | 📋 |
-| 27-2-3 | DB 마이그레이션 | `collection_jobs.evidence_s3_path` → `evidence_storage_path` 컬럼명 변경 + 마이그레이션 스크립트 | 0.5주 | 📋 |
-| 27-2-4 | Purge 스케줄러 | Collection Server 내 주기적 정리 고루틴 (`local` 모드 retention-days 적용) | 0.5주 | 📋 |
+## [08] Phase 22: AI Copilot + 자동 탐색 📋
 
-### 27-3. 테스트 환경 반영
+> **목표**: AI 기반 자동화로 사용자 경험 혁신
+> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.3 #1~2, #8
+> **배치 근거**: Phase 19 LLM 평가·Prompt Hub와 Phase 20 이상 탐지 엔진이 갖춰진 후에 Copilot 구현 효과가 극대화됨. 자연어 → PromQL 변환의 정확도는 Phase 19 기반 품질 데이터에 의존.
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 27-3-1 | docker-compose.test.yaml 수정 | `storage.type: "local"` 기본값으로 변경 — MinIO 컨테이너 선택적으로 전환 | 0.5주 | 📋 |
-| 27-3-2 | E2E 시나리오 갱신 | scripts/phase17-3/02-pipeline-verify.sh — local 모드에서 Evidence 파일 존재 확인 | 0.5주 | 📋 |
+| 22-1 | AI Copilot | "TTFT가 높은 서비스?" 자연어 → PromQL 변환, 대화형 분석 | 4주 | 📋 |
+| 22-2 | 토폴로지 자동 탐색 | 에이전트가 네트워크 연결 기반 서비스 의존관계 자동 발견 | 3주 | 📋 |
+| 22-3 | Fine-tuning 모니터링 | 학습 loss/accuracy 추적, 체크포인트 관리, 학습-추론 비교 | 4주 | 📋 |
+
+---
+
+## [09] Phase 23: 멀티 클라우드 + 모바일 📋
+
+> **목표**: 글로벌 시장 대응
+> **참조**: [SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md) §4.3 #3~5, #7
+> **배치 근거**: 글로벌 확장은 국내 상용화 안정 이후 진행. Phase 22 Copilot·토폴로지 탐색이 완성된 상태에서 멀티 클라우드 통합의 차별화 가치가 극대화됨.
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 23-1 | 멀티 클라우드 통합 | AWS/GCP/Azure 리소스 비용 + 성능 통합 뷰 | 4주 | 📋 |
+| 23-2 | 모바일 앱 | iOS/Android 알림 + 기본 대시보드 | 6주 | 📋 |
+| 23-3 | Data Pipeline 모니터링 | Airflow, Prefect, Dagster ML 파이프라인 추적 | 3주 | 📋 |
+| 23-4 | 비즈니스 KPI 연동 | AI 메트릭 → 매출/전환율 상관관계 | 3주 | 📋 |
+| 23-5 | 글로벌 마켓플레이스 | 플러그인/대시보드/프롬프트 공유 | 4주 | 📋 |
+
+---
+
+## [10] Phase 7': E2E 통합 검증 (재설계) 🔄 🔧
+
+> **목표**: 새 UI + Agent 기준으로 전체 시스템 E2E 검증
+> **전제**: Phase 17 Backend API 완성 후 진행
+> **원래**: Phase 7 (Grafana 기반) → Next.js UI로 교체됨에 따라 재설계
+> **참조**: [DOCS/E2E_REDESIGN.md](DOCS/E2E_REDESIGN.md) — 재설계 배경 + 검증 범위 + 성공 기준
+> **배치 근거**: 인프라 필요(🔧)로 코드 작업과 병렬 진행 가능. E2E 스크립트는 이미 완성(30%)되어 실제 Docker 환경 실행만 대기 중. 코드 작업 블로커가 아니므로 수작업 영역으로 분리.
+
+| # | 작업 | 검증 항목 | 상태 |
+|---|------|----------|------|
+| 7'-1 | 로컬 Docker 통합 테스트 | 전체 스택 기동, 헬스체크, 텔레메트리 수집 확인 | ⚠️ 🔧 |
+| 7'-2 | 부하 테스트 + 샘플링 | Locust 4 시나리오, Tail Sampling 보존율, 비용 절감 효과 | ⚠️ 🔧 |
+| 7'-3 | Trace 연속성 검증 | 5 레이어 Trace ID 연속, Baggage 전달, Metric↔Log 상관관계 | ⚠️ 🔧 |
+| 7'-4 | 보안 감사 | OWASP Top 10, PII 마스킹 검증, mTLS 인증서 검증 | ⚠️ 🔧 |
+
+**신규 파일 (Session 27 — 파일 생성 완료, 실행은 실제 인프라 필요):**
+- `DOCS/E2E_REDESIGN.md` — Phase 7' 재설계 문서 (배경/범위/성공기준/연관파일)
+- `docker-compose.e2e.yaml` — 전체 스택 E2E 환경 (10개 서비스: Frontend + Collection Server + PostgreSQL + MinIO + OTel + Prometheus + Tempo + Loki + Demo RAG + Locust)
+- `infra/docker/otelcol-e2e.yaml` — OTel Collector E2E 설정 (Tail Sampling 5정책 포함)
+- `scripts/e2e/healthcheck.sh` — 9개 서비스 헬스체크 + OTel OTLP Span 전송 + MinIO 버킷 + PostgreSQL DB 확인
+- `scripts/e2e/trace-continuity.sh` — 5레이어 Trace 연속성 + W3C traceparent/Baggage + Tempo TraceQL + Metric↔Log 상관관계
+- `scripts/e2e/security-audit.sh` — OWASP A01~A10 체크리스트 + PII 마스킹 + mTLS + SQL/XSS/Command Injection
+- `locust/locustfile.py` — 4개 시나리오 (APIQueryUser 60% / AgentRegUser 10% / HeartbeatUser 20% / CollectTrigUser 10%)
+- `locust/locust.conf` — Locust 설정 (200 users, 10 spawn-rate, 10분 run-time)
+- `agent/Makefile` — e2e 타겟 8개 추가 (e2e-up/down/logs/ps/health/trace/security/load/load-ui/all)
+
+**실행 방법 (Docker 환경 필요):**
+```bash
+# 전체 스택 기동
+make -C agent e2e-up
+
+# 헬스체크 (서비스 기동 후 60초 대기)
+make -C agent e2e-health
+
+# Trace 연속성 검증
+make -C agent e2e-trace
+
+# 보안 감사
+make -C agent e2e-security
+
+# 부하 테스트 (locust 설치 필요: pip install locust)
+make -C agent e2e-load
+
+# 전체 순서 실행
+make -C agent e2e-all
+```
+
+---
+
+## [11] Phase 8': Kubernetes 통합 배포 📋 🔧
+
+> **목표**: Next.js Frontend + Collection Server + Agent를 Helm으로 통합 배포
+> **전제**: Phase 7' 검증 통과 후 진행
+> **배치 근거**: Phase 7' E2E 검증 통과가 필수 선행 조건. 수작업 특성상 코드 기능(Phase 27·19~26)이 완성된 후 배포해야 재배포 횟수 최소화. Phase 27 StorageBackend 구현 완료 후 배포해야 S3/Local 선택이 가능.
+
+| # | 작업 | 상세 | 상태 |
+|---|------|------|------|
+| 8'-1 | Frontend Dockerfile + Helm | Next.js 프로덕션 빌드 + Helm 서브차트 추가 | 📋 🔧 |
+| 8'-2 | Collection Server Helm | gRPC + REST + PostgreSQL + MinIO 연동 Helm 차트 | 📋 🔧 |
+| 8'-3 | Helm Dry-Run + 스테이징 | dev/prod dry-run, 스테이징 배포, Pod 상태 확인 | 📋 🔧 |
+| 8'-4 | 프로덕션 배포 | Thanos S3, Alertmanager → Slack/PagerDuty, Grafana Ingress+TLS | 📋 🔧 |
+| 8'-5 | DEB/RPM 패키지 실빌드 | nfpm → DEB/RPM 실제 빌드 + 설치 검증 | 📋 🔧 |
+
+---
+
+## [12] Phase 9': SLO 튜닝 + 운영 안정화 📋 🔧
+
+> **목표**: 프로덕션 운영 데이터 기반 임계치 튜닝
+> **전제**: Phase 8' 프로덕션 배포 후 1~2주 운영 데이터 확보
+> **배치 근거**: Phase 8' 프로덕션 배포 + 실제 트래픽 1~2주 관측 후에만 SLO 임계치 실측 가능. Phase 20-3 합성 모니터링이 SLO 프로브로 활용됨. 항상 수작업 영역의 마지막 단계.
+
+| # | 작업 | 상세 | 상태 |
+|---|------|------|------|
+| 9'-1 | SLO 임계치 튜닝 | TTFT/TPS/가드레일/GPU/에러율 실측 후 ±20% 조정 | 📋 🔧 |
+| 9'-2 | Tail Sampling 최적화 | 정책별 보존율 확인, 비용 목표 달성 (~$200/월 @1K RPS) | 📋 🔧 |
+| 9'-3 | 대시보드 커스터마이징 | 팀별 필터, 비즈니스 KPI, On-Call 링크 | 📋 🔧 |
 
 ---
 
