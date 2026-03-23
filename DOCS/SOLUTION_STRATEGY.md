@@ -748,6 +748,78 @@ Phase 27:        Continuous Profiling 통합
 
 ---
 
+## 8. 라이선싱 & OSS 컴플라이언스 전략
+
+> **분석일**: 2026-03-23
+> **목적**: 상용 판매 시 오픈소스 라이선스 리스크 사전 파악 및 대응 전략 수립
+
+### 8.1 AITOP 자체 코드 — 라이선스 클린
+
+AITOP 핵심 코드(Collection Server, Agent, Frontend)의 의존성은 모두 상용 호환 라이선스입니다.
+
+| 영역 | 주요 의존성 | 라이선스 | 상용 사용 |
+|------|-----------|---------|----------|
+| **Go (Agent/Server)** | minio-go/v7, modernc.org/sqlite, google/uuid 등 | Apache 2.0 / MIT / BSD-3 | ✅ 허용 |
+| **Frontend (Next.js)** | React, D3, ECharts, Zustand, Tailwind 등 (540+ 패키지) | MIT / ISC / Apache 2.0 (99%) | ✅ 허용 |
+
+**경미한 주의 사항:**
+
+| 패키지 | 라이선스 | 위험도 | 조치 |
+|--------|---------|--------|------|
+| `@img/sharp-win32-x64` (Next.js 이미지 최적화) | LGPL-3.0 | 중간 | 동적 링크 방식 — 대체로 안전, 법률 검토 권장 |
+| `caniuse-lite` (브라우저 호환성 데이터) | CC-BY-4.0 | 낮음 | 저작자 표기(attribution) 필요 |
+
+### 8.2 인프라 컴포넌트 — AGPL-3.0 리스크
+
+현재 docker-compose 스택에 포함된 **4개 컴포넌트가 AGPL-3.0** 라이선스입니다.
+AGPL-3.0은 네트워크를 통해 서비스하는 것만으로도 소스코드 공개 의무가 발생할 수 있습니다.
+
+| 컴포넌트 | 라이선스 | 역할 | 위험도 |
+|---------|---------|------|--------|
+| Grafana 11.x | **AGPL-3.0** | 시각화 대시보드 | ⚠ 위험 |
+| Grafana Tempo 2.5 | **AGPL-3.0** | 분산 트레이싱 저장 | ⚠ 위험 |
+| Grafana Loki 3.1 | **AGPL-3.0** | 로그 집계/저장 | ⚠ 위험 |
+| MinIO | **AGPL-3.0** | S3 호환 오브젝트 스토리지 | ⚠ 위험 |
+
+**안전한 인프라 컴포넌트:**
+
+| 컴포넌트 | 라이선스 | 상용 사용 |
+|---------|---------|----------|
+| PostgreSQL | PostgreSQL License | ✅ 안전 |
+| Prometheus | Apache 2.0 | ✅ 안전 |
+| OTel Collector | Apache 2.0 | ✅ 안전 |
+| Nginx | BSD 2-Clause | ✅ 안전 |
+| Jaeger | Apache 2.0 | ✅ 안전 |
+
+### 8.3 배포 시나리오별 AGPL 영향
+
+| 배포 방식 | AGPL 의무 발생? | 설명 |
+|----------|----------------|------|
+| **SaaS** (AITOP이 서버 운영) | **YES** | AGPL 소프트웨어를 서버에서 실행 = 소스 공개 의무 |
+| **번들 Docker 스택** 납품 | **YES** | AGPL 소프트웨어 배포 = 소스 공개 의무 |
+| **Core만 납품** (고객이 인프라 구성) | **NO** | 자체 코드만 배포, AGPL 해당 없음 |
+
+### 8.4 AGPL-free 대안 전략
+
+AITOP은 이미 대부분의 AGPL 컴포넌트를 대체할 수 있는 자체 구현을 보유하고 있습니다.
+
+| AGPL 컴포넌트 | 대안 | 대안 라이선스 | 현재 상태 |
+|--------------|------|-------------|----------|
+| **Grafana** | 자체 Next.js UI (26개 화면) | 자체 코드 | ✅ 이미 대체 완료 |
+| **MinIO** | LocalBackend (Phase 27) / AWS S3 | 자체 코드 / 상용 | ✅ 이미 대체 가능 |
+| **Tempo** | Jaeger | Apache 2.0 | 📋 전환 필요 (Phase 30) |
+| **Loki** | 자체 로그 뷰어 또는 Elasticsearch (SSPL 주의) | 자체 코드 | 📋 전환 필요 (Phase 30) |
+
+### 8.5 상용 출시 전 필수 조치
+
+1. **`THIRD_PARTY_LICENSES.md` 생성** — 모든 서드파티 라이선스 명시
+2. **docker-compose에 라이선스 고지** — AGPL 컴포넌트에 라이선스 주석 추가
+3. **배포 구조 분리** — AITOP Core (자체 코드)와 Optional Infrastructure (AGPL) 명확 분리
+4. **AGPL-free 스택 옵션 제공** — Tempo→Jaeger, Loki→자체 로그, MinIO→LocalBackend/AWS S3
+5. **법률 자문** — LGPL(Sharp), AGPL(인프라) 관련 최종 법률 검토
+
+---
+
 ## 결론
 
 AITOP은 **APM + AI Observability + Infrastructure Monitoring**을 단일 플랫폼에서 제공하는 독보적인 포지셔닝을 가지고 있습니다.
