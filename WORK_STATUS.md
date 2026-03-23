@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-23 (Session 31 — SDK 자동 인식·서버 그룹 관리·중앙 설정 편집·설정 반영 수준 설계 반영)
+> **최종 업데이트**: 2026-03-23 (Session 32 — 미들웨어 런타임 모니터링 설계 반영 — 언어별 Collector·Connection Pool·메시지 큐·대시보드)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -53,6 +53,7 @@ Phase 22: AI Copilot + 자동 탐색         [░░░░░░░░░░]   
 Phase 23: 멀티 클라우드 + 모바일          [░░░░░░░░░░]   0%  📋
 Phase 24: Java/.NET SDK + 메소드 프로파일링[░░░░░░░░░░]   0%  📋
 Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 [░░░░░░░░░░]   0%  📋
+Phase 26: 미들웨어 런타임 모니터링                       [░░░░░░░░░░]   0%  📋
 ```
 
 ---
@@ -386,15 +387,61 @@ make -C agent e2e-all
 
 ---
 
+## Phase 26: 미들웨어 런타임 모니터링 📋
+
+> **목표**: Java/..NET/Node.js/Python/Go 언어별 런타임 미들웨어(스레드 풀, 커넥션 풀, 이벤트 루프, 워커, 고루틴)를 실시간 수집·시각화하고, 메시지 큐(Kafka/RabbitMQ/ActiveMQ) 상태를 통합 모니터링한다.
+> **선행 조건**: Phase 25 (에이전트 그룹 관리 + 중앙 설정) 완료 후 진행
+> **참조**: [DOCS/AGENT_DESIGN.md §3.2.5](DOCS/AGENT_DESIGN.md) · [DOCS/UI_DESIGN.md §8.7](DOCS/UI_DESIGN.md) · [DOCS/METRICS_DESIGN.md §13](DOCS/METRICS_DESIGN.md)
+
+### 26-1. 언어별 미들웨어 Collector 구현
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 26-1-1 | Java 미들웨어 Collector | JMX MBean (Thread Pool + HikariCP/DBCP/C3P0 + Session) + jcmd 통합 수집 | 1.5주 | 📋 |
+| 26-1-2 | .NET 미들웨어 Collector | dotnet-counters / CLR EventSource (Kestrel + Thread Pool + GC + EF Core Pool) | 1.5주 | 📋 |
+| 26-1-3 | Node.js 미들웨어 Collector | Event Loop Lag/Utilization (`perf_hooks`) + Active Connections + pg-pool/mongoose Pool | 1주 | 📋 |
+| 26-1-4 | Python 미들웨어 Collector | Gunicorn stats socket + Worker Pool + SQLAlchemy Pool (`engine.pool.status()`) | 1주 | 📋 |
+| 26-1-5 | Go 미들웨어 Collector | `runtime.NumGoroutine()` + `sql.DB.Stats()` + `/debug/vars` 수집 | 1주 | 📋 |
+| 26-1-6 | 언어 자동 감지 로직 | Heartbeat `runtime_language` 필드 + 프로세스/패키지 탐지 → Collector 자동 활성화 | 0.5주 | 📋 |
+
+### 26-2. Connection Pool 실시간 모니터링
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 26-2-1 | 커넥션 풀 메트릭 표준화 | `middleware.connection_pool.*` 네임스페이스 — 8개 구현체 통합 (HikariCP/DBCP/EF Core/pg-pool 등) | 1주 | 📋 |
+| 26-2-2 | 누수 감지 알림 | active/max ≥ 90% 경고, pending > 0 이 30초 지속 시 PagerDuty | 0.5주 | 📋 |
+| 26-2-3 | Connection Pool 대시보드 UI | Active/Idle 게이지 + 대기 시간 히스토그램(P50/P95/P99) + 누수 알림 패널 | 1.5주 | 📋 |
+
+### 26-3. 메시지 큐 모니터링
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 26-3-1 | Kafka Collector | Consumer Group Lag (파티션별), Producer sent rate, Topic offset — kafka-consumer-groups.sh + JMX | 1주 | 📋 |
+| 26-3-2 | RabbitMQ Collector | Queue Depth + Consumer 수 + Publish/Deliver rate — Management HTTP API (`/api/queues`) | 0.5주 | 📋 |
+| 26-3-3 | ActiveMQ Collector | Queue Depth + Enqueue/Dequeue count + Consumer count — JMX + Jolokia REST | 0.5주 | 📋 |
+| 26-3-4 | 메시지 큐 대시보드 UI | Kafka Lag 차트 + RabbitMQ Queue Depth 스파크라인 + 지연 경보 패널 | 1주 | 📋 |
+
+### 26-4. 미들웨어 전용 대시보드 UI
+
+| # | 작업 | 상세 | 예상 공수 | 상태 |
+|---|------|------|----------|------|
+| 26-4-1 | 언어별 대시보드 자동 생성 | `runtime_language` 감지 후 해당 언어 미들웨어 패널 세트 자동 활성화 | 1주 | 📋 |
+| 26-4-2 | Thread Pool 실시간 뷰 | Active/Idle/Max 게이지 + Queue 깊이 스파크라인 (Java/.NET) | 1주 | 📋 |
+| 26-4-3 | Event Loop 실시간 뷰 | Lag 라인 차트 + Utilization 게이지 + 100ms 경고선 (Node.js) | 0.5주 | 📋 |
+| 26-4-4 | Worker Pool 실시간 뷰 | Active/Idle 바 차트 + Restart 카운터 (Python) | 0.5주 | 📋 |
+| 26-4-5 | Goroutine 누수 감지 뷰 | Count 라인 차트 + 기준값 × 2배 경계선 + pprof 딥링크 (Go) | 0.5주 | 📋 |
+
+---
+
 ## 문서 현황
 
 | 파일 경로 | 상태 | 비고 |
 |-----------|------|------|
 | `DOCS/ARCHITECTURE.md` | ✅ v2.0.1 | OTel + Agent 통합 아키텍처 (Java/.NET 언급 추가) |
-| `DOCS/METRICS_DESIGN.md` | ✅ v2.0.1 | 지표 정의 + Agent 수집 메트릭 매핑 (12개 섹션, Java/.NET 추가) |
+| `DOCS/METRICS_DESIGN.md` | ✅ v2.1.0 | 지표 정의 + Agent 수집 메트릭 매핑 (13개 섹션) — 미들웨어 런타임 메트릭 추가 (§13) |
 | `DOCS/JAVA_DOTNET_SDK_DESIGN.md` | ✅ v1.1.0 | Java/.NET SDK 및 메소드 프로파일링 통합 설계 — 설정 항목별 반영 수준(🟢🟡🔴) 추가 |
-| `DOCS/UI_DESIGN.md` | ✅ v2.1.0 | 통합 모니터링 UI 설계 — SDK 자동 인식, 그룹 관리, 그룹 대시보드, 설정 편집 화면 추가 |
-| `DOCS/AGENT_DESIGN.md` | ✅ v1.2.0 | AITOP Agent 상세 설계 — SDK 자동 인식, 중앙 설정 관리, 반영 수준 체계, 원격 재기동 추가 |
+| `DOCS/UI_DESIGN.md` | ✅ v2.2.0 | 통합 모니터링 UI 설계 — 미들웨어 전용 대시보드·Connection Pool·Thread Pool·Goroutine 뷰 추가 (§8.7) |
+| `DOCS/AGENT_DESIGN.md` | ✅ v1.3.0 | AITOP Agent 상세 설계 — 언어별 미들웨어 Collector 설계 추가 (§3.2.5) |
 | `DOCS/SOLUTION_STRATEGY.md` | ✅ v1.0.0 | 완성도 평가 + 경쟁 분석 + 상용화 로드맵 |
 | `DOCS/E2E_REDESIGN.md` | ✅ v1.0.0 | Phase 7' E2E 재설계 문서 (배경/범위/성공기준) |
 | `DOCS/XLOG_DASHBOARD_REDESIGN.md` | ✅ | XLog/HeatMap 3패널 상세 설계 |

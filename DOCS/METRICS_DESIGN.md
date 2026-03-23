@@ -1631,6 +1631,130 @@ abs(
 | **JVM (IT)** | ITEM0300~0309 (신규 10개) | Heap 사용률, GC 패턴, Full GC 주기, Thread Dump, 커넥션 풀 상태, 클래스 로딩, JIT 컴파일률, 메모리 누수 징후, 데드락 감지, 힙 덤프 분석 | S3 |
 | **CLR (IT)** | ITEM0310~0319 (신규 10개) | GC 힙 크기, 세대별 GC 주기, 스레드 풀 포화도, 예외 발생률, 어셈블리 로딩, LOH(Large Object Heap) 단편화, 비동기 대기 시간, TaskScheduler 큐 길이, CLR 버전, 환경 설정 | S3 |
 
+## 13. 미들웨어 메트릭 (Phase 26 예정)
+
+> **목표**: 언어 런타임별 미들웨어 상태(스레드/이벤트 루프/워커/고루틴, 커넥션 풀, 요청 큐)를 표준 네임스페이스로 수집하여 대시보드 및 알림에 활용한다.
+
+### 13.1 공통 HTTP 요청 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.http.request.duration` | Histogram | ms | `language`, `framework`, `method`, `status_code` | HTTP 요청 처리 시간 분포 |
+| `middleware.http.request.count` | Counter | 1 | `language`, `framework`, `method`, `status_code` | HTTP 요청 수 (상태코드별) |
+| `middleware.http.request.tps` | Gauge | req/s | `language`, `framework` | 초당 처리 요청 수 (TPS) |
+| `middleware.http.request.error_rate` | Gauge | % | `language`, `framework` | HTTP 에러율 (4xx+5xx / 전체) |
+| `middleware.http.request.active` | Gauge | 1 | `language`, `framework` | 현재 처리 중인 동시 요청 수 |
+| `middleware.request_queue.depth` | Gauge | 1 | `language`, `framework` | 처리 대기 중인 요청 큐 깊이 |
+
+### 13.2 Thread Pool 메트릭 (Java / .NET)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.thread_pool.active` | Gauge | 1 | `language`, `framework`, `pool_name` | 현재 활성(요청 처리 중) 스레드 수 |
+| `middleware.thread_pool.idle` | Gauge | 1 | `language`, `framework`, `pool_name` | 현재 유휴 스레드 수 |
+| `middleware.thread_pool.max` | Gauge | 1 | `language`, `framework`, `pool_name` | 설정된 최대 스레드 수 |
+| `middleware.thread_pool.queue_length` | Gauge | 1 | `language`, `framework`, `pool_name` | 스레드 풀 대기 큐 길이 (.NET) |
+| `middleware.thread_pool.completed_items` | Counter | 1 | `language`, `framework` | 완료된 작업 항목 수 (.NET) |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `middleware.thread_pool.active / max` | > 80% | > 95% |
+| `middleware.thread_pool.queue_length` | > 50 | > 200 |
+
+### 13.3 Connection Pool 메트릭 (공통)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.connection_pool.active` | Gauge | 1 | `language`, `pool_impl` | 현재 사용 중인 커넥션 수 |
+| `middleware.connection_pool.idle` | Gauge | 1 | `language`, `pool_impl` | 유휴 커넥션 수 |
+| `middleware.connection_pool.max` | Gauge | 1 | `language`, `pool_impl` | 최대 커넥션 수 (설정값) |
+| `middleware.connection_pool.pending` | Gauge | 1 | `language`, `pool_impl` | 커넥션 획득 대기 중인 요청 수 |
+| `middleware.connection_pool.wait_time` | Histogram | ms | `language`, `pool_impl` | 커넥션 대기 시간 분포 (P50/P95/P99) |
+| `middleware.connection_pool.overflow` | Gauge | 1 | `language`, `pool_impl` | overflow 커넥션 수 (Python SQLAlchemy) |
+| `middleware.connection_pool.wait_count` | Counter | 1 | `language`, `pool_impl` | 누적 대기 횟수 (Go database/sql) |
+| `middleware.connection_pool.wait_duration` | Counter | ms | `language`, `pool_impl` | 누적 대기 시간 (Go database/sql) |
+
+**pool_impl 레이블 값**: `hikaricp`, `dbcp2`, `c3p0`, `ef_core`, `pg_pool`, `mongoose`, `sqlalchemy`, `database_sql`
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `connection_pool.active / max` | > 80% | > 90% | Slack #oncall |
+| `connection_pool.pending` > 0 지속 | 30초 | 60초 | PagerDuty |
+| `connection_pool.wait_time` P99 | > 100ms | > 500ms | Slack #oncall |
+
+### 13.4 Event Loop 메트릭 (Node.js)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.event_loop.lag` | Gauge | ms | `framework` | 이벤트 루프 지연 시간 |
+| `middleware.event_loop.utilization` | Gauge | ratio | `framework` | 이벤트 루프 사용률 (0~1) |
+| `middleware.active_connections` | Gauge | 1 | `framework` | 현재 활성 HTTP 연결 수 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `event_loop.lag` | > 100ms | > 500ms |
+| `event_loop.utilization` | > 0.8 | > 0.95 |
+
+### 13.5 Worker 메트릭 (Python)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.worker.active` | Gauge | 1 | `framework`, `server` | 현재 요청 처리 중인 워커 수 |
+| `middleware.worker.idle` | Gauge | 1 | `framework`, `server` | 현재 유휴 워커 수 |
+| `middleware.worker.restarts` | Counter | 1 | `framework`, `server` | 워커 재시작 누적 횟수 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `worker.active / (active+idle)` | > 90% | > 100% (모든 워커 포화) |
+| `worker.restarts` rate/5m | > 3 | > 10 |
+
+### 13.6 Goroutine 메트릭 (Go)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.goroutine.count` | Gauge | 1 | `framework` | 현재 고루틴 수 |
+| `middleware.goroutine.created` | Counter | 1 | `framework` | 누적 생성된 고루틴 수 |
+
+**누수 감지 기준**: `goroutine.count` 가 기준값(배포 직후 P50) 대비 2배 이상 증가 시 경고, 5배 이상 시 위험 알림 발송.
+
+### 13.7 Session 메트릭 (Java WAS)
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.session.active` | Gauge | 1 | `framework`, `context` | 현재 활성 세션 수 |
+| `middleware.session.created` | Counter | 1 | `framework`, `context` | 누적 생성된 세션 수 |
+| `middleware.session.expired` | Counter | 1 | `framework`, `context` | 누적 만료된 세션 수 |
+
+### 13.8 메시지 큐 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `middleware.kafka.consumer.lag` | Gauge | 1 | `group_id`, `topic`, `partition` | Kafka Consumer Group 파티션별 Lag |
+| `middleware.kafka.consumer.lag_max` | Gauge | 1 | `group_id`, `topic` | Consumer Group 내 최대 Lag |
+| `middleware.kafka.producer.sent_rate` | Gauge | msg/s | `topic` | 초당 Kafka 전송 메시지 수 |
+| `middleware.rabbitmq.queue.depth` | Gauge | 1 | `queue`, `vhost` | RabbitMQ 큐 메시지 수 |
+| `middleware.rabbitmq.queue.consumers` | Gauge | 1 | `queue`, `vhost` | RabbitMQ 큐 소비자 수 |
+| `middleware.rabbitmq.queue.publish_rate` | Gauge | msg/s | `queue`, `vhost` | 초당 RabbitMQ Publish 수 |
+| `middleware.activemq.queue.depth` | Gauge | 1 | `queue`, `broker` | ActiveMQ 큐 메시지 수 |
+| `middleware.activemq.queue.enqueue_count` | Counter | 1 | `queue`, `broker` | ActiveMQ 누적 Enqueue 수 |
+| `middleware.activemq.queue.consumer_count` | Gauge | 1 | `queue`, `broker` | ActiveMQ 소비자 수 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `kafka.consumer.lag_max` | > 1,000 | > 10,000 | Slack #oncall |
+| `rabbitmq.queue.depth` | > 500 | > 5,000 | PagerDuty |
+| `activemq.queue.depth` | > 500 | > 5,000 | Slack #oncall |
+
 ---
 
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
