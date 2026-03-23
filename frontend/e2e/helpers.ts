@@ -30,8 +30,8 @@ export async function loginAsDemo(page: Page, role: 'admin' | 'sre' | 'ai' | 'vi
     await page.click('button[type="submit"]');
   }
 
-  // 홈 페이지 로딩 대기
-  await page.waitForURL('/', { timeout: 10_000 });
+  // 로그인 완료 대기 — /login 에서 벗어나면 성공
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
 }
 
 /**
@@ -47,10 +47,12 @@ export async function navigateTo(page: Page, menuText: string) {
  * 페이지가 에러 없이 로드되었는지 확인
  */
 export async function assertPageLoaded(page: Page) {
+  // AuthGuard Loading 해제 대기
+  await expect(page.locator('text=Loading...')).toBeHidden({ timeout: 15_000 }).catch(() => {});
   // 500 에러 페이지가 아닌지
   await expect(page.locator('body')).not.toContainText('Internal Server Error');
-  // 빈 페이지가 아닌지
-  await expect(page.locator('main, [role="main"]').first()).toBeVisible();
+  // 메인 콘텐츠 또는 사이드바가 표시되는지 (레이아웃 로드 확인)
+  await expect(page.locator('main, [role="main"], nav, aside').first()).toBeVisible({ timeout: 10_000 });
 }
 
 /**

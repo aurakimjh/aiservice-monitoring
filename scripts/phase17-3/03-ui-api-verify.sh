@@ -15,7 +15,7 @@
 # 사용법:
 #   ./scripts/phase17-3/03-ui-api-verify.sh [--server http://localhost:8080]
 
-set -euo pipefail
+set -uo pipefail
 
 # ── 색상 출력 ──────────────────────────────────────────────────────────────
 RED='\033[0;31m'

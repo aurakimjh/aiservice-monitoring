@@ -20,9 +20,18 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
   const { isAuthenticated, isLoading, setLoading } = useAuthStore();
 
-  // Hydrate loading state on mount
+  // Wait for zustand persist rehydration before clearing loading state
   useEffect(() => {
-    setLoading(false);
+    // If already hydrated (persist middleware finished), clear loading immediately
+    if (useAuthStore.persist.hasHydrated()) {
+      setLoading(false);
+      return;
+    }
+    // Otherwise wait for rehydration to complete
+    const unsub = useAuthStore.persist.onFinishHydration(() => {
+      setLoading(false);
+    });
+    return unsub;
   }, [setLoading]);
 
   useEffect(() => {
