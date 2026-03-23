@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
-	"github.com/aurakimjh/aiservice-monitoring/agent/internal/storage"
+	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/storage"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/transport"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"

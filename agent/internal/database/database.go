@@ -67,7 +67,7 @@ type CollectResult struct {
 	ItemCount   int       `json:"item_count"`
 	ErrorCount  int       `json:"error_count"`
 	DurationMS  int       `json:"duration_ms"`
-	S3Key       string    `json:"s3_key,omitempty"`
+	StoragePath string    `json:"evidence_storage_path,omitempty"`
 	Metadata    string    `json:"metadata,omitempty"`
 	CollectedAt time.Time `json:"collected_at"`
 	ReceivedAt  time.Time `json:"received_at"`
@@ -310,10 +310,10 @@ func (db *DB) InsertResult(ctx context.Context, r *CollectResult) error {
 
 	_, err := db.conn.ExecContext(ctx, `
 		INSERT INTO collect_results (result_id, job_id, agent_id, collector_id, schema_name,
-		  status, item_count, error_count, duration_ms, s3_key, metadata, collected_at)
+		  status, item_count, error_count, duration_ms, evidence_storage_path, metadata, collected_at)
 		VALUES ($1, NULLIF($2,''), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`, r.ResultID, r.JobID, r.AgentID, r.CollectorID, r.SchemaName,
-		r.Status, r.ItemCount, r.ErrorCount, r.DurationMS, r.S3Key, r.Metadata, r.CollectedAt)
+		r.Status, r.ItemCount, r.ErrorCount, r.DurationMS, r.StoragePath, r.Metadata, r.CollectedAt)
 
 	return err
 }

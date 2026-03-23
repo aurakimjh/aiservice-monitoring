@@ -28,7 +28,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fleet) {
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	srv := httptest.NewServer(buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub))
+	srv := httptest.NewServer(buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub, nil))
 	t.Cleanup(srv.Close)
 	return srv, f
 }

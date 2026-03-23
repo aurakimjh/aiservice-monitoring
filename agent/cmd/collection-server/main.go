@@ -22,11 +22,14 @@ import (
 	"syscall"
 	"time"
 
+	"strconv"
+
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/ws"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
+	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/storage"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/version"
 )
 
@@ -276,10 +279,36 @@ func main() {
 	wsHub := ws.NewHub(logger, bus)
 	defer wsHub.Close()
 
+	// Initialize storage backend
+	storageCfg := storage.StorageConfig{
+		Type: envOrDefault("AITOP_STORAGE_TYPE", "local"),
+		S3: storage.S3Config{
+			Endpoint:  os.Getenv("AITOP_S3_ENDPOINT"),
+			Bucket:    envOrDefault("AITOP_S3_BUCKET", "aitop-evidence"),
+			AccessKey: os.Getenv("AITOP_S3_ACCESS_KEY"),
+			SecretKey: os.Getenv("AITOP_S3_SECRET_KEY"),
+			Region:    envOrDefault("AITOP_S3_REGION", "us-east-1"),
+			UseSSL:    os.Getenv("AITOP_S3_USE_SSL") == "true",
+			PathStyle: os.Getenv("AITOP_S3_PATH_STYLE") != "false",
+		},
+		Local: storage.LocalConfig{
+			BasePath:      envOrDefault("AITOP_STORAGE_PATH", "./data"),
+			RetentionDays: envOrDefaultInt("AITOP_STORAGE_RETENTION_DAYS", 30),
+		},
+	}
+
+	var store storage.StorageBackend
+	store, err := storage.NewFromConfig(storageCfg, logger)
+	if err != nil {
+		logger.Error("storage init failed", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("storage backend initialized", "type", store.Type())
+
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub)
+	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub, store)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -303,6 +332,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Start background purge scheduler
+	go startPurgeScheduler(ctx, store, storageCfg.Local.RetentionDays, logger)
+
 	go func() {
 		logger.Info("collection-server starting", "addr", *addr, "version", version.Full())
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -320,7 +352,7 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
@@ -481,6 +513,24 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 			"size", len(sanitized),
 		)
 
+		// Store evidence
+		var storageRef string
+		if store != nil {
+			resultID := fmt.Sprintf("cr-%d", time.Now().UnixNano())
+			key := storage.EvidenceKey(agentID, collectorID, resultID, time.Now())
+			ref, err := store.Put(r.Context(), key, sanitized, map[string]string{
+				"agent_id":     agentID,
+				"collector_id": collectorID,
+				"result_id":    resultID,
+			})
+			if err != nil {
+				logger.Error("evidence storage failed", "key", key, "error", err)
+			} else {
+				storageRef = ref
+				logger.Info("evidence stored", "ref", ref)
+			}
+		}
+
 		// Publish event
 		bus.Publish(eventbus.Event{
 			Type:    eventbus.EventCollectCompleted,
@@ -488,6 +538,7 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 			Data: map[string]interface{}{
 				"collector_id": collectorID,
 				"sanitized":    result.Sanitized,
+				"storage_ref":  storageRef,
 			},
 		})
 
@@ -767,7 +818,16 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 
 	// ── Health endpoints ─────────────────────────────────────────────────────
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version.Full()})
+		resp := map[string]string{"status": "ok", "version": version.Full()}
+		if store != nil {
+			resp["storage"] = store.Type()
+			if err := store.Health(r.Context()); err != nil {
+				resp["storage_health"] = err.Error()
+			} else {
+				resp["storage_health"] = "ok"
+			}
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 	mux.HandleFunc("GET /healthz", healthHandler)
 	mux.HandleFunc("GET /health", healthHandler)
@@ -779,4 +839,20 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envOrDefaultInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
 }
