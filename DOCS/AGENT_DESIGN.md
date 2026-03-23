@@ -1,7 +1,7 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.2.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-23 (Session 31 — SDK 자동 인식, 중앙 설정 관리, 설정 반영 수준, 원격 재기동 추가)
+> **문서 버전**: v1.3.1
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-23 (Session 33 — 수집 서버 저장 계층 설계 추가: StorageBackend 인터페이스, S3/Local/Dual 구현체, 설정 스키마)
 > **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료
 > **관련 문서**:
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
@@ -24,6 +24,7 @@
    - 5.8 [원격 재기동](#58-원격-재기동)
 6. [원격 CLI / 터미널 구현](#6-원격-cli--터미널-구현)
 7. [수집 데이터 저장 전략](#7-수집-데이터-저장-전략)
+   - 7.6 [StorageBackend 인터페이스 설계](#76-storagebackend-인터페이스-설계)
 8. [UI 화면 연동 — 에이전트 수집 데이터 기반 동작](#8-ui-화면-연동--에이전트-수집-데이터-기반-동작)
 9. [통신 프로토콜 및 보안](#9-통신-프로토콜-및-보안)
 10. [배포 및 설치](#10-배포-및-설치)
@@ -1633,6 +1634,311 @@ Lite 모드 (docker-compose 단일 서버):
 └──────────────────────────────────────────────────────┘
 ```
 
+### 7.6 StorageBackend 인터페이스 설계
+
+Evidence(진단 스냅샷·설정 파일 등) 파일 저장은 **StorageBackend 인터페이스**를 통해 추상화하여, S3 호환 스토리지와 로컬 파일시스템을 동일하게 다룬다. Prometheus 시계열·Loki 로그·Tempo 트레이스는 기존 설계(§7.1~7.4)를 그대로 따른다.
+
+#### 인터페이스 정의 (Go)
+
+```go
+// pkg/storage/backend.go
+
+package storage
+
+import (
+    "context"
+    "io"
+    "time"
+)
+
+// StorageEntry — 저장된 파일의 메타 정보
+type StorageEntry struct {
+    Key          string            // 논리적 경로 (예: tenants/t1/jobs/j1/nginx.conf.json)
+    Size         int64             // 바이트
+    LastModified time.Time
+    Metadata     map[string]string // 수집 시각, 에이전트 ID, ITEM ID 등
+}
+
+// StorageBackend — Evidence 파일 저장소 추상 인터페이스
+//
+// 구현체: S3Backend · LocalBackend · DualBackend
+type StorageBackend interface {
+    // Put — key 위치에 data를 저장하고 접근 가능한 참조 URL(또는 경로)을 반환
+    Put(ctx context.Context, key string, data []byte, metadata map[string]string) (ref string, err error)
+
+    // PutStream — 대용량 파일 스트림 저장 (io.Reader)
+    PutStream(ctx context.Context, key string, r io.Reader, size int64, metadata map[string]string) (ref string, err error)
+
+    // Get — key에 해당하는 파일 내용 반환
+    Get(ctx context.Context, key string) ([]byte, error)
+
+    // List — prefix로 시작하는 파일 목록 반환
+    List(ctx context.Context, prefix string) ([]StorageEntry, error)
+
+    // Delete — 지정 key 파일 삭제
+    Delete(ctx context.Context, key string) error
+
+    // Purge — retentionDays 이전에 생성된 파일 일괄 삭제 (보존 정책 적용)
+    Purge(ctx context.Context, before time.Time) (deletedCount int, err error)
+
+    // Type — 백엔드 식별자 ("s3" | "local" | "dual")
+    Type() string
+}
+```
+
+#### S3Backend
+
+```go
+// pkg/storage/s3_backend.go
+
+package storage
+
+import (
+    "bytes"
+    "context"
+    "fmt"
+    "io"
+    "time"
+
+    "github.com/minio/minio-go/v7"
+    "github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+// S3Backend — AWS S3 / MinIO / GCS 호환 스토리지 구현체
+type S3Backend struct {
+    client    *minio.Client
+    bucket    string
+    publicURL string // 선택적 — Evidence URL 생성용
+}
+
+func NewS3Backend(cfg S3Config) (*S3Backend, error) {
+    client, err := minio.New(cfg.Endpoint, &minio.Options{
+        Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+        Secure: cfg.UseSSL,
+        Region: cfg.Region,
+    })
+    if err != nil {
+        return nil, fmt.Errorf("s3 init: %w", err)
+    }
+    return &S3Backend{client: client, bucket: cfg.Bucket, publicURL: cfg.PublicURL}, nil
+}
+
+func (b *S3Backend) Put(ctx context.Context, key string, data []byte, metadata map[string]string) (string, error) {
+    opts := minio.PutObjectOptions{ContentType: "application/json", UserMetadata: metadata}
+    _, err := b.client.PutObject(ctx, b.bucket, key, bytes.NewReader(data), int64(len(data)), opts)
+    if err != nil {
+        return "", fmt.Errorf("s3 put %s: %w", key, err)
+    }
+    return fmt.Sprintf("s3://%s/%s", b.bucket, key), nil
+}
+
+func (b *S3Backend) Purge(ctx context.Context, before time.Time) (int, error) {
+    // ListObjects → before 이전 객체 삭제 (배치 처리)
+    // ... (구현 생략)
+    return 0, nil
+}
+
+func (b *S3Backend) Type() string { return "s3" }
+
+// PutStream, Get, List, Delete — minio-go SDK 표준 API 활용
+```
+
+#### LocalBackend
+
+```go
+// pkg/storage/local_backend.go
+
+package storage
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "time"
+)
+
+// LocalBackend — 로컬 파일시스템 저장 구현체
+//
+// 디렉터리 구조: {basePath}/{key}
+// 예) /var/aitop/data/tenants/t1/jobs/j1/nginx.conf.json
+type LocalBackend struct {
+    basePath      string
+    retentionDays int
+}
+
+func NewLocalBackend(cfg LocalConfig) (*LocalBackend, error) {
+    if err := os.MkdirAll(cfg.BasePath, 0750); err != nil {
+        return nil, fmt.Errorf("local storage mkdir %s: %w", cfg.BasePath, err)
+    }
+    return &LocalBackend{basePath: cfg.BasePath, retentionDays: cfg.RetentionDays}, nil
+}
+
+func (b *LocalBackend) Put(ctx context.Context, key string, data []byte, metadata map[string]string) (string, error) {
+    absPath := filepath.Join(b.basePath, filepath.FromSlash(key))
+    if err := os.MkdirAll(filepath.Dir(absPath), 0750); err != nil {
+        return "", fmt.Errorf("local mkdir: %w", err)
+    }
+    if err := os.WriteFile(absPath, data, 0640); err != nil {
+        return "", fmt.Errorf("local write %s: %w", key, err)
+    }
+    return "file://" + absPath, nil
+}
+
+func (b *LocalBackend) Purge(ctx context.Context, before time.Time) (int, error) {
+    // filepath.Walk → ModTime < before → os.Remove
+    count := 0
+    _ = filepath.Walk(b.basePath, func(path string, info os.FileInfo, err error) error {
+        if err != nil || info.IsDir() {
+            return nil
+        }
+        if info.ModTime().Before(before) {
+            if removeErr := os.Remove(path); removeErr == nil {
+                count++
+            }
+        }
+        return nil
+    })
+    return count, nil
+}
+
+func (b *LocalBackend) Type() string { return "local" }
+
+// PutStream, Get, List, Delete — os 패키지 표준 파일 I/O 활용
+```
+
+#### DualBackend
+
+```go
+// pkg/storage/dual_backend.go
+
+package storage
+
+import (
+    "context"
+    "io"
+    "time"
+)
+
+// DualBackend — S3 + Local 동시 저장 구현체
+//
+// 두 백엔드 모두 Put 성공 시에만 성공으로 처리.
+// 운영 환경의 고가용성 + 로컬 빠른 읽기가 동시에 필요한 경우 사용.
+type DualBackend struct {
+    primary   StorageBackend // S3Backend
+    secondary StorageBackend // LocalBackend
+}
+
+func NewDualBackend(primary, secondary StorageBackend) *DualBackend {
+    return &DualBackend{primary: primary, secondary: secondary}
+}
+
+func (b *DualBackend) Put(ctx context.Context, key string, data []byte, metadata map[string]string) (string, error) {
+    ref, err := b.primary.Put(ctx, key, data, metadata)
+    if err != nil {
+        return "", err
+    }
+    // secondary 실패는 경고 로그만 남기고 계속 (비동기 재시도 가능)
+    if _, secErr := b.secondary.Put(ctx, key, data, metadata); secErr != nil {
+        // log.Warn("dual backend secondary write failed", "key", key, "err", secErr)
+        _ = secErr
+    }
+    return ref, nil
+}
+
+func (b *DualBackend) Purge(ctx context.Context, before time.Time) (int, error) {
+    n1, _ := b.primary.Purge(ctx, before)
+    n2, _ := b.secondary.Purge(ctx, before)
+    return n1 + n2, nil
+}
+
+func (b *DualBackend) Type() string { return "dual" }
+
+// Get — primary 우선, 실패 시 secondary fallback
+// List, Delete — primary + secondary 동기화 처리
+```
+
+#### 설정 스키마 (server.yaml)
+
+```yaml
+# server.yaml (Collection Server 설정)
+
+storage:
+  # "s3"   — S3 호환 스토리지만 사용 (프로덕션 권장)
+  # "local" — 로컬 파일시스템만 사용 (개발/테스트 환경)
+  # "both"  — S3 + 로컬 동시 저장 (DualBackend)
+  type: "local"
+
+  s3:
+    endpoint:   "http://minio:9000"   # AWS S3는 빈 문자열 (기본 엔드포인트 사용)
+    bucket:     "aitop-evidence"
+    access-key: "minioadmin"
+    secret-key: "minioadmin"
+    region:     "us-east-1"
+    use-ssl:    false                 # MinIO 로컬: false / AWS: true
+    path-style: true                  # MinIO 호환: true / AWS S3: false
+
+  local:
+    base-path:      "/var/aitop/data" # Evidence 저장 루트 디렉터리
+    retention-days: 30                # 이 일수 이상 된 파일 자동 정리 (0 = 비활성)
+```
+
+#### StorageBackend 팩토리
+
+```go
+// pkg/storage/factory.go
+
+package storage
+
+import "fmt"
+
+// NewFromConfig — server.yaml의 storage 섹션을 읽어 적절한 구현체 반환
+func NewFromConfig(cfg StorageConfig) (StorageBackend, error) {
+    switch cfg.Type {
+    case "s3":
+        return NewS3Backend(cfg.S3)
+    case "local":
+        return NewLocalBackend(cfg.Local)
+    case "both":
+        s3, err := NewS3Backend(cfg.S3)
+        if err != nil {
+            return nil, fmt.Errorf("dual backend s3: %w", err)
+        }
+        local, err := NewLocalBackend(cfg.Local)
+        if err != nil {
+            return nil, fmt.Errorf("dual backend local: %w", err)
+        }
+        return NewDualBackend(s3, local), nil
+    default:
+        return nil, fmt.Errorf("unknown storage type %q (must be s3|local|both)", cfg.Type)
+    }
+}
+```
+
+#### DB 스키마 연계
+
+`collection_jobs.evidence_storage_path` 컬럼은 StorageBackend가 반환한 **참조 URL**을 저장한다. 백엔드 유형에 따라 형식이 달라진다:
+
+| 백엔드 | 참조 URL 예시 |
+|--------|-------------|
+| S3Backend | `s3://aitop-evidence/tenants/t1/jobs/j1/nginx.json` |
+| LocalBackend | `file:///var/aitop/data/tenants/t1/jobs/j1/nginx.json` |
+| DualBackend | S3 primary URL (s3://) 반환 |
+
+> **기존 컬럼명**: `evidence_s3_path` → 새 구현에서는 `evidence_storage_path`로 마이그레이션 권장.
+> 현재 MVP(인메모리/단일 MinIO) 환경에서는 `evidence_s3_path` 유지 가능.
+
+#### 환경별 권장 설정
+
+| 환경 | `storage.type` | 이유 |
+|------|---------------|------|
+| 로컬 개발 / 테스트 | `local` | S3/MinIO 컨테이너 불필요, 디스크 직접 확인 가능 |
+| CI / E2E 자동화 | `local` | 외부 의존 없이 파이프라인 독립 실행 |
+| 단일 서버 Lite 운영 | `local` 또는 `s3` (MinIO) | 요구사항에 따라 선택 |
+| 프로덕션 (멀티 서버) | `s3` | 고가용성, 스케일아웃, 수명주기 정책 |
+| 프로덕션 + 로컬 캐시 | `both` | S3 기본 + 로컬 빠른 읽기 (선택적) |
+
 ---
 
 ## 8. UI 화면 연동 — 에이전트 수집 데이터 기반 동작
@@ -2044,14 +2350,16 @@ service ConfigService {
 
 | Collector | 대상 ITEM | UI 화면 | 수집 주기 | 저장소 | 필요 권한 |
 |-----------|----------|---------|---------|--------|---------|
-| OS | ITEM0036~0040, 0064, 0066 | 호스트 목록/상세 | 60초(메트릭), 6시간(Evidence) | Prometheus + S3 | read:/proc |
-| WEB | ITEM0006~0009 | 미들웨어 상태 | 6시간 | S3 + PG | read:설정파일 |
-| WAS | ITEM0010~0035 | 미들웨어 상태 | 6시간 | S3 + PG | exec:jcmd, read:설정파일 |
-| DB | ITEM0050~0065 | DB 모니터링 | 6시간 | S3 + PG | net:DB접속, read:설정 |
-| AI-LLM | ITEM0200~0204, 0209~0212, 0221~0223, 0230 | AI 서비스, LLM 성능, 가드레일 | 6시간 | S3 + Prometheus | exec:python3, read:설정 |
-| AI-VectorDB | ITEM0205~0206, 0213~0216, 0224~0226 | RAG 파이프라인, VectorDB | 6시간 | S3 + Prometheus | exec:curl, read:설정 |
-| AI-GPU | ITEM0207~0208, 0217~0220, 0227~0229 | GPU 클러스터, LLM 성능 | 60초(메트릭), 6시간(Evidence) | Prometheus + S3 | exec:nvidia-smi |
-| OTel | ITEM0207 연동 | 전체 대시보드 보강 | 6시간(스냅샷) | S3 | net:Prometheus접근 |
+| OS | ITEM0036~0040, 0064, 0066 | 호스트 목록/상세 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | read:/proc |
+| WEB | ITEM0006~0009 | 미들웨어 상태 | 6시간 | StorageBackend¹ + PG | read:설정파일 |
+| WAS | ITEM0010~0035 | 미들웨어 상태 | 6시간 | StorageBackend¹ + PG | exec:jcmd, read:설정파일 |
+| DB | ITEM0050~0065 | DB 모니터링 | 6시간 | StorageBackend¹ + PG | net:DB접속, read:설정 |
+| AI-LLM | ITEM0200~0204, 0209~0212, 0221~0223, 0230 | AI 서비스, LLM 성능, 가드레일 | 6시간 | StorageBackend¹ + Prometheus | exec:python3, read:설정 |
+| AI-VectorDB | ITEM0205~0206, 0213~0216, 0224~0226 | RAG 파이프라인, VectorDB | 6시간 | StorageBackend¹ + Prometheus | exec:curl, read:설정 |
+| AI-GPU | ITEM0207~0208, 0217~0220, 0227~0229 | GPU 클러스터, LLM 성능 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | exec:nvidia-smi |
+| OTel | ITEM0207 연동 | 전체 대시보드 보강 | 6시간(스냅샷) | StorageBackend¹ | net:Prometheus접근 |
+
+> ¹ **StorageBackend**: `storage.type` 설정에 따라 S3Backend(s3) / LocalBackend(local) / DualBackend(both) 중 하나가 선택됨 (§7.6 참조)
 
 ## 부록 B: 에러 코드 정의
 

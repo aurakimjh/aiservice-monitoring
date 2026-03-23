@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
+> **최종 업데이트**: 2026-03-23 (Session 33 — 로컬 스토리지 백엔드 설정 안내 추가)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -94,6 +94,7 @@ pip install fastapi         # 그 주방에만 재료를 설치합니다
 7. [Git 및 GitHub 연동](#7-git-및-github-연동)
 8. [첫 실행 검증 체크리스트](#8-첫-실행-검증-체크리스트)
 9. [자주 발생하는 문제 (Troubleshooting)](#9-자주-발생하는-문제-troubleshooting)
+10. [수집 서버 스토리지 백엔드 설정](#10-수집-서버-스토리지-백엔드-설정)
 
 ---
 
@@ -1381,6 +1382,106 @@ python scripts/validate-traces.py --fail-on-broken
 ```
 
 ---
+
+---
+
+## 10. 수집 서버 스토리지 백엔드 설정
+
+> **요약**: 로컬 개발 환경에서는 S3/MinIO 없이 `storage.type: "local"`만으로 Collection Server를 완전히 구동할 수 있습니다.
+
+Collection Server는 Evidence 파일(진단 스냅샷·설정 파일 등)을 저장할 때 **StorageBackend** 인터페이스를 사용합니다. `server.yaml`의 `storage.type` 값으로 백엔드를 선택합니다.
+
+### 로컬 개발: `storage.type: "local"` (S3/MinIO 불필요)
+
+```yaml
+# collection-server/config/server.yaml (로컬 개발용)
+
+storage:
+  type: "local"           # S3 없이 로컬 디스크에 직접 저장
+
+  local:
+    base-path: "/var/aitop/data"   # 로컬 저장 루트 (없으면 자동 생성)
+    retention-days: 30             # 30일 이상 파일 자동 정리 (0 = 비활성)
+```
+
+```bash
+# Collection Server 실행 시 로컬 스토리지 확인
+ls /var/aitop/data/tenants/
+
+# 수집된 Evidence 파일 예시
+/var/aitop/data/tenants/t1/jobs/job-abc123/nginx.conf.json
+/var/aitop/data/tenants/t1/jobs/job-abc123/gpu-snapshot.json
+```
+
+> **Windows 개발 환경**: `base-path`를 Windows 경로로 변경하세요.
+> ```yaml
+> local:
+>   base-path: "C:/aitop/data"
+> ```
+
+### 프로덕션: `storage.type: "s3"` (MinIO 또는 AWS S3)
+
+```yaml
+# collection-server/config/server.yaml (프로덕션용)
+
+storage:
+  type: "s3"
+
+  s3:
+    endpoint:   ""                  # AWS S3 기본값: 빈 문자열
+    bucket:     "aitop-evidence"
+    access-key: "${AWS_ACCESS_KEY}" # 환경 변수로 주입
+    secret-key: "${AWS_SECRET_KEY}"
+    region:     "ap-northeast-2"
+    use-ssl:    true
+    path-style: false               # AWS S3: false / MinIO: true
+```
+
+MinIO를 S3 대신 사용하는 경우 (Lite 모드 docker-compose):
+
+```yaml
+storage:
+  type: "s3"
+
+  s3:
+    endpoint:   "http://minio:9000"
+    bucket:     "aitop-evidence"
+    access-key: "minioadmin"
+    secret-key: "minioadmin"
+    region:     "us-east-1"
+    use-ssl:    false
+    path-style: true
+```
+
+### 로컬 + S3 동시 저장: `storage.type: "both"`
+
+```yaml
+storage:
+  type: "both"   # DualBackend — S3에 기본 저장, 로컬에도 복사
+
+  s3:
+    endpoint:   "http://minio:9000"
+    bucket:     "aitop-evidence"
+    access-key: "minioadmin"
+    secret-key: "minioadmin"
+    path-style: true
+
+  local:
+    base-path:      "/var/aitop/data"
+    retention-days: 7   # 로컬 복사본은 7일만 보관
+```
+
+### 환경별 권장 설정 요약
+
+| 환경 | `storage.type` | MinIO/S3 컨테이너 필요 |
+|------|---------------|----------------------|
+| 로컬 개발 | `"local"` | ❌ 불필요 |
+| CI / E2E | `"local"` | ❌ 불필요 |
+| Lite 운영 (단일 서버) | `"s3"` (MinIO) | ✅ MinIO |
+| 프로덕션 | `"s3"` (AWS S3) | ✅ AWS S3 |
+| 프로덕션 + 로컬 캐시 | `"both"` | ✅ S3 + 로컬 병행 |
+
+> **참조**: StorageBackend 인터페이스 전체 설계는 [AGENT_DESIGN.md §7.6](./AGENT_DESIGN.md#76-storagebackend-인터페이스-설계)을 참고하세요.
 
 ---
 

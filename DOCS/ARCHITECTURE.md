@@ -3,7 +3,7 @@
 > **문서 버전**: v2.0.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
+> **최종 업데이트**: 2026-03-23 (Session 33 — Collection Server 저장 계층에 로컬 파일시스템 옵션 추가)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
@@ -137,8 +137,8 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 ║  ┌──────────▼────────────────▼────── 저장/분석 레이어 (Storage) ───────┐     ║
 ║  │                                                                       │     ║
 ║  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────────┐  │     ║
-║  │  │ Prometheus │  │Grafana Tempo│  │   Loki     │  │ S3 / MinIO    │  │     ║
-║  │  │ (Metrics)  │  │ (Traces)   │  │  (Logs)    │  │ (Cold Archive)│  │     ║
+║  │  │ Prometheus │  │Grafana Tempo│  │   Loki     │  │StorageBackend │  │     ║
+║  │  │ (Metrics)  │  │ (Traces)   │  │  (Logs)    │  │S3/Local/Dual  │  │     ║
 ║  │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └───────────────┘  │     ║
 ║  │        └───────────────┴───────────────┘                               │     ║
 ║  │                         │ Unified Query                                 │     ║
@@ -172,6 +172,7 @@ OTel Collector는 **중앙 우체국**과 같습니다.
 │ 레이어 3: 저장/시각화 (Storage & Visualization)               │
 │  — 각 데이터 유형별 전문 저장소 + Grafana 단일 대시보드          │
 │  — Prometheus(숫자), Tempo(추적), Loki(로그)                  │
+│  — StorageBackend: Evidence 파일 저장 (S3/Local/Dual 전환 가능) │
 │  — 비유: 도서관 — 자료를 분류·보관하고 열람 제공                │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -1877,7 +1878,11 @@ $$
 │         │                                                              │
 │  ┌──────┴──────────────────────────────────────────────────────────┐   │
 │  │  저장소 계층                                                      │   │
-│  │  Prometheus (시계열) · S3/MinIO (Evidence) · PostgreSQL (상태)    │   │
+│  │  Prometheus (시계열) · PostgreSQL (메타·상태·결과)                │   │
+│  │  StorageBackend (Evidence 파일):                                  │   │
+│  │    — S3/MinIO [storage.type: "s3"]   프로덕션 권장               │   │
+│  │    — 로컬 디스크 [storage.type: "local"]  개발/테스트 환경        │   │
+│  │    — Dual [storage.type: "both"]    S3 + 로컬 동시 저장          │   │
 │  │  Loki (로그) · Tempo (트레이스) · 감사 로그 (터미널 세션)          │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────┬────────────────────────────────────────┘
@@ -1889,6 +1894,37 @@ $$
 │  Fleet Console · Remote CLI (xterm.js) · Diagnostics · Incidents       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+### 11.1.1 Collection Server — Evidence 저장 백엔드 옵션
+
+Collection Server의 진단 Evidence(설정 파일·스냅샷·스크립트 출력) 파일 저장은 **StorageBackend 인터페이스**를 통해 추상화되어 있으며, `server.yaml`의 `storage.type` 값으로 백엔드를 선택한다.
+
+| `storage.type` | 구현체 | 권장 환경 | 비고 |
+|---------------|--------|---------|------|
+| `"local"` | `LocalBackend` | 로컬 개발, 테스트, CI | S3/MinIO 컨테이너 불필요 |
+| `"s3"` | `S3Backend` | 프로덕션, 멀티 서버 | AWS S3 또는 MinIO 필요 |
+| `"both"` | `DualBackend` | 프로덕션 + 로컬 캐시 | S3 기본 + 로컬 fallback |
+
+**데이터 흐름 (Evidence 저장 경로)**:
+
+```
+[AITOP Agent]
+  │  gRPC Push (Evidence bytes)
+  ▼
+[Collection Server — gRPC Receiver]
+  │
+  ├─ storage.type: "s3"   ──▶ S3Backend ──▶ s3://aitop-evidence/{tenant}/{job}/{file}
+  ├─ storage.type: "local" ──▶ LocalBackend ──▶ /var/aitop/data/{tenant}/{job}/{file}
+  └─ storage.type: "both"  ──▶ DualBackend ──▶ S3 (primary) + Local (secondary)
+  │
+  ▼
+[PostgreSQL]
+  collection_jobs.evidence_storage_path = "s3://.." | "file://.."
+```
+
+> **Prometheus 시계열·Loki 로그·Tempo 트레이스**는 StorageBackend와 독립적으로 각 전문 저장소로 직접 전송된다. StorageBackend는 Evidence 파일(NDJSON 스냅샷, 설정 파일, CLI 감사 로그 등)에만 적용된다.
+
+---
 
 ### 11.2 AITOP Agent 수집 체계
 
