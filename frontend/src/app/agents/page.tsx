@@ -9,10 +9,12 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
+import { ConfigEditor } from '@/components/agents/config-editor';
 import { useProjectStore } from '@/stores/project-store';
 import { useFleet } from '@/hooks/use-fleet';
 import { fleetApi } from '@/lib/api-client';
 import { getRelativeTime } from '@/lib/utils';
+import { getAgentConfig, getConfigHistory, getSDKDetections } from '@/lib/demo-data';
 import type { AgentGroup, UpdatePhase } from '@/types/monitoring';
 import {
   Cpu,
@@ -35,6 +37,9 @@ import {
   DownloadCloud,
   RotateCcw,
   Settings2,
+  Settings,
+  Scan,
+  CheckCircle,
 } from 'lucide-react';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
@@ -45,6 +50,7 @@ const VIEW_TABS = [
   { id: 'jobs',    label: 'Collection Jobs',  icon: <Clock size={13} /> },
   { id: 'plugins', label: 'Plugins',          icon: <Package size={13} /> },
   { id: 'updates', label: 'Update Status',    icon: <UploadCloud size={13} /> },
+  { id: 'config',  label: 'Config',           icon: <Settings size={13} /> },
 ];
 
 const JOB_TYPE_LABELS: Record<string, string> = {
@@ -317,6 +323,10 @@ function GroupModal({
 export default function AgentsPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const { agents, jobs, plugins, groups, updateStatuses, schedules, loading, isLive, refresh } = useFleet(currentProjectId ?? undefined);
+
+  const agentConfig = getAgentConfig();
+  const configHistory = getConfigHistory();
+  const sdkDetections = getSDKDetections();
 
   const [activeTab, setActiveTab] = useState('agents');
 
@@ -815,6 +825,117 @@ export default function AgentsPage() {
             </div>
           </Card>
         </div>
+      )}
+
+      {/* ── Config ── */}
+      {activeTab === 'config' && (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Settings size={14} className="text-[var(--text-muted)]" />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Agent Configuration</h3>
+            </div>
+            <ConfigEditor config={agentConfig} />
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={14} className="text-[var(--text-muted)]" />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Configuration History</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2.5 font-medium">Version</th>
+                    <th className="px-4 py-2.5 font-medium">Author</th>
+                    <th className="px-4 py-2.5 font-medium">Timestamp</th>
+                    <th className="px-4 py-2.5 font-medium">Changes</th>
+                    <th className="px-4 py-2.5 font-medium">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {configHistory.map((rev) => (
+                    <tr key={rev.version} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-[var(--accent-primary)]">v{rev.version}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rev.author}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(rev.timestamp))}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="space-y-0.5">
+                          {rev.changes.map((c, i) => (
+                            <div key={i} className="text-[10px]">
+                              <span className="font-mono text-[var(--text-muted)]">{c.field}:</span>{' '}
+                              <span className="text-[var(--status-warning)]">{c.oldValue}</span>
+                              <span className="text-[var(--text-muted)]"> → </span>
+                              <span className="text-[var(--status-healthy)]">{c.newValue}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rev.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── SDK Detections (shown below agents tab) ── */}
+      {activeTab === 'agents' && sdkDetections.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <Scan size={14} className="text-[var(--text-muted)]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">SDK Detections</h3>
+            <span className="text-[10px] text-[var(--text-muted)]">Auto-detected runtimes</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2.5 font-medium">Hostname</th>
+                  <th className="px-4 py-2.5 font-medium">Language</th>
+                  <th className="px-4 py-2.5 font-medium">Framework</th>
+                  <th className="px-4 py-2.5 font-medium">Version</th>
+                  <th className="px-4 py-2.5 font-medium">Detected</th>
+                  <th className="px-4 py-2.5 font-medium">Auto-instrumented</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sdkDetections.map((sdk) => {
+                  const langColors: Record<string, string> = {
+                    java: 'bg-orange-500/15 text-orange-400',
+                    python: 'bg-blue-500/15 text-blue-400',
+                    dotnet: 'bg-purple-500/15 text-purple-400',
+                    go: 'bg-cyan-500/15 text-cyan-400',
+                    nodejs: 'bg-green-500/15 text-green-400',
+                  };
+                  return (
+                    <tr key={sdk.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-[var(--accent-primary)]">{sdk.hostname}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium', langColors[sdk.language] ?? 'bg-[var(--bg-tertiary)] text-[var(--text-muted)]')}>
+                          {sdk.language}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--text-primary)]">{sdk.framework}</td>
+                      <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{sdk.frameworkVersion}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(sdk.detectedAt))}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        {sdk.autoInstrumented ? (
+                          <CheckCircle size={14} className="inline text-[var(--status-healthy)]" />
+                        ) : (
+                          <XCircle size={14} className="inline text-[var(--text-muted)]" />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* ── Modals ── */}

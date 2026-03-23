@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile, AgentConfig, ConfigRevision, SDKDetection, GroupDashboard } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -1465,4 +1465,72 @@ export function getMethodProfile(): MethodProfile {
       ],
     },
   };
+}
+
+// ══ Phase 25: Server Groups + SDK + Config — Mock Data ══════════════
+
+export function getAgentConfig(): AgentConfig {
+  return {
+    agentId: 'a-01', version: 8, updatedAt: now - 3600_000, updatedBy: 'admin',
+    sections: [
+      { name: 'server', label: 'Server Connection', fields: [
+        { key: 'server.url', label: 'Server URL', type: 'string', value: 'https://collect.aitop.io:8080', defaultValue: 'http://localhost:8080', reflectionLevel: 'restart', description: 'Collection Server URL' },
+        { key: 'server.token', label: 'Project Token', type: 'string', value: 'proj-ai-prod-****', defaultValue: '', reflectionLevel: 'restart', description: 'Project authentication token' },
+        { key: 'server.tls', label: 'TLS Enabled', type: 'boolean', value: true, defaultValue: false, reflectionLevel: 'restart', description: 'Enable mTLS connection' },
+      ]},
+      { name: 'agent', label: 'Agent Settings', fields: [
+        { key: 'agent.mode', label: 'Mode', type: 'select', value: 'full', defaultValue: 'full', reflectionLevel: 'app', description: 'Agent operating mode', options: ['full', 'collect-only', 'collect-export', 'lite'] },
+        { key: 'agent.tags', label: 'Tags', type: 'string', value: 'env:prod,team:ai,region:kr', defaultValue: '', reflectionLevel: 'hot', description: 'Agent tags (comma-separated)' },
+        { key: 'agent.log_level', label: 'Log Level', type: 'select', value: 'info', defaultValue: 'info', reflectionLevel: 'hot', description: 'Logging verbosity', options: ['debug', 'info', 'warn', 'error'] },
+      ]},
+      { name: 'collectors', label: 'Collectors', fields: [
+        { key: 'collectors.it_os', label: 'IT OS Collector', type: 'boolean', value: true, defaultValue: true, reflectionLevel: 'restart', description: 'OS metrics (CPU, Memory, Disk, Network)' },
+        { key: 'collectors.it_web', label: 'IT Web Collector', type: 'boolean', value: true, defaultValue: false, reflectionLevel: 'restart', description: 'Web server (Nginx, Apache) metrics' },
+        { key: 'collectors.ai_gpu', label: 'AI GPU Collector', type: 'boolean', value: true, defaultValue: false, reflectionLevel: 'restart', description: 'GPU utilization (NVIDIA DCGM)' },
+        { key: 'collectors.ai_llm', label: 'AI LLM Collector', type: 'boolean', value: true, defaultValue: false, reflectionLevel: 'restart', description: 'LLM performance (TTFT, TPS)' },
+        { key: 'collectors.interval', label: 'Collection Interval', type: 'string', value: '30s', defaultValue: '30s', reflectionLevel: 'hot', description: 'Data collection interval' },
+      ]},
+      { name: 'buffer', label: 'Buffer Settings', fields: [
+        { key: 'buffer.max_size_mb', label: 'Max Buffer Size', type: 'number', value: 100, defaultValue: 50, reflectionLevel: 'restart', description: 'Maximum buffer size in MB' },
+        { key: 'buffer.flush_interval', label: 'Flush Interval', type: 'string', value: '10s', defaultValue: '10s', reflectionLevel: 'hot', description: 'Buffer flush interval' },
+      ]},
+    ],
+  };
+}
+
+export function getConfigHistory(): ConfigRevision[] {
+  return [
+    { version: 8, author: 'admin', timestamp: now - 3600_000, changes: [{ field: 'collectors.ai_llm', oldValue: 'false', newValue: 'true' }], message: 'Enable LLM collector for AI monitoring' },
+    { version: 7, author: 'sre', timestamp: now - 86400_000, changes: [{ field: 'agent.tags', oldValue: 'env:prod,team:ai', newValue: 'env:prod,team:ai,region:kr' }], message: 'Add region tag' },
+    { version: 6, author: 'admin', timestamp: now - 172800_000, changes: [{ field: 'buffer.max_size_mb', oldValue: '50', newValue: '100' }, { field: 'collectors.interval', oldValue: '60s', newValue: '30s' }], message: 'Increase buffer and reduce interval for better resolution' },
+    { version: 5, author: 'admin', timestamp: now - 604800_000, changes: [{ field: 'server.tls', oldValue: 'false', newValue: 'true' }], message: 'Enable mTLS for production' },
+  ];
+}
+
+export function getSDKDetections(): SDKDetection[] {
+  return [
+    { id: 'sdk-01', agentId: 'a-01', hostname: 'prod-api-01', language: 'java', framework: 'Spring Boot', frameworkVersion: '3.2.4', detectedAt: now - 86400_000, autoInstrumented: true },
+    { id: 'sdk-02', agentId: 'a-01', hostname: 'prod-api-01', language: 'python', framework: 'FastAPI', frameworkVersion: '0.115.0', detectedAt: now - 86400_000, autoInstrumented: true },
+    { id: 'sdk-03', agentId: 'a-02', hostname: 'prod-api-02', language: 'java', framework: 'Spring Boot', frameworkVersion: '3.2.4', detectedAt: now - 172800_000, autoInstrumented: true },
+    { id: 'sdk-04', agentId: 'a-03', hostname: 'prod-gpu-01', language: 'python', framework: 'vLLM', frameworkVersion: '0.4.0', detectedAt: now - 259200_000, autoInstrumented: true },
+    { id: 'sdk-05', agentId: 'a-05', hostname: 'prod-db-01', language: 'dotnet', framework: 'ASP.NET Core', frameworkVersion: '8.0', detectedAt: now - 3600_000, autoInstrumented: false },
+  ];
+}
+
+export function getGroupDashboard(groupId: string): GroupDashboard {
+  const groups: Record<string, GroupDashboard> = {
+    'grp-gpu': { groupId: 'grp-gpu', groupName: 'GPU Servers', agentCount: 2, healthyCount: 2, avgCpu: 68, avgMemory: 72, agents: [
+      { id: 'a-03', hostname: 'prod-gpu-01', status: 'healthy', version: '1.2.0', cpu: 72, memory: 85, lastHeartbeat: now - 30_000 },
+      { id: 'a-04', hostname: 'prod-gpu-02', status: 'healthy', version: '1.2.0', cpu: 64, memory: 59, lastHeartbeat: now - 25_000 },
+    ]},
+    'grp-api': { groupId: 'grp-api', groupName: 'API Servers', agentCount: 2, healthyCount: 1, avgCpu: 45, avgMemory: 62, agents: [
+      { id: 'a-01', hostname: 'prod-api-01', status: 'healthy', version: '1.2.0', cpu: 38, memory: 55, lastHeartbeat: now - 15_000 },
+      { id: 'a-02', hostname: 'prod-api-02', status: 'degraded', version: '1.1.9', cpu: 52, memory: 69, lastHeartbeat: now - 120_000 },
+    ]},
+    'grp-db': { groupId: 'grp-db', groupName: 'Database Servers', agentCount: 2, healthyCount: 2, avgCpu: 35, avgMemory: 70, agents: [
+      { id: 'a-05', hostname: 'prod-db-01', status: 'healthy', version: '1.2.0', cpu: 30, memory: 65, lastHeartbeat: now - 20_000 },
+      { id: 'a-06', hostname: 'prod-db-02', status: 'healthy', version: '1.2.0', cpu: 40, memory: 75, lastHeartbeat: now - 35_000 },
+    ]},
+  };
+  return groups[groupId] || { groupId, groupName: 'Unknown', agentCount: 0, healthyCount: 0, avgCpu: 0, avgMemory: 0, agents: [] };
 }

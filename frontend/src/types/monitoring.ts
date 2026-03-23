@@ -813,3 +813,61 @@ export interface MethodProfile {
   slowQueries: number;
   totalDurationMs: number;
 }
+
+// ── Phase 25: Server Groups + SDK Detection + Central Config ────────
+
+export type ReflectionLevel = 'hot' | 'restart' | 'app';
+
+export interface ConfigField {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'select';
+  value: string | number | boolean;
+  defaultValue: string | number | boolean;
+  reflectionLevel: ReflectionLevel;
+  description: string;
+  options?: string[];
+}
+
+export interface ConfigSection {
+  name: string;
+  label: string;
+  fields: ConfigField[];
+}
+
+export interface AgentConfig {
+  agentId: string;
+  version: number;
+  sections: ConfigSection[];
+  updatedAt: number;
+  updatedBy: string;
+}
+
+export interface ConfigRevision {
+  version: number;
+  author: string;
+  timestamp: number;
+  changes: { field: string; oldValue: string; newValue: string }[];
+  message: string;
+}
+
+export interface SDKDetection {
+  id: string;
+  agentId: string;
+  hostname: string;
+  language: 'java' | 'dotnet' | 'python' | 'go' | 'nodejs';
+  framework: string;
+  frameworkVersion: string;
+  detectedAt: number;
+  autoInstrumented: boolean;
+}
+
+export interface GroupDashboard {
+  groupId: string;
+  groupName: string;
+  agentCount: number;
+  healthyCount: number;
+  avgCpu: number;
+  avgMemory: number;
+  agents: { id: string; hostname: string; status: string; version: string; cpu: number; memory: number; lastHeartbeat: number }[];
+}
