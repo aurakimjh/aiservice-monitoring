@@ -10,10 +10,12 @@
 ```
 test/
 ├── README.md                      ← 현재 문서
+├── UI_화면_테스트_체크리스트.md   ← 43페이지 + 공통 UX 화면 점검표
 ├── templates/                     ← 재사용 가능한 문서 템플릿
 │   ├── 절차서_TEMPLATE.md
 │   ├── 결과서_TEMPLATE.md
-│   └── 변경이력_TEMPLATE.md
+│   ├── 변경이력_TEMPLATE.md
+│   └── OS별_명령어_참조.md       ← Windows PowerShell ↔ Bash 대응표
 │
 ├── 단위테스트_1차_2026-03-24/     ← 테스트 라운드 폴더
 │   ├── 절차서_단위테스트_1차.md   ← 실행 절차 (AI + 수동)
