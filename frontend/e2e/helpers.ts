@@ -14,10 +14,17 @@ export async function loginAsDemo(page: Page, role: 'admin' | 'sre' | 'ai' | 'vi
     viewer: 'Viewer',
   };
 
-  const btn = page.getByRole('button', { name: new RegExp(buttonText[role], 'i') });
-  if (await btn.isVisible()) {
+  // 데모 버튼 클릭 시도 → 실패하면 email/password fallback
+  const btn = page.locator(`button:has-text("${buttonText[role]}")`).first();
+  let clicked = false;
+  try {
+    await btn.waitFor({ state: 'visible', timeout: 5000 });
     await btn.click();
-  } else {
+    clicked = true;
+    // 클릭 후 페이지 이동 대기 (짧은 타임아웃)
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 5000 });
+  } catch {
+    // 데모 버튼 클릭이 안 되거나 리다이렉트 안 되면 email/password 입력
     // Fallback: email/password 입력
     const emails: Record<string, string> = {
       admin: 'admin@aitop.io',
@@ -30,8 +37,8 @@ export async function loginAsDemo(page: Page, role: 'admin' | 'sre' | 'ai' | 'vi
     await page.click('button[type="submit"]');
   }
 
-  // 로그인 완료 대기 — /login 에서 벗어나면 성공
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
+  // 로그인 완료 대기 — /login 에서 벗어나면 성공 (Docker 환경에서 API 응답 + Zustand persist 시간 필요)
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 20_000 });
 }
 
 /**

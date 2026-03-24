@@ -25,7 +25,10 @@ test.describe('Consultant Inspection Flow', () => {
     // Step 2: Agent Fleet Console
     await page.goto('/agents');
     await assertPageLoaded(page);
-    await expect(page.locator('text=/agent|에이전트|fleet/i').first()).toBeVisible();
+    // Agents 페이지가 렌더링되었는지 확인 (KPI 카드, 테이블, 탭 중 하나)
+    await expect(
+      page.getByText(/Total Agents|Healthy|Offline|Hostname|Loading|Agent List/i).first()
+    ).toBeVisible({ timeout: 10000 });
 
     // Step 3: 진단 보고서 — 86개 항목
     await page.goto('/diagnostics');

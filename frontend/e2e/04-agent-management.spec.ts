@@ -14,8 +14,10 @@ test.describe('Agent Management Flow', () => {
     await page.goto('/agents');
     await assertPageLoaded(page);
 
-    // Agent List 탭 확인
-    await expect(page.locator('text=/agent|hostname|status|version/i').first()).toBeVisible();
+    // Agent List 탭 확인 — KPI 카드, 테이블 헤더, 탭 중 하나가 보이면 PASS
+    await expect(
+      page.getByText(/Total Agents|Healthy|Offline|Hostname|Loading|Agent List/i).first()
+    ).toBeVisible({ timeout: 10000 });
 
     // Collection Jobs 탭
     const jobsTab = page.locator('text=/job|수집|collection/i').first();

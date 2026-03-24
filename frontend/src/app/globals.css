@@ -50,10 +50,12 @@
   --chart-7: #79C0FF;
   --chart-8: #56D364;
 
-  /* Interactive */
+  /* Interactive — 다크 배경 위 텍스트/링크용 (4.5:1+ on #161B22) */
   --accent-primary: #58A6FF;
   --accent-hover: #79C0FF;
   --accent-active: #388BFD;
+  /* 버튼 배경용 — 흰색 텍스트와 4.5:1+ 대비 */
+  --accent-button: #1F6FEB;
 
   /* Sidebar */
   --sidebar-bg: #0D1117;
