@@ -33,8 +33,8 @@ from locust.runners import MasterRunner, LocalRunner
 # ─────────────────────────────────────────────────────────
 
 DEMO_CREDENTIALS = {
-    "username": "admin",
-    "password": "admin123",
+    "email": "admin@aitop.io",
+    "password": "admin",
 }
 
 # 테스트용 에이전트 ID 풀
@@ -90,10 +90,10 @@ class APIQueryUser(HttpUser):
         ) as resp:
             if resp.status_code == 200:
                 data = resp.json()
-                self.jwt_token = data.get("token")
+                tokens = data.get("tokens", {})
+                self.jwt_token = tokens.get("accessToken") or data.get("token")
                 resp.success()
             elif resp.status_code == 401:
-                # 데모 계정 없을 때 — 인증 없이 계속
                 resp.failure(f"Login failed: {resp.status_code}")
                 self.jwt_token = None
             else:
@@ -117,9 +117,9 @@ class APIQueryUser(HttpUser):
     def get_agents_list(self):
         """에이전트 목록 조회 (가장 빈번한 조회)"""
         with self.client.get(
-            "/api/v1/agents",
+            "/api/v1/fleet/agents",
             headers=self.auth_headers,
-            name="/api/v1/agents [list]",
+            name="/api/v1/fleet/agents [list]",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 401):
@@ -132,24 +132,23 @@ class APIQueryUser(HttpUser):
         """에이전트 상세 조회"""
         agent_id = random.choice(AGENT_ID_POOL)
         with self.client.get(
-            f"/api/v1/agents/{agent_id}",
+            f"/api/v1/fleet/agents/{agent_id}",
             headers=self.auth_headers,
-            name="/api/v1/agents/{id} [detail]",
+            name="/api/v1/fleet/agents/{id} [detail]",
             catch_response=True,
         ) as resp:
-            # 404 = 에이전트 미존재 (부하 테스트에서는 정상)
             if resp.status_code in (200, 401, 404):
                 resp.success()
             else:
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(3)
-    def get_collect_jobs(self):
+    def get_fleet_jobs(self):
         """수집 작업 목록 조회"""
         with self.client.get(
-            "/api/v1/collect/jobs",
+            "/api/v1/fleet/jobs",
             headers=self.auth_headers,
-            name="/api/v1/collect/jobs [list]",
+            name="/api/v1/fleet/jobs [list]",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 401):
@@ -158,29 +157,29 @@ class APIQueryUser(HttpUser):
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(2)
-    def get_fleet_kpi(self):
-        """Fleet KPI 조회"""
+    def get_ai_services(self):
+        """AI 서비스 목록 조회"""
         with self.client.get(
-            "/api/v1/fleet/kpi",
+            "/api/v1/ai/services",
             headers=self.auth_headers,
-            name="/api/v1/fleet/kpi",
+            name="/api/v1/ai/services [list]",
             catch_response=True,
         ) as resp:
-            if resp.status_code in (200, 401, 404):
+            if resp.status_code in (200, 401):
                 resp.success()
             else:
                 resp.failure(f"Unexpected: {resp.status_code}")
 
     @task(2)
-    def get_diagnostics_list(self):
-        """진단 보고서 목록 조회"""
+    def get_diagnostics_runs(self):
+        """진단 실행 목록 조회"""
         with self.client.get(
-            "/api/v1/diagnostics",
+            "/api/v1/diagnostics/runs",
             headers=self.auth_headers,
-            name="/api/v1/diagnostics [list]",
+            name="/api/v1/diagnostics/runs [list]",
             catch_response=True,
         ) as resp:
-            if resp.status_code in (200, 401, 404):
+            if resp.status_code in (200, 401):
                 resp.success()
             else:
                 resp.failure(f"Unexpected: {resp.status_code}")
@@ -248,7 +247,9 @@ class AgentRegUser(HttpUser):
             catch_response=True,
         ) as resp:
             if resp.status_code == 200:
-                self.jwt_token = resp.json().get("token")
+                data = resp.json()
+                tokens = data.get("tokens", {})
+                self.jwt_token = tokens.get("accessToken") or data.get("token")
                 resp.success()
             else:
                 resp.failure(f"Admin login failed: {resp.status_code}")
@@ -287,10 +288,10 @@ class AgentRegUser(HttpUser):
         }
 
         with self.client.post(
-            "/api/v1/agents/register",
+            "/api/v1/heartbeat",
             json=payload,
             headers=self.auth_headers,
-            name="/api/v1/agents/register",
+            name="/api/v1/heartbeat [register]",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 201, 401, 400):
@@ -383,14 +384,14 @@ class HeartbeatUser(HttpUser):
         span_id = generate_span_id()
 
         with self.client.post(
-            "/api/v1/agents/heartbeat",
+            "/api/v1/heartbeat",
             json=payload,
             headers={
                 "traceparent": f"00-{trace_id}-{span_id}-01",
                 "Content-Type": "application/json",
                 "X-Agent-ID": self.agent_id,
             },
-            name="/api/v1/agents/heartbeat",
+            name="/api/v1/heartbeat",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 204, 401, 400):
@@ -402,12 +403,12 @@ class HeartbeatUser(HttpUser):
     def check_own_status(self):
         """자신의 에이전트 상태 조회"""
         with self.client.get(
-            f"/api/v1/agents/{self.agent_id}/status",
+            f"/api/v1/fleet/agents/{self.agent_id}",
             headers={
                 "X-Agent-ID": self.agent_id,
                 "traceparent": f"00-{generate_trace_id()}-{generate_span_id()}-01",
             },
-            name="/api/v1/agents/{id}/status",
+            name="/api/v1/fleet/agents/{id} [status]",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 401, 404):
@@ -443,7 +444,9 @@ class CollectTrigUser(HttpUser):
             catch_response=True,
         ) as resp:
             if resp.status_code == 200:
-                self.jwt_token = resp.json().get("token")
+                data = resp.json()
+                tokens = data.get("tokens", {})
+                self.jwt_token = tokens.get("accessToken") or data.get("token")
                 resp.success()
             else:
                 resp.failure(f"Login failed: {resp.status_code}")
@@ -475,10 +478,10 @@ class CollectTrigUser(HttpUser):
         }
 
         with self.client.post(
-            "/api/v1/collect/trigger",
+            f"/api/v1/agents/{agent_id}/collect",
             json=payload,
             headers=self.auth_headers,
-            name="/api/v1/collect/trigger",
+            name="/api/v1/agents/{id}/collect",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 201, 401, 400, 404):
@@ -499,11 +502,11 @@ class CollectTrigUser(HttpUser):
         """수집 작업 상태 조회"""
         if self.job_ids:
             job_id = random.choice(self.job_ids)
-            url = f"/api/v1/collect/jobs/{job_id}"
-            name = "/api/v1/collect/jobs/{id}"
+            url = f"/api/v1/fleet/jobs"
+            name = "/api/v1/fleet/jobs [detail]"
         else:
-            url = "/api/v1/collect/jobs"
-            name = "/api/v1/collect/jobs [list]"
+            url = "/api/v1/fleet/jobs"
+            name = "/api/v1/fleet/jobs [list]"
 
         with self.client.get(
             url,
@@ -533,7 +536,7 @@ class CollectTrigUser(HttpUser):
             name="/api/v1/diagnostics/trigger",
             catch_response=True,
         ) as resp:
-            if resp.status_code in (200, 201, 401, 400, 404):
+            if resp.status_code in (200, 201, 202, 401, 400, 404):
                 resp.success()
             else:
                 resp.failure(f"Diagnostic trigger failed: {resp.status_code}")
@@ -543,9 +546,9 @@ class CollectTrigUser(HttpUser):
         """진단 보고서 조회"""
         agent_id = random.choice(AGENT_ID_POOL)
         with self.client.get(
-            f"/api/v1/diagnostics?agent_id={agent_id}&limit=10",
+            f"/api/v1/diagnostics/runs?agent={agent_id}",
             headers=self.auth_headers,
-            name="/api/v1/diagnostics [agent-filter]",
+            name="/api/v1/diagnostics/runs [agent-filter]",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 401, 404):
