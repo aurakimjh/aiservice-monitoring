@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/buffer"
@@ -39,6 +40,8 @@ func (s *Server) Start(ctx context.Context) {
 	mux.HandleFunc("GET /", s.handleDashboard)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("POST /api/report", s.handleReport)
+	mux.HandleFunc("POST /api/report/pdf", s.handleReportPDF)
+	mux.HandleFunc("GET /reports/{file}", s.handleReportFile)
 	mux.HandleFunc("POST /api/cleanup", s.handleCleanup)
 	mux.HandleFunc("GET /health", s.handleHealth)
 
@@ -158,6 +161,41 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		"message": "Report generated successfully",
 		"path":    path,
 	})
+}
+
+func (s *Server) handleReportPDF(w http.ResponseWriter, r *http.Request) {
+	outputDir := envOrDefault("AITOP_REPORT_PATH", "./reports")
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	report := NewReportGenerator(s.buf, s.logger)
+	path, err := report.GeneratePDF(outputDir, s.startTime)
+	if err != nil {
+		s.logger.Error("PDF report generation failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	s.logger.Info("PDF report generated", "path", path)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":  "PDF report generated successfully",
+		"path":     path,
+		"filename": filepath.Base(path),
+	})
+}
+
+// handleReportFile serves a generated report file (HTML or PDF) by filename.
+// Only the base filename is accepted; directory traversal is prevented.
+func (s *Server) handleReportFile(w http.ResponseWriter, r *http.Request) {
+	name := filepath.Base(r.PathValue("file"))
+	if name == "." || name == "/" {
+		http.Error(w, "invalid filename", http.StatusBadRequest)
+		return
+	}
+	outputDir := envOrDefault("AITOP_REPORT_PATH", "./reports")
+	http.ServeFile(w, r, filepath.Join(outputDir, name))
 }
 
 func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
