@@ -64,6 +64,31 @@ test/
 5. 코드 수정 발생 → 변경이력.md 기록
 ```
 
+## 명령어 실행 위치
+
+> 프로젝트 루트: `C:\workspace\aiservice-monitoring\`
+
+```
+C:\workspace\aiservice-monitoring\          ← 프로젝트 루트
+├── agent\                                  ← Go 명령 실행 위치
+├── frontend\                               ← npm 명령 실행 위치
+├── docker-compose.e2e.yaml                 ← Docker 명령 (루트에서 실행)
+├── scripts\                                ← bash 스크립트 (루트에서 실행)
+└── test\                                   ← 테스트 문서
+```
+
+| 작업 | 실행 위치 | 명령어 예시 |
+|------|----------|-----------|
+| Go 빌드/테스트 | `cd agent` | `go build ./...` / `go test ./...` |
+| Frontend 개발 서버 | `cd frontend` | `npm run dev` |
+| Frontend Vitest | `cd frontend` | `npx vitest run` |
+| Frontend Playwright | `cd frontend` | `npx playwright test` |
+| Docker 스택 기동 | **프로젝트 루트** | `docker compose -f docker-compose.e2e.yaml up -d` |
+| Bash 스크립트 | **프로젝트 루트** | `bash scripts/e2e/healthcheck.sh` |
+| Locust 부하 테스트 | **프로젝트 루트** | `locust -f locust/locustfile.py` |
+
+> Windows PowerShell 사용 시 [OS별 명령어 참조](templates/OS별_명령어_참조.md) 참고
+
 ## 참고
 
 - `agent/test/` — Go 통합/계약 테스트 코드 (이 디렉토리와 별개)

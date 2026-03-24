@@ -5,6 +5,30 @@
 
 ---
 
+## 0. 명령어 실행 위치 (중요)
+
+> 프로젝트 루트: `C:\workspace\aiservice-monitoring\`
+
+```
+C:\workspace\aiservice-monitoring\          ← 프로젝트 루트
+├── agent\                                  ← Go 명령 실행 위치
+├── frontend\                               ← npm 명령 실행 위치 (package.json이 여기에 있음)
+├── docker-compose.e2e.yaml                 ← Docker 명령 (루트에서 실행)
+├── scripts\                                ← bash 스크립트 (루트에서 실행)
+└── test\                                   ← 테스트 문서
+```
+
+| 작업 | Bash 이동 | PowerShell 이동 |
+|------|----------|----------------|
+| Go 빌드/테스트 | `cd /c/workspace/aiservice-monitoring/agent` | `cd C:\workspace\aiservice-monitoring\agent` |
+| Frontend (npm) | `cd /c/workspace/aiservice-monitoring/frontend` | `cd C:\workspace\aiservice-monitoring\frontend` |
+| Docker / 스크립트 | `cd /c/workspace/aiservice-monitoring` | `cd C:\workspace\aiservice-monitoring` |
+
+> **주의**: `npm run dev`, `npx vitest run` 등 npm 명령은 반드시 `frontend\` 폴더에서 실행해야 합니다.
+> 프로젝트 루트에는 `package.json`이 없으므로 루트에서 npm 명령을 실행하면 에러가 발생합니다.
+
+---
+
 ## 1. 실행 환경 선택 가이드
 
 | 환경 | 추천 상황 | 비고 |
