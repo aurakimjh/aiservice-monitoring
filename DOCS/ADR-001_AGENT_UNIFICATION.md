@@ -165,7 +165,64 @@ aitop-agent (Go 단일 바이너리, ~25MB)
 
 ---
 
-## 5. 대안 검토
+## 5. 수집 방식 — Go 네이티브 vs 스크립트
+
+### 5.1 현재 스크립트 분석
+
+AITOP Diagnostic은 30개 shell/PowerShell 스크립트로 데이터를 수집한다.
+스크립트가 하는 일을 유형별로 분류하면:
+
+| 유형 | 비율 | Go 네이티브 대체 | 방법 |
+|------|:----:|:----------------:|------|
+| 시스템 명령어 (`sysctl`, `df`, `free`) | 25% | **가능** | `/proc`, `/sys` 직접 읽기 또는 `exec.Command` |
+| 설정 파일 읽기 (`nginx.conf`, `my.cnf`) | 20% | **가능** | `os.ReadFile` + Go 파서 |
+| 프로세스 탐지 (`ps -ef \| grep`) | 15% | **가능** | `/proc/{pid}/cmdline` 스캔 |
+| 로그 분석 (access.log, GC log) | 15% | **가능** | `bufio.Scanner` + `regexp` |
+| 버전/네트워크 (`nginx -v`, `netstat`) | 10% | **가능** | `exec.Command` + `/proc/net/tcp` |
+| **DB SQL 쿼리** (`pg_settings` 등) | 10% | **조건부** | Go DB 드라이버 필요 + **인증 정보** |
+| **WAS JMX/특수 유닉스** | 5% | **어려움** | Jolokia HTTP 또는 스크립트 래핑 |
+
+### 5.2 권장 전략: 3계층 수집
+
+```
+계층 1: Go 네이티브 (80~85%)
+  ├── /proc, /sys 직접 읽기 (OS 메트릭)
+  ├── 설정 파일 파싱 (nginx, tomcat, postgresql 등)
+  ├── 프로세스 탐지 + 버전 추출
+  ├── 로그 패턴 분석
+  └── GPU nvidia-smi 파싱 (이미 구현)
+
+계층 2: Go DB 드라이버 (10%)
+  ├── pgx (PostgreSQL) — pg_settings, pg_stat_activity
+  ├── go-sql-driver (MySQL) — SHOW VARIABLES, SHOW STATUS
+  ├── godror (Oracle) — v$parameter, v$session
+  └── go-mssqldb (MSSQL) — sys.configurations
+  * 인증 정보: agent.yaml 또는 --db-user/--db-pass 옵션
+
+계층 3: 임베디드 스크립트 래핑 (5~10%)
+  ├── AIX/HP-UX/Solaris 전용 명령어
+  ├── WAS JMX (Jolokia 미사용 환경)
+  └── 고객 맞춤 수집 스크립트 (plugin 디렉토리)
+  * Go의 exec.Command로 호출, 출력을 Evidence JSON으로 변환
+  * 스크립트가 Agent 바이너리에 embed (Go 1.16+ //go:embed)
+```
+
+### 5.3 스크립트를 완전히 없애지 않는 이유
+
+1. **DB 쿼리**: SQL 실행에는 DB 인증 정보가 필수 — 모든 고객 환경에서 Go 드라이버로 접속 가능하지 않음 (방화벽, 인증 방식, 클라이언트 라이브러리)
+2. **레거시 유닉스**: AIX/HP-UX/Solaris는 Go 크로스 컴파일이 제한적
+3. **고객 맞춤**: 특수 환경(커스텀 미들웨어, 독자 프로토콜)은 스크립트가 유연
+
+### 5.4 결론
+
+> **"스크립트를 없애는 게 아니라, 스크립트를 에이전트 안에 내장한다."**
+>
+> 고객은 더 이상 스크립트를 수동 배포/실행할 필요가 없다.
+> Agent 설치 → 자동 수집. 스크립트 버전 관리는 Agent OTA 업데이트로 해결.
+
+---
+
+## 6. 대안 검토
 
 ### 대안 A: 현재 유지 (에이전트 2개)
 
