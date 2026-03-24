@@ -797,19 +797,20 @@ Part C (교차검증) 승인자: ____________ 서명: ____
 | 7'-1 | Docker 11컨테이너 기동 + 헬스체크 | **완료** | Phase 17에서 전체 PASS (2026-03-23) |
 | 7'-2 | 파이프라인 검증 (21개 체크포인트) | **완료** | 21/21 PASS — JWT, Heartbeat, Fleet, MinIO, Prometheus |
 | 7'-3 | Playwright E2E 5개 시나리오 | **완료** | 9/9 PASS — SRE, AI, Consultant, Agent, Navigation |
-| 7'-4 | a11y + Visual Regression | **미실행** | Playwright a11y/visual 프로젝트 미실행 |
+| 7'-4 | a11y + Visual Regression | **완료** | a11y 13/14 PASS (Agents 페이지 1건 FAIL), Visual 15/15 기준선 생성 |
 
-#### To-Do (통합테스트 1차에서 수행)
+#### To-Do
 
-| # | 작업 | 우선순위 | 예상 기록 위치 |
-|---|------|:-------:|--------------|
-| ~~1~~ | ~~UI 전용 API 12개 엔드포인트 구현~~ | ~~High~~ | **완료** (2026-03-24) — 11개 API 구현, 40/40 PASS |
-| 2 | **Playwright a11y 테스트 실행** | Medium | 결과서_E2E |
-| 3 | **Playwright visual-regression 기준 스냅샷 생성** | Medium | `frontend/e2e/snapshots/` |
-| 4 | **Locust 부하 테스트** (200 users, 10분, 4 시나리오) | Medium | Locust HTML 리포트 |
-| 5 | **보안 감사** (`scripts/e2e/security-audit.sh`) | Medium | 결과서_E2E |
-| 6 | **트레이스 연속성** (`scripts/e2e/trace-continuity.sh`) | Medium | 결과서_E2E |
-| 7 | **AI-L3**: Frontend↔Backend API 경로/타입 대조 | Medium | 결과서_AI |
+| # | 작업 | 우선순위 | 상태 |
+|---|------|:-------:|------|
+| ~~1~~ | ~~UI 전용 API 12개 엔드포인트 구현~~ | ~~High~~ | **완료** (2026-03-24) |
+| ~~2~~ | ~~Playwright a11y 테스트 실행~~ | ~~Medium~~ | **완료** — 13/14 PASS, Agents 페이지 button-name + color-contrast 수정 필요 |
+| ~~3~~ | ~~Playwright visual-regression 기준 스냅샷 생성~~ | ~~Medium~~ | **완료** — 15개 기준 스냅샷 생성 |
+| 4 | **Locust 부하 테스트** (200 users, 10분) | Medium | SKIP — `pip install locust` 후 재실행 |
+| 5 | **보안 감사 완성** (A02~A10) | Medium | 부분 실행 — 스크립트 의존성 보완 필요 |
+| 6 | **트레이스 연속성 완성** (Layer 2~5) | Medium | Layer 1 PASS, 나머지 Tempo 조회 대기 |
+| 7 | **Agents 페이지 a11y 수정** (button-name + color-contrast) | High | 미수정 — UI 컴포넌트 수정 필요 |
+| 8 | **E2E spec locator 수정** (03, 04 시나리오) | Medium | 미수정 — 실제 UI 텍스트에 맞게 업데이트 |
 
 **Playwright E2E 테스트 실행**:
 
