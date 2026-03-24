@@ -3,6 +3,7 @@ package health
 import (
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
@@ -14,15 +15,23 @@ type Monitor struct {
 	agentID  string
 	hostname string
 	startAt  time.Time
+
+	mu          sync.Mutex
+	prevCPUTime float64
+	prevWallAt  time.Time
+	lastCPUPct  float64
 }
 
 // NewMonitor creates a new health monitor.
 func NewMonitor(agentID string) *Monitor {
 	hostname, _ := os.Hostname()
+	now := time.Now()
 	return &Monitor{
-		agentID:  agentID,
-		hostname: hostname,
-		startAt:  time.Now(),
+		agentID:     agentID,
+		hostname:    hostname,
+		startAt:     now,
+		prevCPUTime: processCPUSeconds(),
+		prevWallAt:  now,
 	}
 }
 
@@ -32,6 +41,7 @@ type SelfMetrics struct {
 	SysMemMB      float64 `json:"sys_mem_mb"`
 	NumGoroutines int     `json:"num_goroutines"`
 	UptimeSeconds float64 `json:"uptime_seconds"`
+	CPUPercent    float64 `json:"cpu_percent"`
 }
 
 // GetSelfMetrics returns current agent resource usage.
@@ -44,7 +54,27 @@ func (m *Monitor) GetSelfMetrics() SelfMetrics {
 		SysMemMB:      float64(mem.Sys) / 1024 / 1024,
 		NumGoroutines: runtime.NumGoroutine(),
 		UptimeSeconds: time.Since(m.startAt).Seconds(),
+		CPUPercent:    m.sampleCPUPercent(),
 	}
+}
+
+// sampleCPUPercent computes the agent's CPU usage since the last sample.
+func (m *Monitor) sampleCPUPercent() float64 {
+	now := time.Now()
+	cpuNow := processCPUSeconds()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	wallDelta := now.Sub(m.prevWallAt).Seconds()
+	if wallDelta > 0 {
+		cpuDelta := cpuNow - m.prevCPUTime
+		m.lastCPUPct = (cpuDelta / wallDelta) * 100
+	}
+	m.prevCPUTime = cpuNow
+	m.prevWallAt = now
+
+	return m.lastCPUPct
 }
 
 // BuildHeartbeat creates a heartbeat message with current agent state.
@@ -59,7 +89,7 @@ func (m *Monitor) BuildHeartbeat(plugins []models.PluginStatus, privReport *mode
 		AgentVersion:    version.Version,
 		OSType:          runtime.GOOS,
 		OSVersion:       "",
-		CPUPercent:      0, // TODO: track agent CPU usage
+		CPUPercent:      self.CPUPercent,
 		MemoryMB:        self.SysMemMB,
 		Plugins:         plugins,
 		PrivilegeReport: privReport,
