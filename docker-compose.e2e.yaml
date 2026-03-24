@@ -37,7 +37,7 @@ services:
       minio:
         condition: service_healthy
       otel-collector:
-        condition: service_healthy
+        condition: service_started
     networks:
       - aitop-e2e
     healthcheck:
@@ -164,12 +164,10 @@ services:
       - ./infra/docker/otelcol-e2e.yaml:/etc/otelcol/config.yaml:ro
     networks:
       - aitop-e2e
+    # OTel Collector 0.91.0 이미지는 scratch 기반이라 curl/wget/sh 없음
+    # healthcheck extension이 포트 13133에서 응답하므로 외부에서 확인
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:13133/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      disable: true
     labels:
       aitop.role: "otel-collector"
 
@@ -266,7 +264,7 @@ services:
       - OTEL_LOGS_EXPORTER=otlp
     depends_on:
       otel-collector:
-        condition: service_healthy
+        condition: service_started
     networks:
       - aitop-e2e
     healthcheck:
