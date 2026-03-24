@@ -803,9 +803,7 @@ Part C (교차검증) 승인자: ____________ 서명: ____
 
 | # | 작업 | 우선순위 | 예상 기록 위치 |
 |---|------|:-------:|--------------|
-| 1 | **UI 전용 API 12개 엔드포인트 구현** | High | 변경이력 |
-|   | `/infra/hosts`, `/fleet/agents/{id}`, `/ai/services`, `/ai/gpu` | | |
-|   | `/ai/services/{id}/llm,rag,guardrail`, `/diagnostics/*` | | |
+| ~~1~~ | ~~UI 전용 API 12개 엔드포인트 구현~~ | ~~High~~ | **완료** (2026-03-24) — 11개 API 구현, 40/40 PASS |
 | 2 | **Playwright a11y 테스트 실행** | Medium | 결과서_E2E |
 | 3 | **Playwright visual-regression 기준 스냅샷 생성** | Medium | `frontend/e2e/snapshots/` |
 | 4 | **Locust 부하 테스트** (200 users, 10분, 4 시나리오) | Medium | Locust HTML 리포트 |

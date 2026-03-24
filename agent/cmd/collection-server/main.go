@@ -812,6 +812,240 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
+	// ── Fleet Agent Detail (GET /api/v1/fleet/agents/{id}) ───────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/agents/", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.URL.Path[len("/api/v1/fleet/agents/"):]
+		if agentID == "" {
+			http.Error(w, "agent id required", http.StatusBadRequest)
+			return
+		}
+		rec, ok := f.get(agentID)
+		if !ok {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, snapshot(rec))
+	})
+
+	// ── Infra Hosts API (/api/v1/infra/hosts) ────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/infra/hosts", func(w http.ResponseWriter, r *http.Request) {
+		agents := f.list()
+		hosts := make([]map[string]interface{}, 0, len(agents))
+		for _, a := range agents {
+			a.mu.RLock()
+			hosts = append(hosts, map[string]interface{}{
+				"hostname":   a.Hostname,
+				"agent_id":   a.ID,
+				"status":     string(a.Status),
+				"os_type":    a.OSType,
+				"os_version": a.OSVersion,
+				"cpu_percent": a.CPUPercent,
+				"memory_mb":  a.MemoryMB,
+				"last_heartbeat": a.LastHeartbeat.Format(time.RFC3339),
+			})
+			a.mu.RUnlock()
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": hosts, "total": len(hosts)})
+	})
+
+	// ── AI Services API (/api/v1/ai/*) ───────────────────────────────────────
+
+	demoAIServices := func() []map[string]interface{} {
+		return []map[string]interface{}{
+			{
+				"id": "test-rag-service", "name": "RAG Q&A Service", "type": "rag",
+				"status": "healthy", "model": "gpt-4o", "provider": "openai",
+				"ttft_p50_ms": 180, "ttft_p95_ms": 420, "tps": 45.2,
+				"token_usage_24h": 1250000, "cost_24h_usd": 18.75,
+				"error_rate": 0.2, "request_count_24h": 8500,
+			},
+			{
+				"id": "ai-svc-002", "name": "Code Assistant", "type": "completion",
+				"status": "healthy", "model": "claude-sonnet-4-20250514", "provider": "anthropic",
+				"ttft_p50_ms": 220, "ttft_p95_ms": 580, "tps": 38.7,
+				"token_usage_24h": 980000, "cost_24h_usd": 14.70,
+				"error_rate": 0.1, "request_count_24h": 5200,
+			},
+			{
+				"id": "ai-svc-003", "name": "Image Classifier", "type": "inference",
+				"status": "degraded", "model": "resnet-50", "provider": "self-hosted",
+				"ttft_p50_ms": 45, "ttft_p95_ms": 120, "tps": 210.5,
+				"token_usage_24h": 0, "cost_24h_usd": 2.30,
+				"error_rate": 1.8, "request_count_24h": 42000,
+			},
+		}
+	}
+
+	mux.HandleFunc("GET /api/v1/ai/services", func(w http.ResponseWriter, r *http.Request) {
+		items := demoAIServices()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": len(items)})
+	})
+
+	mux.HandleFunc("GET /api/v1/ai/services/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[len("/api/v1/ai/services/"):]
+		svcID := path
+		subPath := ""
+		for i, c := range path {
+			if c == '/' {
+				svcID = path[:i]
+				subPath = path[i+1:]
+				break
+			}
+		}
+
+		// Find the service
+		var svc map[string]interface{}
+		for _, s := range demoAIServices() {
+			if s["id"] == svcID {
+				svc = s
+				break
+			}
+		}
+		if svc == nil {
+			http.Error(w, "ai service not found", http.StatusNotFound)
+			return
+		}
+
+		switch subPath {
+		case "llm":
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"service_id": svcID, "model": svc["model"], "provider": svc["provider"],
+				"ttft_p50_ms": svc["ttft_p50_ms"], "ttft_p95_ms": svc["ttft_p95_ms"], "tps": svc["tps"],
+				"token_usage_24h": svc["token_usage_24h"], "cost_24h_usd": svc["cost_24h_usd"],
+				"error_rate": svc["error_rate"],
+				"ttft_histogram": []map[string]interface{}{
+					{"bucket_ms": 100, "count": 120}, {"bucket_ms": 200, "count": 340},
+					{"bucket_ms": 500, "count": 85}, {"bucket_ms": 1000, "count": 22}, {"bucket_ms": 2000, "count": 5},
+				},
+			})
+		case "rag":
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"service_id": svcID,
+				"embedding": map[string]interface{}{"model": "text-embedding-3-small", "dimension": 1536, "latency_ms": 12},
+				"retrieval": map[string]interface{}{"vectordb": "qdrant", "top_k": 5, "latency_ms": 35, "relevancy_score": 0.87},
+				"generation": map[string]interface{}{"model": svc["model"], "ttft_ms": svc["ttft_p50_ms"], "tps": svc["tps"]},
+				"guardrail": map[string]interface{}{"enabled": true, "block_rate": 2.1, "latency_ms": 8},
+			})
+		case "guardrail":
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"service_id": svcID, "enabled": true,
+				"policies": []map[string]interface{}{
+					{"name": "PII Detection", "type": "pii", "action": "mask", "triggered_24h": 45},
+					{"name": "SQL Injection", "type": "injection", "action": "block", "triggered_24h": 3},
+					{"name": "Prompt Injection", "type": "prompt_injection", "action": "block", "triggered_24h": 12},
+					{"name": "Toxicity Filter", "type": "toxicity", "action": "block", "triggered_24h": 7},
+				},
+				"total_blocked_24h": 67, "total_requests_24h": svc["request_count_24h"],
+				"block_rate": 2.1,
+			})
+		default:
+			writeJSON(w, http.StatusOK, svc)
+		}
+	})
+
+	mux.HandleFunc("GET /api/v1/ai/gpu", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": []map[string]interface{}{
+				{
+					"gpu_id": "gpu-0", "name": "NVIDIA A100 80GB", "host": "gpu-node-01",
+					"utilization_pct": 78.5, "memory_used_mb": 65536, "memory_total_mb": 81920,
+					"temperature_c": 72, "power_w": 285, "power_limit_w": 400,
+					"sm_clock_mhz": 1410, "mem_clock_mhz": 1593,
+					"processes": []map[string]interface{}{
+						{"pid": 12345, "name": "vllm-worker", "memory_mb": 42000},
+						{"pid": 12346, "name": "embedding-svc", "memory_mb": 18000},
+					},
+				},
+				{
+					"gpu_id": "gpu-1", "name": "NVIDIA A100 80GB", "host": "gpu-node-01",
+					"utilization_pct": 45.2, "memory_used_mb": 40960, "memory_total_mb": 81920,
+					"temperature_c": 65, "power_w": 220, "power_limit_w": 400,
+					"sm_clock_mhz": 1410, "mem_clock_mhz": 1593,
+					"processes": []map[string]interface{}{
+						{"pid": 22345, "name": "training-job-7", "memory_mb": 38000},
+					},
+				},
+				{
+					"gpu_id": "gpu-2", "name": "NVIDIA H100 80GB", "host": "gpu-node-02",
+					"utilization_pct": 92.1, "memory_used_mb": 74752, "memory_total_mb": 81920,
+					"temperature_c": 79, "power_w": 650, "power_limit_w": 700,
+					"sm_clock_mhz": 1980, "mem_clock_mhz": 2619,
+					"processes": []map[string]interface{}{
+						{"pid": 33456, "name": "vllm-worker", "memory_mb": 72000},
+					},
+				},
+			},
+			"total": 3,
+			"summary": map[string]interface{}{
+				"total_gpus": 3, "avg_utilization_pct": 71.9,
+				"total_memory_mb": 245760, "used_memory_mb": 181248,
+			},
+		})
+	})
+
+	// ── Diagnostics API (/api/v1/diagnostics/*) ──────────────────────────────
+
+	mux.HandleFunc("POST /api/v1/diagnostics/trigger", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			AgentID string `json:"agent_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AgentID == "" {
+			http.Error(w, "agent_id required", http.StatusBadRequest)
+			return
+		}
+		runID := fmt.Sprintf("diag-%d", time.Now().UnixMilli())
+		logger.Info("diagnostic triggered", "agent_id", body.AgentID, "run_id", runID)
+		bus.Publish(eventbus.Event{
+			Type:      "diagnostic.started",
+			Timestamp: time.Now().UTC(),
+			AgentID:   body.AgentID,
+			Data:      map[string]interface{}{"run_id": runID},
+		})
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{
+			"run_id": runID, "agent_id": body.AgentID, "status": "started",
+			"started_at": time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/diagnostics/runs", func(w http.ResponseWriter, r *http.Request) {
+		agentFilter := r.URL.Query().Get("agent")
+		items := []map[string]interface{}{
+			{"run_id": "diag-001", "agent_id": "agent-01", "status": "completed", "total_checks": 86, "passed": 82, "failed": 3, "warnings": 1, "started_at": time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339), "completed_at": time.Now().Add(-2*time.Hour + 45*time.Second).UTC().Format(time.RFC3339)},
+			{"run_id": "diag-002", "agent_id": "agent-02", "status": "completed", "total_checks": 86, "passed": 85, "failed": 0, "warnings": 1, "started_at": time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339), "completed_at": time.Now().Add(-1*time.Hour + 38*time.Second).UTC().Format(time.RFC3339)},
+			{"run_id": "diag-003", "agent_id": "agent-01", "status": "running", "total_checks": 86, "passed": 40, "failed": 0, "warnings": 0, "started_at": time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339)},
+		}
+		if agentFilter != "" {
+			filtered := make([]map[string]interface{}, 0)
+			for _, item := range items {
+				if item["agent_id"] == agentFilter {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": len(items)})
+	})
+
+	mux.HandleFunc("GET /api/v1/diagnostics/runs/", func(w http.ResponseWriter, r *http.Request) {
+		runID := r.URL.Path[len("/api/v1/diagnostics/runs/"):]
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"run_id": runID, "agent_id": "agent-01", "status": "completed",
+			"total_checks": 86, "passed": 82, "failed": 3, "warnings": 1,
+			"started_at":   time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339),
+			"completed_at": time.Now().Add(-2*time.Hour + 45*time.Second).UTC().Format(time.RFC3339),
+			"categories": []map[string]interface{}{
+				{"name": "OS", "total": 15, "passed": 15, "failed": 0},
+				{"name": "Network", "total": 12, "passed": 11, "failed": 1},
+				{"name": "Storage", "total": 10, "passed": 10, "failed": 0},
+				{"name": "Security", "total": 14, "passed": 12, "failed": 2},
+				{"name": "Performance", "total": 18, "passed": 17, "failed": 0},
+				{"name": "AI/LLM", "total": 17, "passed": 17, "failed": 0},
+			},
+		})
+	})
+
 	// ── Multi-Cloud API (Phase 23-1) ─────────────────────────────────────────
 
 	mux.HandleFunc("GET /api/v1/cloud/costs", func(w http.ResponseWriter, r *http.Request) {

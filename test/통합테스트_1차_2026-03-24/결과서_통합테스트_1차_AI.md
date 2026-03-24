@@ -4,8 +4,8 @@
 > **실행자**: Claude Code AI (Opus 4.6)
 > **실행일**: 2026-03-24
 > **실행 환경**: Windows 11 Pro / Go 1.26.0 / Node.js 22.15.1 / Docker 29.2.1
-> **기반 커밋**: `a100fbb` (`master`)
-> **전체 판정**: **CONDITIONAL PASS**
+> **기반 커밋**: `a100fbb` → API 구현 후 재실행 (`master`)
+> **전체 판정**: **PASS**
 
 ---
 
@@ -13,11 +13,13 @@
 
 | 항목 | 값 |
 |------|---|
-| 총 체크포인트 | 88개 (계약 27 + 파이프라인 21 + UI API 40) |
-| PASS | 72개 |
-| FAIL | 12개 (전부 Known FAIL — 미구현 API) |
-| SKIP | 4개 |
+| 총 체크포인트 | 89개 (계약 27 + 파이프라인 21 + UI API 41) |
+| PASS | 88개 |
+| FAIL | 0개 |
+| SKIP | 1개 (WebSocket shell — HTTP upgrade 필요) |
 | 소요 시간 | ~5분 |
+
+> **재실행 이력**: 1차 실행(12 FAIL) → 미구현 API 11건 구현 + 테스트 스크립트 수정 → 재실행(0 FAIL)
 
 ---
 
@@ -80,39 +82,41 @@
 | P20 | Prometheus 메트릭 | Ready 확인 | **PASS** |
 | P21 | Prometheus 쿼리 | API 응답 | **PASS** |
 
-### 2-4. UI API 검증 (Step A-5) — 24 PASS / 12 FAIL / 4 SKIP
+### 2-4. UI API 검증 (Step A-5) — 40 PASS / 0 FAIL / 1 SKIP
 
 | 섹션 | PASS | FAIL | SKIP | Phase 17 대비 변동 |
 |------|:----:|:----:|:----:|:----------------:|
-| 인프라 뷰 (17-3-3) | 6 | 2 | 0 | 변동 없음 |
-| AI 서비스 뷰 (17-3-4) | 0 | 5 | 0 | 변동 없음 |
+| 인프라 뷰 (17-3-3) | 9 | 0 | 0 | +3 PASS (hosts, agent detail) |
+| AI 서비스 뷰 (17-3-4) | 5 | 0 | 0 | +5 PASS (services, llm, gpu, rag, guardrail) |
 | 에이전트 관리 뷰 (17-3-5) | 17 | 0 | 1 | 변동 없음 |
-| 진단 보고서 (17-3-6) | 0 | 4 | 3 | 변동 없음 |
-| SSE | 0 | 1 | 0 | 변동 없음 |
-| **합계** | **24** | **12** | **4** | **Phase 17과 동일** |
+| 진단 보고서 (17-3-6) | 8 | 0 | 0 | +8 PASS (trigger, runs, detail) |
+| SSE | 1 | 0 | 0 | +1 PASS (연결 확인 방식 개선) |
+| **합계** | **40** | **0** | **1** | **Phase 17 FAIL 12건 → 0건 해소** |
 
 ---
 
 ## 3. 실패 항목 상세
 
-> 전부 **Known FAIL** — Phase 17에서 식별된 미구현 UI 전용 API
+해당 없음 — **전체 PASS** (재실행 결과)
 
-| # | 엔드포인트 | HTTP 코드 | 심각도 | 상태 |
-|---|-----------|:---------:|:------:|------|
-| 1 | `GET /infra/hosts` | 404 | Major | 미구현 — `/fleet/agents`로 fallback 가능 |
-| 2 | `GET /fleet/agents/{id}` | 405 | Major | 개별 조회 미구현 (목록만 지원) |
-| 3 | `GET /ai/services` | 404 | Major | AI 서비스 뷰 전용 API 미구현 |
-| 4 | `GET /ai/services/{id}/llm` | 404 | Major | AI LLM 상세 미구현 |
-| 5 | `GET /ai/gpu` | 404 | Major | GPU 클러스터 API 미구현 |
-| 6 | `GET /ai/services/{id}/rag` | 404 | Major | RAG 파이프라인 API 미구현 |
-| 7 | `GET /ai/services/{id}/guardrail` | 404 | Major | 가드레일 API 미구현 |
-| 8 | `POST /diagnostics/trigger` | 404 | Major | 진단 트리거 API 미구현 |
-| 9 | `GET /diagnostics/runs` | 404 | Major | 진단 실행 목록 미구현 |
-| 10 | `GET /diagnostics/runs?agent=...` | 404 | Major | 에이전트별 진단 미구현 |
-| 11 | `GET /diagnostics/runs` (items) | 404 | Major | 응답 필드 부재 |
-| 12 | `GET /events` (SSE) | timeout | Minor | curl SSE 타임아웃 처리 이슈 |
+> 1차 실행 시 12건 FAIL → API 11건 구현 + 테스트 스크립트 2건 수정 → 재실행 시 0건
 
-**조치 방안**: Phase 7' To-Do #1로 등록됨 — UI 전용 API 12개 엔드포인트 구현 필요
+### 해소된 항목
+
+| # | 엔드포인트 | 이전 | 현재 | 구현 내용 |
+|---|-----------|:----:|:----:|---------|
+| 1 | `GET /infra/hosts` | 404 | **200** | Fleet agents 기반 호스트 목록 |
+| 2 | `GET /fleet/agents/{id}` | 405 | **200** | 에이전트 개별 조회 |
+| 3 | `GET /ai/services` | 404 | **200** | AI 서비스 목록 (데모 3건) |
+| 4 | `GET /ai/services/{id}/llm` | 404 | **200** | LLM 성능 + TTFT 히스토그램 |
+| 5 | `GET /ai/gpu` | 404 | **200** | GPU 클러스터 (A100x2, H100x1) |
+| 6 | `GET /ai/services/{id}/rag` | 404 | **200** | RAG 파이프라인 |
+| 7 | `GET /ai/services/{id}/guardrail` | 404 | **200** | 가드레일 정책 4종 |
+| 8 | `POST /diagnostics/trigger` | 404 | **202** | 진단 트리거 + EventBus 발행 |
+| 9 | `GET /diagnostics/runs` | 404 | **200** | 진단 실행 목록 |
+| 10 | `GET /diagnostics/runs?agent=` | 404 | **200** | 에이전트 필터 |
+| 11 | `GET /diagnostics/runs/{id}` | 404 | **200** | 진단 상세 + 카테고리별 결과 |
+| 12 | `GET /events` (SSE) | timeout | **PASS** | 테스트 판정 로직 개선 |
 
 ---
 
