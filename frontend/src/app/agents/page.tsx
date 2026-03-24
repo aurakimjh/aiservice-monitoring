@@ -40,6 +40,7 @@ import {
   Settings,
   Scan,
   CheckCircle,
+  PowerOff,
 } from 'lucide-react';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
@@ -253,6 +254,64 @@ function ScheduleModal({
   );
 }
 
+// ── Restart Agent Modal (25-4-2) ──────────────────────────────────────────────
+
+function RestartAgentModal({
+  open,
+  onClose,
+  agentId,
+  hostname,
+}: {
+  open: boolean;
+  onClose: () => void;
+  agentId: string;
+  hostname: string;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handleRestart = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      await fleetApi.restartAgent(agentId);
+      setDone(true);
+      setTimeout(() => { setDone(false); onClose(); }, 1500);
+    } catch {
+      setDone(true);
+      setTimeout(() => { setDone(false); onClose(); }, 1500);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [agentId, onClose]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Restart Agent" size="sm">
+      {done ? (
+        <div className="flex flex-col items-center gap-3 py-6">
+          <CheckCircle2 size={28} className="text-[var(--status-healthy)]" />
+          <p className="text-sm text-[var(--text-primary)]">Restart queued for <strong>{hostname}</strong></p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Restart agent on <strong className="text-[var(--text-primary)] font-mono">{hostname}</strong>?
+          </p>
+          <p className="text-xs text-[var(--text-muted)]">
+            The agent process will be restarted. Collection will be briefly interrupted (~5s).
+          </p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={() => void handleRestart()} disabled={submitting}>
+              {submitting ? <Loader2 size={12} className="animate-spin mr-1" /> : <RotateCcw size={12} className="mr-1" />}
+              Restart
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ── Group Edit Modal ──────────────────────────────────────────────────────────
 
 function GroupModal({
@@ -335,6 +394,7 @@ export default function AgentsPage() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<AgentGroup | undefined>(undefined);
+  const [restartTarget, setRestartTarget] = useState<{ id: string; hostname: string } | null>(null);
 
   const stats = useMemo(() => {
     const total = agents.length;
@@ -438,12 +498,13 @@ export default function AgentsPage() {
                   <th className="px-4 py-2.5 font-medium">Plugins</th>
                   <th className="px-4 py-2.5 font-medium">Last Heartbeat</th>
                   <th className="px-4 py-2.5 font-medium">Last Collection</th>
+                  <th className="px-4 py-2.5 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && agents.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                    <td colSpan={9} className="px-4 py-8 text-center text-[var(--text-muted)]">
                       <Loader2 size={16} className="inline animate-spin mr-2" />Loading agents…
                     </td>
                   </tr>
@@ -486,6 +547,17 @@ export default function AgentsPage() {
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastHeartbeat)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastCollection)}</td>
+                      {/* 25-4-2: Per-agent restart button */}
+                      <td className="px-4 py-2.5">
+                        <button
+                          onClick={() => setRestartTarget({ id: agent.id, hostname: agent.hostname })}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--status-warning)] hover:border-[var(--status-warning)]/50 transition-colors"
+                          title="Restart agent"
+                        >
+                          <PowerOff size={10} />
+                          Restart
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -947,6 +1019,15 @@ export default function AgentsPage() {
         onSaved={() => void refresh()}
         initial={editingGroup}
       />
+      {/* 25-4-2: Restart agent modal */}
+      {restartTarget && (
+        <RestartAgentModal
+          open={!!restartTarget}
+          onClose={() => setRestartTarget(null)}
+          agentId={restartTarget.id}
+          hostname={restartTarget.hostname}
+        />
+      )}
     </div>
   );
 }

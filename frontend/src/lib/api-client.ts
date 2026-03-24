@@ -196,6 +196,60 @@ export const fleetApi = {
       method: 'POST',
       body: JSON.stringify({ pluginName, targetType, targetId, agentIds }),
     }),
+
+  // 25-2-2: Group agent assignment
+  assignAgentsToGroup: (groupId: string, agentIds: string[]) =>
+    apiFetch<{ id: string; agentIds: string[] }>(`/fleet/groups/${groupId}/agents`, {
+      method: 'POST',
+      body: JSON.stringify({ agentIds }),
+    }),
+
+  removeAgentFromGroup: (groupId: string, agentId: string) =>
+    apiFetch<void>(`/fleet/groups/${groupId}/agents/${agentId}`, { method: 'DELETE' }),
+
+  // 25-2-5: Group-level collect / OTA trigger
+  triggerGroupCollect: (groupId: string) =>
+    apiFetch<{ status: string; agentCount: number }>(`/fleet/groups/${groupId}/collect`, { method: 'POST' }),
+
+  triggerGroupUpdate: (groupId: string, targetVersion: string) =>
+    apiFetch<{ status: string; queued: number }>(`/fleet/groups/${groupId}/update`, {
+      method: 'POST',
+      body: JSON.stringify({ targetVersion }),
+    }),
+
+  // 25-1-3: SDK alerts
+  listSDKAlerts: () =>
+    apiFetch<{ items: import('@/types/monitoring').SDKAlert[]; total: number }>('/fleet/sdk-alerts'),
+
+  createSDKAlert: (data: { agentId: string; hostname: string; language: string; sdkName: string; sdkVersion: string; otelEnabled: boolean }) =>
+    apiFetch<import('@/types/monitoring').SDKAlert>('/fleet/sdk-alerts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  acknowledgeSDKAlert: (alertId: string) =>
+    apiFetch<{ status: string }>(`/fleet/sdk-alerts/${alertId}/acknowledge`, { method: 'POST' }),
+
+  // 25-3-2: Agent config CRUD
+  getAgentConfig: (agentId: string) =>
+    apiFetch<import('@/types/monitoring').AgentConfigRecord>(`/agents/${agentId}/config`),
+
+  updateAgentConfig: (agentId: string, config: Record<string, unknown>) =>
+    apiFetch<import('@/types/monitoring').AgentConfigRecord>(`/agents/${agentId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+
+  getAgentConfigHistory: (agentId: string) =>
+    apiFetch<{ history: import('@/types/monitoring').ConfigHistoryEntry[] }>(`/agents/${agentId}/config/history`),
+
+  // 25-3-3: Config hot reload
+  reloadAgentConfig: (agentId: string) =>
+    apiFetch<{ status: string; queued_at: string }>(`/agents/${agentId}/config/reload`, { method: 'POST' }),
+
+  // 25-4-1: Agent restart
+  restartAgent: (agentId: string) =>
+    apiFetch<{ status: string; queued_at: string }>(`/agents/${agentId}/restart`, { method: 'POST' }),
 };
 
 // ── Infrastructure API ──

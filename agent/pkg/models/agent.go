@@ -66,8 +66,10 @@ type Heartbeat struct {
 	OSVersion         string         `json:"os_version"`
 	CPUPercent        float64        `json:"cpu_percent"`
 	MemoryMB          float64        `json:"memory_mb"`
-	Plugins           []PluginStatus `json:"plugins"`
+	Plugins           []PluginStatus   `json:"plugins"`
 	PrivilegeReport   *PrivilegeReport `json:"privilege_report,omitempty"`
+	AIDetected        bool             `json:"ai_detected,omitempty"`
+	SDKLangs          []string         `json:"sdk_langs,omitempty"`
 }
 
 // HeartbeatResponse is the server's reply to a heartbeat.

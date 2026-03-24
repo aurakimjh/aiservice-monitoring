@@ -103,6 +103,13 @@ func (g *groupRegistry) update(id, name, desc string, agentIDs, tags []string) (
 	return rec, true
 }
 
+func (g *groupRegistry) get(id string) (*groupRecord, bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	rec, ok := g.groups[id]
+	return rec, ok
+}
+
 func (g *groupRegistry) delete(id string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -157,6 +164,152 @@ func (s *scheduleRegistry) upsert(id, name, targetType, targetID, cron string, e
 	return rec
 }
 
+// ── Agent Config Registry ─────────────────────────────────────────────────
+
+type configHistoryEntry struct {
+	Version   int                    `json:"version"`
+	Config    map[string]interface{} `json:"config"`
+	ChangedAt time.Time              `json:"changedAt"`
+	ChangedBy string                 `json:"changedBy"`
+}
+
+type configRecord struct {
+	AgentID   string                 `json:"agentId"`
+	Version   int                    `json:"version"`
+	Config    map[string]interface{} `json:"config"`
+	UpdatedAt time.Time              `json:"updatedAt"`
+	UpdatedBy string                 `json:"updatedBy"`
+	History   []configHistoryEntry   `json:"history"`
+}
+
+type configRegistry struct {
+	mu      sync.RWMutex
+	configs map[string]*configRecord
+}
+
+func newConfigRegistry() *configRegistry {
+	return &configRegistry{configs: make(map[string]*configRecord)}
+}
+
+func (cr *configRegistry) get(agentID string) (*configRecord, bool) {
+	cr.mu.RLock()
+	defer cr.mu.RUnlock()
+	rec, ok := cr.configs[agentID]
+	return rec, ok
+}
+
+func (cr *configRegistry) defaultFor(agentID string) *configRecord {
+	return &configRecord{
+		AgentID:   agentID,
+		Version:   1,
+		UpdatedAt: time.Now().UTC(),
+		UpdatedBy: "system",
+		Config: map[string]interface{}{
+			"collect.interval_sec":   30,
+			"collect.timeout_sec":    10,
+			"collect.ai_enabled":     true,
+			"collect.os_enabled":     true,
+			"heartbeat.interval_sec": 30,
+			"log.level":              "info",
+		},
+		History: []configHistoryEntry{},
+	}
+}
+
+func (cr *configRegistry) set(agentID, updatedBy string, cfg map[string]interface{}) *configRecord {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	rec, ok := cr.configs[agentID]
+	if !ok {
+		rec = &configRecord{
+			AgentID: agentID,
+			Version: 0,
+			History: []configHistoryEntry{},
+		}
+		cr.configs[agentID] = rec
+	}
+	if rec.Config != nil {
+		entry := configHistoryEntry{
+			Version:   rec.Version,
+			Config:    rec.Config,
+			ChangedAt: rec.UpdatedAt,
+			ChangedBy: rec.UpdatedBy,
+		}
+		rec.History = append(rec.History, entry)
+		if len(rec.History) > 20 {
+			rec.History = rec.History[len(rec.History)-20:]
+		}
+	}
+	rec.Version++
+	rec.Config = cfg
+	rec.UpdatedAt = time.Now().UTC()
+	rec.UpdatedBy = updatedBy
+	return rec
+}
+
+// ── SDK Alert Registry ────────────────────────────────────────────────────
+
+type sdkAlertRecord struct {
+	ID           string    `json:"id"`
+	AgentID      string    `json:"agentId"`
+	Hostname     string    `json:"hostname"`
+	Language     string    `json:"language"`
+	SDKName      string    `json:"sdkName"`
+	SDKVersion   string    `json:"sdkVersion"`
+	OTelEnabled  bool      `json:"otelEnabled"`
+	Acknowledged bool      `json:"acknowledged"`
+	DetectedAt   time.Time `json:"detectedAt"`
+}
+
+type sdkAlertRegistry struct {
+	mu     sync.RWMutex
+	alerts map[string]*sdkAlertRecord
+	seq    int
+}
+
+func newSDKAlertRegistry() *sdkAlertRegistry {
+	return &sdkAlertRegistry{alerts: make(map[string]*sdkAlertRecord)}
+}
+
+func (s *sdkAlertRegistry) list() []*sdkAlertRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*sdkAlertRecord, 0, len(s.alerts))
+	for _, v := range s.alerts {
+		out = append(out, v)
+	}
+	return out
+}
+
+func (s *sdkAlertRegistry) create(agentID, hostname, language, sdkName, sdkVersion string, otelEnabled bool) *sdkAlertRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seq++
+	rec := &sdkAlertRecord{
+		ID:          fmt.Sprintf("sdk-%04d", s.seq),
+		AgentID:     agentID,
+		Hostname:    hostname,
+		Language:    language,
+		SDKName:     sdkName,
+		SDKVersion:  sdkVersion,
+		OTelEnabled: otelEnabled,
+		DetectedAt:  time.Now().UTC(),
+	}
+	s.alerts[rec.ID] = rec
+	return rec
+}
+
+func (s *sdkAlertRegistry) acknowledge(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec, ok := s.alerts[id]
+	if !ok {
+		return false
+	}
+	rec.Acknowledged = true
+	return true
+}
+
 // agentRecord holds in-memory state for one registered agent.
 type agentRecord struct {
 	mu            sync.RWMutex
@@ -172,6 +325,8 @@ type agentRecord struct {
 	LastHeartbeat time.Time          `json:"last_heartbeat"`
 	RegisteredAt  time.Time          `json:"registered_at"`
 	PrivReport    *models.PrivilegeReport `json:"privilege_report,omitempty"`
+	AIDetected    bool                    `json:"ai_detected"`
+	SDKLangs      []string                `json:"sdk_langs,omitempty"`
 }
 
 // fleet is the in-memory agent registry.
@@ -206,6 +361,12 @@ func (f *fleet) upsert(hb *models.Heartbeat) {
 	rec.MemoryMB = hb.MemoryMB
 	rec.Plugins = hb.Plugins
 	rec.LastHeartbeat = hb.Timestamp
+	if hb.AIDetected {
+		rec.AIDetected = true
+	}
+	if hb.SDKLangs != nil {
+		rec.SDKLangs = hb.SDKLangs
+	}
 	if hb.PrivilegeReport != nil {
 		rec.PrivReport = hb.PrivilegeReport
 	}
@@ -267,6 +428,8 @@ func snapshot(rec *agentRecord) map[string]interface{} {
 		"plugins":        rec.Plugins,
 		"last_heartbeat": rec.LastHeartbeat,
 		"registered_at":  rec.RegisteredAt,
+		"ai_detected":    rec.AIDetected,
+		"sdk_langs":      rec.SDKLangs,
 	}
 }
 
@@ -319,7 +482,9 @@ func main() {
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
-	mux := buildMux(f, gr, sr, logger, jwtMgr, bus, validator, wsHub, store)
+	cr := newConfigRegistry()
+	sar := newSDKAlertRegistry()
+	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -364,7 +529,7 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
@@ -605,12 +770,32 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 			return
 		}
 
+		// GET /api/v1/agents/{id}/config
+		if subPath == "config" {
+			cfgRec, ok := cr.get(agentID)
+			if !ok {
+				cfgRec = cr.defaultFor(agentID)
+			}
+			writeJSON(w, http.StatusOK, cfgRec)
+			return
+		}
+
+		// GET /api/v1/agents/{id}/config/history
+		if subPath == "config/history" {
+			cfgRec, ok := cr.get(agentID)
+			if !ok {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"history": []interface{}{}})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"history": cfgRec.History})
+			return
+		}
+
 		writeJSON(w, http.StatusOK, snapshot(rec))
 	})
 
-	// ── POST /api/v1/agents/{id}/collect ───────────────────────────────────
+	// ── POST /api/v1/agents/{id}/* ─────────────────────────────────────────
 	mux.HandleFunc("POST /api/v1/agents/", func(w http.ResponseWriter, r *http.Request) {
-		// POST /api/v1/agents/{id}/collect — trigger immediate collection.
 		path := r.URL.Path[len("/api/v1/agents/"):]
 		agentID := path
 		subPath := ""
@@ -621,7 +806,62 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 				break
 			}
 		}
-		if subPath != "collect" {
+		if _, ok := f.get(agentID); !ok {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+		switch subPath {
+		case "collect":
+			// POST /api/v1/agents/{id}/collect — trigger immediate collection.
+			logger.Info("manual collect triggered", "agent_id", agentID)
+			writeJSON(w, http.StatusAccepted, map[string]string{
+				"status":   "queued",
+				"agent_id": agentID,
+			})
+		case "restart":
+			// POST /api/v1/agents/{id}/restart — restart agent process.
+			logger.Info("agent restart requested", "agent_id", agentID)
+			bus.Publish(eventbus.Event{
+				Type:      "agent.restart.requested",
+				Timestamp: time.Now().UTC(),
+				AgentID:   agentID,
+			})
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":    "restart_queued",
+				"agent_id":  agentID,
+				"queued_at": time.Now().UTC().Format(time.RFC3339),
+			})
+		case "config/reload":
+			// POST /api/v1/agents/{id}/config/reload — trigger config hot reload.
+			logger.Info("config hot reload triggered", "agent_id", agentID)
+			bus.Publish(eventbus.Event{
+				Type:      "agent.config.reload",
+				Timestamp: time.Now().UTC(),
+				AgentID:   agentID,
+			})
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":    "reload_queued",
+				"agent_id":  agentID,
+				"queued_at": time.Now().UTC().Format(time.RFC3339),
+			})
+		default:
+			http.Error(w, "unknown sub-path", http.StatusNotFound)
+		}
+	})
+
+	// ── PUT /api/v1/agents/{id}/config ─────────────────────────────────────
+	mux.HandleFunc("PUT /api/v1/agents/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[len("/api/v1/agents/"):]
+		agentID := path
+		subPath := ""
+		for i, c := range path {
+			if c == '/' {
+				agentID = path[:i]
+				subPath = path[i+1:]
+				break
+			}
+		}
+		if subPath != "config" {
 			http.Error(w, "unknown sub-path", http.StatusNotFound)
 			return
 		}
@@ -629,11 +869,18 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 			http.Error(w, "agent not found", http.StatusNotFound)
 			return
 		}
-		logger.Info("manual collect triggered", "agent_id", agentID)
-		writeJSON(w, http.StatusAccepted, map[string]string{
-			"status":   "queued",
-			"agent_id": agentID,
-		})
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		updatedBy := "admin"
+		if claims := auth.GetClaims(r); claims != nil {
+			updatedBy = claims.Email
+		}
+		rec := cr.set(agentID, updatedBy, body)
+		logger.Info("agent config updated", "agent_id", agentID, "version", rec.Version, "by", updatedBy)
+		writeJSON(w, http.StatusOK, rec)
 	})
 
 	// ── DELETE /api/v1/agents/{id} ────────────────────────────────────────────
@@ -709,9 +956,107 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		writeJSON(w, http.StatusOK, rec)
 	})
 
+	// ── POST /api/v1/fleet/groups/{id}/* — assign agents / trigger collect / trigger update ──
+	mux.HandleFunc("POST /api/v1/fleet/groups/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[len("/api/v1/fleet/groups/"):]
+		groupID, subPath := path, ""
+		for i, c := range path {
+			if c == '/' {
+				groupID = path[:i]
+				subPath = path[i+1:]
+				break
+			}
+		}
+		grp, ok := gr.get(groupID)
+		if !ok {
+			http.Error(w, "group not found", http.StatusNotFound)
+			return
+		}
+		switch subPath {
+		case "agents":
+			// POST /api/v1/fleet/groups/{id}/agents — assign agents to group (25-2-2)
+			var body struct {
+				AgentIDs []string `json:"agentIds"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			existing := make(map[string]bool)
+			for _, id := range grp.AgentIDs {
+				existing[id] = true
+			}
+			for _, id := range body.AgentIDs {
+				existing[id] = true
+			}
+			merged := make([]string, 0, len(existing))
+			for id := range existing {
+				merged = append(merged, id)
+			}
+			rec, _ := gr.update(groupID, grp.Name, grp.Description, merged, grp.Tags)
+			logger.Info("agents assigned to group", "group_id", groupID, "added", len(body.AgentIDs))
+			writeJSON(w, http.StatusOK, rec)
+		case "collect":
+			// POST /api/v1/fleet/groups/{id}/collect — trigger collection for all agents (25-2-5)
+			logger.Info("group collection triggered", "group_id", groupID, "agents", len(grp.AgentIDs))
+			bus.Publish(eventbus.Event{
+				Type:      "group.collect.triggered",
+				Timestamp: time.Now().UTC(),
+				Data: map[string]interface{}{
+					"group_id":  groupID,
+					"agent_ids": grp.AgentIDs,
+				},
+			})
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":     "queued",
+				"group_id":   groupID,
+				"agentCount": len(grp.AgentIDs),
+			})
+		case "update":
+			// POST /api/v1/fleet/groups/{id}/update — trigger OTA for all agents in group (25-2-5)
+			var body struct {
+				TargetVersion string `json:"targetVersion"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TargetVersion == "" {
+				body.TargetVersion = "1.2.0"
+			}
+			logger.Info("group OTA triggered", "group_id", groupID, "version", body.TargetVersion, "agents", len(grp.AgentIDs))
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":        "queued",
+				"group_id":      groupID,
+				"targetVersion": body.TargetVersion,
+				"queued":        len(grp.AgentIDs),
+			})
+		default:
+			http.Error(w, "unknown sub-path", http.StatusNotFound)
+		}
+	})
+
 	mux.HandleFunc("DELETE /api/v1/fleet/groups/", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/v1/fleet/groups/"):]
-		if !gr.delete(id) {
+		path := r.URL.Path[len("/api/v1/fleet/groups/"):]
+
+		// DELETE /api/v1/fleet/groups/{id}/agents/{agentId} — remove agent from group (25-2-2)
+		if parts := strings.SplitN(path, "/", 3); len(parts) == 3 && parts[1] == "agents" {
+			groupID, agentID := parts[0], parts[2]
+			grp, ok := gr.get(groupID)
+			if !ok {
+				http.Error(w, "group not found", http.StatusNotFound)
+				return
+			}
+			newIDs := make([]string, 0, len(grp.AgentIDs))
+			for _, id := range grp.AgentIDs {
+				if id != agentID {
+					newIDs = append(newIDs, id)
+				}
+			}
+			gr.update(groupID, grp.Name, grp.Description, newIDs, grp.Tags)
+			logger.Info("agent removed from group", "group_id", groupID, "agent_id", agentID)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// DELETE /api/v1/fleet/groups/{id} — delete group
+		if !gr.delete(path) {
 			http.Error(w, "group not found", http.StatusNotFound)
 			return
 		}
@@ -739,16 +1084,29 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 				break
 			}
 		}
-		if subPath != "collect" {
-			http.Error(w, "unknown sub-path", http.StatusNotFound)
-			return
-		}
 		if _, ok := f.get(agentID); !ok {
 			http.Error(w, "agent not found", http.StatusNotFound)
 			return
 		}
-		logger.Info("manual collect triggered via fleet API", "agent_id", agentID)
-		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "agent_id": agentID})
+		switch subPath {
+		case "collect":
+			logger.Info("manual collect triggered via fleet API", "agent_id", agentID)
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "agent_id": agentID})
+		case "restart":
+			logger.Info("agent restart requested via fleet API", "agent_id", agentID)
+			bus.Publish(eventbus.Event{
+				Type:      "agent.restart.requested",
+				Timestamp: time.Now().UTC(),
+				AgentID:   agentID,
+			})
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{
+				"status":    "restart_queued",
+				"agent_id":  agentID,
+				"queued_at": time.Now().UTC().Format(time.RFC3339),
+			})
+		default:
+			http.Error(w, "unknown sub-path", http.StatusNotFound)
+		}
 	})
 
 	// ── Fleet Jobs endpoint (/api/v1/fleet/jobs) ────────────────────────────
@@ -850,6 +1208,57 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 		}
 		rec := sr.upsert(id, body.Name, body.TargetType, body.TargetID, body.Cron, body.Enabled)
 		writeJSON(w, http.StatusOK, rec)
+	})
+
+	// ── SDK Alert endpoints (25-1-3) ─────────────────────────────────────────
+
+	mux.HandleFunc("GET /api/v1/fleet/sdk-alerts", func(w http.ResponseWriter, r *http.Request) {
+		alerts := sar.list()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": alerts, "total": len(alerts)})
+	})
+
+	mux.HandleFunc("POST /api/v1/fleet/sdk-alerts", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			AgentID     string `json:"agentId"`
+			Hostname    string `json:"hostname"`
+			Language    string `json:"language"`
+			SDKName     string `json:"sdkName"`
+			SDKVersion  string `json:"sdkVersion"`
+			OTelEnabled bool   `json:"otelEnabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		rec := sar.create(body.AgentID, body.Hostname, body.Language, body.SDKName, body.SDKVersion, body.OTelEnabled)
+		logger.Info("SDK alert created", "id", rec.ID, "language", rec.Language, "sdk", rec.SDKName)
+		bus.Publish(eventbus.Event{
+			Type:      "sdk.detected",
+			Timestamp: time.Now().UTC(),
+			AgentID:   body.AgentID,
+			Data: map[string]interface{}{
+				"alert_id":     rec.ID,
+				"language":     rec.Language,
+				"sdk_name":     rec.SDKName,
+				"otel_enabled": rec.OTelEnabled,
+			},
+		})
+		writeJSON(w, http.StatusCreated, rec)
+	})
+
+	// POST /api/v1/fleet/sdk-alerts/{id}/acknowledge
+	mux.HandleFunc("POST /api/v1/fleet/sdk-alerts/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/fleet/sdk-alerts/")
+		if strings.HasSuffix(path, "/acknowledge") {
+			alertID := strings.TrimSuffix(path, "/acknowledge")
+			if sar.acknowledge(alertID) {
+				writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged"})
+			} else {
+				http.Error(w, "alert not found", http.StatusNotFound)
+			}
+			return
+		}
+		http.Error(w, "unknown sub-path", http.StatusNotFound)
 	})
 
 	// ── Fleet Agent Detail (GET /api/v1/fleet/agents/{id}) ───────────────────

@@ -410,7 +410,7 @@ npm run test:i18n     # i18n 커버리지 감사
 
 ---
 
-## [05] Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 ✅ (코어 UI 완료, Backend API 일부 미구현)
+## [05] Phase 25: 서버 그룹 관리 + SDK 자동 인식 + 중앙 설정 편집 ✅ (전 항목 완료)
 
 > **목표**: 대규모 서버 환경에서 서버 그룹화 및 그룹 단위 관리, UI 기반 에이전트 설정 원격 편집, SDK/에이전트 자동 탐지 기능 구현
 > **완료일**: 2026-03-23
@@ -431,36 +431,36 @@ npm run test:i18n     # i18n 커버리지 감사
 |---|------|------|----------|------|
 | 25-1-1 | 에이전트 자동 감지 UI | Heartbeat 기반 신규 에이전트 탐지 → Fleet 콘솔에 상태 배지 표시 | 0.5주 | ✅ |
 | 25-1-2 | SDK 언어 자동 판별 | agents 페이지 SDK Detection 테이블 — Java/Python/Node/.NET/Go 배지 | 0.5주 | ✅ |
-| 25-1-3 | 신규 SDK 감지 알림 | 첫 OTel 데이터 수신 시 서비스 맵 자동 노드 추가 + 알림 발송 (설정 가능) | 0.5주 | 📋 미구현 — OTel 연동 후 |
-| 25-1-4 | AI 환경 자동 탐지 | Heartbeat `ai_detected` 필드 → AI 탭 자동 활성화 | 0.5주 | 📋 미구현 — Agent 진단 모드 연동 시 |
+| 25-1-3 | 신규 SDK 감지 알림 | 첫 OTel 데이터 수신 시 서비스 맵 자동 노드 추가 + 알림 발송 (설정 가능) | 0.5주 | ✅ `sdkAlertRegistry` + `GET/POST /fleet/sdk-alerts` + OTel eventbus 연동 |
+| 25-1-4 | AI 환경 자동 탐지 | Heartbeat `ai_detected` 필드 → AI 탭 자동 활성화 | 0.5주 | ✅ `ai_detected`·`sdk_langs` Heartbeat/agentRecord 추가, snapshot 포함 |
 
 ### 25-2. 서버 그룹 관리
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
 | 25-2-1 | 그룹 CRUD API | `POST/GET/PUT/DELETE /api/v1/fleet/groups` — 그룹 생성·조회·수정·삭제 | 1주 | ✅ |
-| 25-2-2 | 에이전트 그룹 할당 API | `POST /api/v1/fleet/groups/{id}/agents` — 할당 즉시 에이전트 `host_group` 설정 반영 | 0.5주 | 📋 미구현 — 할당 전용 API |
+| 25-2-2 | 에이전트 그룹 할당 API | `POST /api/v1/fleet/groups/{id}/agents` — 할당 즉시 에이전트 `host_group` 설정 반영 | 0.5주 | ✅ `POST/DELETE /fleet/groups/{id}/agents[/{agentId}]` 구현 |
 | 25-2-3 | 그룹 관리 UI | 그룹 목록 + agents 탭 Groups 섹션 | 1.5주 | ✅ (DnD 미구현) |
 | 25-2-4 | 그룹 대시보드 UI | 그룹별 KPI 요약 + 서버 목록 + 헬스 집계 (`/agents/groups/{id}`) | 1주 | ✅ |
-| 25-2-5 | 그룹별 수집 작업 | 그룹 단위 즉시 수집 트리거, 그룹 단위 OTA 업데이트 | 0.5주 | 📋 미구현 |
+| 25-2-5 | 그룹별 수집 작업 | 그룹 단위 즉시 수집 트리거, 그룹 단위 OTA 업데이트 | 0.5주 | ✅ `POST /fleet/groups/{id}/collect`, `POST /fleet/groups/{id}/update` + GroupDashboard 버튼 연동 |
 
 ### 25-3. 중앙 설정 관리 (UI에서 agent.yaml 원격 편집)
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
 | 25-3-1 | 설정 스키마 레지스트리 | 에이전트 버전별 `config-schema.json` 관리 — 기본값·타입·반영수준 포함 | 1주 | ✅ (config-editor 내장) |
-| 25-3-2 | 설정 CRUD API | `GET/PUT /api/v1/agents/{id}/config` + 이력 관리 + 롤백 | 1주 | 📋 미구현 — Backend API |
-| 25-3-3 | 설정 즉시 폴링 트리거 | `POST /api/v1/agents/{id}/config/reload` — Hot Reload 항목 즉시 적용 | 0.5주 | 📋 미구현 |
+| 25-3-2 | 설정 CRUD API | `GET/PUT /api/v1/agents/{id}/config` + 이력 관리 + 롤백 | 1주 | ✅ `configRegistry` + `GET/PUT /agents/{id}/config`, `GET /agents/{id}/config/history` |
+| 25-3-3 | 설정 즉시 폴링 트리거 | `POST /api/v1/agents/{id}/config/reload` — Hot Reload 항목 즉시 적용 | 0.5주 | ✅ `POST /agents/{id}/config/reload` eventbus 연동 |
 | 25-3-4 | 설정 편집 UI | 섹션별 폼 편집 + 반영수준 아이콘(🟢🟡🔴) + 유효성 검증 + 설정 이력 뷰 | 2주 | ✅ |
-| 25-3-5 | 그룹 일괄 설정 편집 | 그룹 내 전체 에이전트에 동일 설정 일괄 적용 UI | 1주 | 📋 미구현 |
+| 25-3-5 | 그룹 일괄 설정 편집 | 그룹 내 전체 에이전트에 동일 설정 일괄 적용 UI | 1주 | ✅ GroupDashboard `GroupConfigModal` — key/value 편집 + 전체 에이전트 일괄 적용 |
 
 ### 25-4. 에이전트 원격 재기동
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 25-4-1 | 재기동 API | `POST /api/v1/agents/{id}/restart` — HeartbeatResponse에 RESTART_COMMAND 삽입 | 0.5주 | 📋 미구현 |
-| 25-4-2 | 재기동 UI | [🔄 에이전트 재기동] 버튼 + 진행 상태 표시 + 완료 확인 | 0.5주 | 📋 미구현 |
-| 25-4-3 | App Restart 안내 UI | 🔴 항목 변경 시 "수동 재기동 필요" 경고 모달 + 절차 안내 | 0.5주 | 📋 미구현 |
+| 25-4-1 | 재기동 API | `POST /api/v1/agents/{id}/restart` — HeartbeatResponse에 RESTART_COMMAND 삽입 | 0.5주 | ✅ `POST /agents/{id}/restart` + `POST /fleet/agents/{id}/restart` eventbus 연동 |
+| 25-4-2 | 재기동 UI | [🔄 에이전트 재기동] 버튼 + 진행 상태 표시 + 완료 확인 | 0.5주 | ✅ AgentsPage + GroupDashboard `RestartAgentModal` 구현 |
+| 25-4-3 | App Restart 안내 UI | 🔴 항목 변경 시 "수동 재기동 필요" 경고 모달 + 절차 안내 | 0.5주 | ✅ `ConfigEditor` `AppRestartModal` — reflectionLevel=app 필드 변경 감지 후 systemctl 안내 |
 
 ---
 

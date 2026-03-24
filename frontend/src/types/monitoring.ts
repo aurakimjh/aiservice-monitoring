@@ -469,6 +469,36 @@ export interface AgentGroup {
   createdAt: string;
 }
 
+// 25-1-3: SDK Detection Alert
+export interface SDKAlert {
+  id: string;
+  agentId: string;
+  hostname: string;
+  language: string;
+  sdkName: string;
+  sdkVersion: string;
+  otelEnabled: boolean;
+  acknowledged: boolean;
+  detectedAt: string;
+}
+
+// 25-3-2: Agent Config Record
+export interface ConfigHistoryEntry {
+  version: number;
+  config: Record<string, unknown>;
+  changedAt: string;
+  changedBy: string;
+}
+
+export interface AgentConfigRecord {
+  agentId: string;
+  version: number;
+  config: Record<string, unknown>;
+  updatedAt: string;
+  updatedBy: string;
+  history: ConfigHistoryEntry[];
+}
+
 // OTA Update Status
 export type UpdatePhase = 'pending' | 'downloading' | 'installing' | 'completed' | 'failed' | 'rolled_back';
 
