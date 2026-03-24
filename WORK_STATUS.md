@@ -955,7 +955,7 @@ make -C agent e2e-all
 |---|------|------|
 | 29-2-1 | 보고서 데이터 집계 | ✅ |
 | 29-2-3 | HTML 보고서 (단일 파일, inline CSS) | ✅ |
-| 29-2-2 | PDF 렌더링 | 📋 향후 추가 (wkhtmltopdf/chromedp) |
+| 29-2-2 | PDF 렌더링 (순수 Go minimal PDF/1.4 writer, `POST /api/report/pdf`) | ✅ |
 
 ### 29-3. 인프라
 
