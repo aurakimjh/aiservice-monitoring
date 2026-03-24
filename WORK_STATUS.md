@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-24 (Session 42 — Agent Collector 실구현 + 테스트 체계 구축 + 단위/통합/E2E 테스트 1차 AI 실행 완료 + UI API 11건 구현 + WCAG 접근성 수정)
+> **최종 업데이트**: 2026-03-25 (Session 43 — Phase 26 전 항목 완료: middleware Collector 5종+자동감지, Connection Pool 표준화·누수감지·대시보드, Redis Cluster 수집·뷰, 캐시 알림규칙 7개, 언어별 UI 5종)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -464,7 +464,7 @@ npm run test:i18n     # i18n 커버리지 감사
 
 ---
 
-## [06] Phase 26: 미들웨어 런타임 모니터링 ✅ (코어 구현, 세부 확장 예정)
+## [06] Phase 26: 미들웨어 런타임 모니터링 ✅ (전 항목 완료 — Session 43)
 
 > **목표**: Java/..NET/Node.js/Python/Go 언어별 런타임 미들웨어(스레드 풀, 커넥션 풀, 이벤트 루프, 워커, 고루틴)를 실시간 수집·시각화하고, 메시지 큐(Kafka/RabbitMQ/ActiveMQ) 상태를 통합 모니터링한다.
 > **선행 조건**: Phase 25 (에이전트 그룹 관리 + 중앙 설정) 완료 후 진행
@@ -475,20 +475,20 @@ npm run test:i18n     # i18n 커버리지 감사
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 26-1-1 | Java 미들웨어 Collector | JMX MBean (Thread Pool + HikariCP/DBCP/C3P0 + Session) + jcmd 통합 수집 | 1.5주 | 📋 |
-| 26-1-2 | .NET 미들웨어 Collector | dotnet-counters / CLR EventSource (Kestrel + Thread Pool + GC + EF Core Pool) | 1.5주 | 📋 |
-| 26-1-3 | Node.js 미들웨어 Collector | Event Loop Lag/Utilization (`perf_hooks`) + Active Connections + pg-pool/mongoose Pool | 1주 | 📋 |
-| 26-1-4 | Python 미들웨어 Collector | Gunicorn stats socket + Worker Pool + SQLAlchemy Pool (`engine.pool.status()`) | 1주 | 📋 |
-| 26-1-5 | Go 미들웨어 Collector | `runtime.NumGoroutine()` + `sql.DB.Stats()` + `/debug/vars` 수집 | 1주 | 📋 |
-| 26-1-6 | 언어 자동 감지 로직 | Heartbeat `runtime_language` 필드 + 프로세스/패키지 탐지 → Collector 자동 활성화 | 0.5주 | 📋 |
+| 26-1-1 | Java 미들웨어 Collector | JMX MBean (Thread Pool + HikariCP/DBCP/C3P0 + Session) + jcmd 통합 수집 | 1.5주 | ✅ (Session 43) |
+| 26-1-2 | .NET 미들웨어 Collector | dotnet-counters / CLR EventSource (Kestrel + Thread Pool + GC + EF Core Pool) | 1.5주 | ✅ (Session 43) |
+| 26-1-3 | Node.js 미들웨어 Collector | Event Loop Lag/Utilization (`perf_hooks`) + Active Connections + pg-pool/mongoose Pool | 1주 | ✅ (Session 43) |
+| 26-1-4 | Python 미들웨어 Collector | Gunicorn stats socket + Worker Pool + SQLAlchemy Pool (`engine.pool.status()`) | 1주 | ✅ (Session 43) |
+| 26-1-5 | Go 미들웨어 Collector | `runtime.NumGoroutine()` + `sql.DB.Stats()` + `/debug/vars` 수집 | 1주 | ✅ (Session 43) |
+| 26-1-6 | 언어 자동 감지 로직 | Heartbeat `runtime_language` 필드 + 프로세스/패키지 탐지 → Collector 자동 활성화 | 0.5주 | ✅ (Session 43) |
 
 ### 26-2. Connection Pool 실시간 모니터링
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 26-2-1 | 커넥션 풀 메트릭 표준화 | `middleware.connection_pool.*` 네임스페이스 — 8개 구현체 통합 (HikariCP/DBCP/EF Core/pg-pool 등) | 1주 | 📋 |
-| 26-2-2 | 누수 감지 알림 | active/max ≥ 90% 경고, pending > 0 이 30초 지속 시 PagerDuty | 0.5주 | 📋 |
-| 26-2-3 | Connection Pool 대시보드 UI | Active/Idle 게이지 + 대기 시간 히스토그램(P50/P95/P99) + 누수 알림 패널 | 1.5주 | 📋 |
+| 26-2-1 | 커넥션 풀 메트릭 표준화 | `middleware.connection_pool.*` 네임스페이스 — 8개 구현체 통합 (HikariCP/DBCP/EF Core/pg-pool 등) | 1주 | ✅ (Session 43) |
+| 26-2-2 | 누수 감지 알림 | active/max ≥ 90% 경고, pending > 0 이 30초 지속 시 PagerDuty | 0.5주 | ✅ (Session 43) |
+| 26-2-3 | Connection Pool 대시보드 UI | Active/Idle 게이지 + 대기 시간 히스토그램(P50/P95/P99) + 누수 알림 패널 | 1.5주 | ✅ (Session 43) |
 
 ### 26-3. 메시지 큐 모니터링
 
@@ -503,11 +503,11 @@ npm run test:i18n     # i18n 커버리지 감사
 
 | # | 작업 | 상세 | 예상 공수 | 상태 |
 |---|------|------|----------|------|
-| 26-4-1 | 언어별 대시보드 자동 생성 | `runtime_language` 감지 후 해당 언어 미들웨어 패널 세트 자동 활성화 | 1주 | 📋 |
-| 26-4-2 | Thread Pool 실시간 뷰 | Active/Idle/Max 게이지 + Queue 깊이 스파크라인 (Java/.NET) | 1주 | 📋 |
-| 26-4-3 | Event Loop 실시간 뷰 | Lag 라인 차트 + Utilization 게이지 + 100ms 경고선 (Node.js) | 0.5주 | 📋 |
-| 26-4-4 | Worker Pool 실시간 뷰 | Active/Idle 바 차트 + Restart 카운터 (Python) | 0.5주 | 📋 |
-| 26-4-5 | Goroutine 누수 감지 뷰 | Count 라인 차트 + 기준값 × 2배 경계선 + pprof 딥링크 (Go) | 0.5주 | 📋 |
+| 26-4-1 | 언어별 대시보드 자동 생성 | `runtime_language` 감지 후 해당 언어 미들웨어 패널 세트 자동 활성화 | 1주 | ✅ (Session 43) |
+| 26-4-2 | Thread Pool 실시간 뷰 | Active/Idle/Max 게이지 + Queue 깊이 스파크라인 (Java/.NET) | 1주 | ✅ (Session 43) |
+| 26-4-3 | Event Loop 실시간 뷰 | Lag 라인 차트 + Utilization 게이지 + 100ms 경고선 (Node.js) | 0.5주 | ✅ (Session 43) |
+| 26-4-4 | Worker Pool 실시간 뷰 | Active/Idle 바 차트 + Restart 카운터 (Python) | 0.5주 | ✅ (Session 43) |
+| 26-4-5 | Goroutine 누수 감지 뷰 | Count 라인 차트 + 기준값 × 2배 경계선 + pprof 딥링크 (Go) | 0.5주 | ✅ (Session 43) |
 
 ### 26-5. Redis/Cache Collector
 
@@ -520,9 +520,9 @@ npm run test:i18n     # i18n 커버리지 감사
 | 26-5-2 | Memcached Collector 구현 | `stats` 명령 파싱 — get_hits/get_misses/evictions 등 12개 메트릭 | 0.5주 | ✅ (Session 42) |
 | 26-5-3 | 엔진 자동 탐지 로직 | 포트 6379/11211 스캔 + defaultCandidates 자동 탐지 | 0.5주 | ✅ (Session 42) |
 | 26-5-4 | 메트릭 표준화 | RedisMetrics/MemcachedMetrics 구조체 정의 + cache.info.v1 스키마 | 1주 | ✅ (Session 42) |
-| 26-5-5 | Redis/Cache 대시보드 UI | Hit Rate 게이지 · 메모리 사용률 · Eviction 추세 + Slow Log 테이블 + Replication Lag 차트 + Keyspace 분포 파이 차트 | 1.5주 | 📋 |
-| 26-5-6 | Redis Cluster 지원 | `CLUSTER INFO` 기반 cluster_state · 슬롯 배분(assigned/ok/pfail/fail) 수집 및 Cluster 전용 뷰 | 1주 | 📋 |
-| 26-5-7 | 알림 규칙 등록 | Hit Rate < 80% · 메모리 > 80% · Replication Lag > 1MB · Evictions 급증 → Slack/PagerDuty 알림 | 0.5주 | 📋 |
+| 26-5-5 | Redis/Cache 대시보드 UI | Hit Rate 게이지 · 메모리 사용률 · Eviction 추세 + Slow Log 테이블 + Replication Lag 차트 + Keyspace 분포 파이 차트 | 1.5주 | ✅ (Session 43) |
+| 26-5-6 | Redis Cluster 지원 | `CLUSTER INFO` 기반 cluster_state · 슬롯 배분(assigned/ok/pfail/fail) 수집 및 Cluster 전용 뷰 | 1주 | ✅ (Session 43) |
+| 26-5-7 | 알림 규칙 등록 | Hit Rate < 80% · 메모리 > 80% · Replication Lag > 1MB · Evictions 급증 → Slack/PagerDuty 알림 | 0.5주 | ✅ (Session 43) |
 
 ---
 

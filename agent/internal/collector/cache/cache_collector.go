@@ -34,7 +34,7 @@ func (c *Collector) RequiredPrivileges() []models.Privilege {
 }
 
 func (c *Collector) OutputSchemas() []string {
-	return []string{"cache.info.v1", "cache.slowlog.v1"}
+	return []string{"cache.info.v1", "cache.slowlog.v1", "cache.cluster.v1", "cache.alert.v1"}
 }
 
 // cacheCandidate represents a potential cache endpoint to probe.
@@ -144,8 +144,18 @@ func (c *Collector) Collect(ctx context.Context, cfg models.CollectConfig) (*mod
 			collectMemcached(t, result)
 		} else {
 			collectRedis(t, cfg, result)
+			// Collect Redis Cluster info if cluster mode is enabled or requested
+			if cfg.Extra != nil && cfg.Extra["cluster"] == "true" {
+				collectRedisCluster(t, cfg, result)
+			} else {
+				// Auto-detect cluster mode
+				collectRedisCluster(t, cfg, result)
+			}
 		}
 	}
+
+	// Evaluate alert rules on all collected cache metrics
+	evaluateCacheAlertRules(result)
 
 	if len(result.Items) == 0 && len(result.Errors) > 0 {
 		result.Status = models.StatusFailed
@@ -463,4 +473,293 @@ func isPortOpen(host, port string) bool {
 	}
 	_ = conn.Close()
 	return true
+}
+
+// ── Redis Cluster Support (26-5-6) ───────────────────────────────────────────
+
+// RedisClusterMetrics captures CLUSTER INFO and slot distribution.
+type RedisClusterMetrics struct {
+	Engine           string              `json:"engine"`
+	Host             string              `json:"host"`
+	Port             string              `json:"port"`
+	ClusterEnabled   bool                `json:"cluster_enabled"`
+	ClusterState     string              `json:"cluster_state"`   // "ok","fail"
+	ClusterSize      int64               `json:"cluster_size"`
+	SlotsAssigned    int64               `json:"slots_assigned"`
+	SlotsOK          int64               `json:"slots_ok"`
+	SlotsPfail       int64               `json:"slots_pfail"`
+	SlotsFail        int64               `json:"slots_fail"`
+	KnownNodes       int64               `json:"known_nodes"`
+	ConnectedSlaves  int64               `json:"connected_slaves"`
+	MigrationStatus  string              `json:"migration_status,omitempty"` // "" or "migrating"
+}
+
+// collectRedisCluster queries CLUSTER INFO and emits a cache.cluster.v1 item.
+func collectRedisCluster(t cacheCandidate, cfg models.CollectConfig, result *models.CollectResult) {
+	addr := net.JoinHostPort(t.host, t.port)
+	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	reader := bufio.NewReader(conn)
+
+	// AUTH if needed
+	if cfg.Extra != nil {
+		if pw, ok := cfg.Extra["password"]; ok && pw != "" {
+			if err := redisAuth(conn, reader, pw); err != nil {
+				return
+			}
+		}
+	}
+
+	// CLUSTER INFO
+	raw, err := redisSimpleCommand(conn, reader, "CLUSTER", "INFO")
+	if err != nil {
+		// Not a cluster or error; skip silently
+		return
+	}
+
+	m := parseRedisClusterInfo(raw)
+	m.Engine = t.engine
+	m.Host = t.host
+	m.Port = t.port
+
+	// Only emit if cluster mode is actually on
+	if !m.ClusterEnabled {
+		return
+	}
+
+	result.Items = append(result.Items, models.CollectedItem{
+		SchemaName:    "cache.cluster.v1",
+		SchemaVersion: "1.0.0",
+		MetricType:    "gauge",
+		Category:      "it",
+		Data:          m,
+	})
+}
+
+// parseRedisClusterInfo parses CLUSTER INFO key:value output.
+func parseRedisClusterInfo(raw string) RedisClusterMetrics {
+	m := RedisClusterMetrics{}
+	kv := make(map[string]string)
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if parts := strings.SplitN(line, ":", 2); len(parts) == 2 {
+			kv[parts[0]] = strings.TrimSpace(parts[1])
+		}
+	}
+
+	m.ClusterEnabled = kv["cluster_enabled"] == "1"
+	m.ClusterState = kv["cluster_state"]
+	m.ClusterSize, _ = strconv.ParseInt(kv["cluster_size"], 10, 64)
+	m.SlotsAssigned, _ = strconv.ParseInt(kv["cluster_slots_assigned"], 10, 64)
+	m.SlotsOK, _ = strconv.ParseInt(kv["cluster_slots_ok"], 10, 64)
+	m.SlotsPfail, _ = strconv.ParseInt(kv["cluster_slots_pfail"], 10, 64)
+	m.SlotsFail, _ = strconv.ParseInt(kv["cluster_slots_fail"], 10, 64)
+	m.KnownNodes, _ = strconv.ParseInt(kv["cluster_known_nodes"], 10, 64)
+	m.ConnectedSlaves, _ = strconv.ParseInt(kv["cluster_connected_slaves"], 10, 64)
+
+	if m.SlotsPfail > 0 || m.SlotsFail > 0 {
+		m.MigrationStatus = "migrating"
+	}
+
+	return m
+}
+
+// ── Cache Alert Rules (26-5-7) ───────────────────────────────────────────────
+
+// CacheAlertRule defines a threshold alert for cache metrics.
+type CacheAlertRule struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Condition   string  `json:"condition"`
+	Threshold   float64 `json:"threshold"`
+	Severity    string  `json:"severity"` // "warning","critical"
+	Actions     []string `json:"actions"`
+}
+
+// DefaultCacheAlertRules returns the standard Redis/Cache alert rules.
+// Rule 26-5-7: Hit Rate < 80%, Memory > 80%, Replication Lag > 1MB, Evictions급증
+var DefaultCacheAlertRules = []CacheAlertRule{
+	{
+		Name:        "cache_low_hit_rate",
+		Description: "Cache hit rate < 80% — possible cache churn or cold start",
+		Condition:   "hit_rate < 0.80",
+		Threshold:   0.80,
+		Severity:    "warning",
+		Actions:     []string{"slack"},
+	},
+	{
+		Name:        "cache_critical_hit_rate",
+		Description: "Cache hit rate < 60% — severe cache inefficiency",
+		Condition:   "hit_rate < 0.60",
+		Threshold:   0.60,
+		Severity:    "critical",
+		Actions:     []string{"pagerduty", "slack"},
+	},
+	{
+		Name:        "cache_high_memory",
+		Description: "Cache memory usage > 80% of maxmemory",
+		Condition:   "used_memory/maxmemory > 0.80",
+		Threshold:   0.80,
+		Severity:    "warning",
+		Actions:     []string{"slack"},
+	},
+	{
+		Name:        "cache_critical_memory",
+		Description: "Cache memory usage > 95% of maxmemory — eviction risk",
+		Condition:   "used_memory/maxmemory > 0.95",
+		Threshold:   0.95,
+		Severity:    "critical",
+		Actions:     []string{"pagerduty"},
+	},
+	{
+		Name:        "cache_replication_lag",
+		Description: "Replication lag > 1MB — replica falling behind master",
+		Condition:   "replication_lag_bytes > 1048576",
+		Threshold:   1048576,
+		Severity:    "warning",
+		Actions:     []string{"pagerduty", "slack"},
+	},
+	{
+		Name:        "cache_evictions_spike",
+		Description: "Evicted keys > 1000 — memory pressure causing data loss",
+		Condition:   "evicted_keys > 1000",
+		Threshold:   1000,
+		Severity:    "critical",
+		Actions:     []string{"pagerduty"},
+	},
+	{
+		Name:        "cache_cluster_degraded",
+		Description: "Redis Cluster has failed or pfail slots",
+		Condition:   "cluster_slots_fail > 0 OR cluster_slots_pfail > 0",
+		Threshold:   0,
+		Severity:    "critical",
+		Actions:     []string{"pagerduty"},
+	},
+}
+
+// CacheAlert represents a triggered cache alert.
+type CacheAlert struct {
+	AlertID     string  `json:"alert_id"`
+	RuleName    string  `json:"rule_name"`
+	InstanceID  string  `json:"instance_id"`
+	Host        string  `json:"host"`
+	Port        string  `json:"port"`
+	Engine      string  `json:"engine"`
+	Severity    string  `json:"severity"`
+	Value       float64 `json:"value"`
+	Threshold   float64 `json:"threshold"`
+	Message     string  `json:"message"`
+	Actions     []string `json:"actions"`
+}
+
+// evaluateCacheAlertRules checks collected cache items against alert rules.
+func evaluateCacheAlertRules(result *models.CollectResult) {
+	for _, item := range result.Items {
+		if item.SchemaName != "cache.info.v1" {
+			continue
+		}
+		switch m := item.Data.(type) {
+		case RedisMetrics:
+			checkRedisAlerts(m, result)
+		}
+	}
+	// Check cluster alerts
+	for _, item := range result.Items {
+		if item.SchemaName != "cache.cluster.v1" {
+			continue
+		}
+		if m, ok := item.Data.(RedisClusterMetrics); ok {
+			checkRedisClusterAlerts(m, result)
+		}
+	}
+}
+
+func checkRedisAlerts(m RedisMetrics, result *models.CollectResult) {
+	instID := fmt.Sprintf("%s:%s", m.Host, m.Port)
+
+	for _, rule := range DefaultCacheAlertRules {
+		var triggered bool
+		var value float64
+
+		switch rule.Name {
+		case "cache_low_hit_rate":
+			value = m.HitRate
+			triggered = m.HitRate < 0.80
+		case "cache_critical_hit_rate":
+			value = m.HitRate
+			triggered = m.HitRate < 0.60
+		case "cache_high_memory":
+			if m.MaxMemory > 0 {
+				value = float64(m.UsedMemory) / float64(m.MaxMemory)
+				triggered = value > 0.80
+			}
+		case "cache_critical_memory":
+			if m.MaxMemory > 0 {
+				value = float64(m.UsedMemory) / float64(m.MaxMemory)
+				triggered = value > 0.95
+			}
+		case "cache_evictions_spike":
+			value = float64(m.EvictedKeys)
+			triggered = m.EvictedKeys > 1000
+		}
+
+		if !triggered {
+			continue
+		}
+
+		alert := CacheAlert{
+			AlertID:    fmt.Sprintf("cache_%s_%s", instID, rule.Name),
+			RuleName:   rule.Name,
+			InstanceID: instID,
+			Host:       m.Host,
+			Port:       m.Port,
+			Engine:     m.Engine,
+			Severity:   rule.Severity,
+			Value:      value,
+			Threshold:  rule.Threshold,
+			Message:    fmt.Sprintf("[%s] %s (%s) — %s", rule.Severity, m.Engine, instID, rule.Description),
+			Actions:    rule.Actions,
+		}
+		result.Items = append(result.Items, models.CollectedItem{
+			SchemaName:    "cache.alert.v1",
+			SchemaVersion: "1.0.0",
+			MetricType:    "alert",
+			Category:      "it",
+			Data:          alert,
+		})
+	}
+}
+
+func checkRedisClusterAlerts(m RedisClusterMetrics, result *models.CollectResult) {
+	if m.SlotsFail == 0 && m.SlotsPfail == 0 {
+		return
+	}
+	instID := fmt.Sprintf("%s:%s", m.Host, m.Port)
+	alert := CacheAlert{
+		AlertID:    fmt.Sprintf("cache_%s_cache_cluster_degraded", instID),
+		RuleName:   "cache_cluster_degraded",
+		InstanceID: instID,
+		Host:       m.Host,
+		Port:       m.Port,
+		Engine:     m.Engine,
+		Severity:   "critical",
+		Value:      float64(m.SlotsFail + m.SlotsPfail),
+		Threshold:  0,
+		Message:    fmt.Sprintf("[critical] Redis Cluster %s has fail_slots=%d pfail_slots=%d", instID, m.SlotsFail, m.SlotsPfail),
+		Actions:    []string{"pagerduty"},
+	}
+	result.Items = append(result.Items, models.CollectedItem{
+		SchemaName:    "cache.alert.v1",
+		SchemaVersion: "1.0.0",
+		MetricType:    "alert",
+		Category:      "it",
+		Data:          alert,
+	})
 }
