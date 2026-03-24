@@ -48,15 +48,23 @@ export interface Middleware {
   status: 'running' | 'stopped' | 'error';
 }
 
+export type GPUVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'virtual' | 'unknown';
+
 export interface GPUInfo {
   index: number;
   model: string;
+  vendor?: GPUVendor;
   vramTotal: number;
   vramUsed: number;
   vramPercent: number;
   temperature: number;
   powerDraw: number;
   smOccupancy: number;
+  coreFreqMHz?: number;
+  isVirtual?: boolean;
+  migEnabled?: boolean;
+  migInstance?: string;
+  driverVersion?: string;
 }
 
 export interface Service {
