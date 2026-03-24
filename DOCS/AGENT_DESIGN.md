@@ -2504,7 +2504,182 @@ service ConfigService {
 
 ---
 
-## 12. 구현 로드맵
+## 12. 진단 모드 — Diagnostic + Monitoring 통합 (ADR-011)
+
+> **결정**: Go Agent 단일 바이너리로 Monitoring(24/7)과 Diagnostic(온디맨드 진단)을 통합한다.
+> **배경**: [ADR-001_AGENT_UNIFICATION.md](./ADR-001_AGENT_UNIFICATION.md) 참조
+> **추가일**: 2026-03-24
+
+### 12.1 실행 모드
+
+```
+aitop-agent [--mode=MODE] [--part=PART] [--config=PATH]
+
+MODE:
+  monitor        24/7 실시간 모니터링 (기본값)
+                 OTel 스트리밍, Heartbeat, Fleet 관리
+
+  diagnose       온디맨드 진단 수집
+                 86개 항목 Evidence 수집 → ZIP/업로드
+                 수집 완료 후 종료 (상주하지 않음)
+
+  collect-only   1회 수집 → HTTPS Push → 종료
+                 에어갭 환경, 프로젝트 토큰 인증
+
+  full           모니터링 상시 + 진단 스케줄/온디맨드 (권장)
+                 가장 완전한 모드
+
+PART (diagnose/collect-only 모드에서 사용):
+  aa             애플리케이션 항목 (WEB/WAS/LLM/Agent)
+  da             데이터 항목 (DB/VectorDB/Embedding)
+  ia             인프라 항목 (OS/GPU/Network)
+  all            전체 (기본값)
+```
+
+### 12.2 3계층 수집 전략
+
+에이전트의 수집 방식을 3계층으로 분리하여, 스크립트 수동 배포 없이 자동 수집을 실현한다.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 계층 1: Go 네이티브 (80~85%)                                  │
+│                                                               │
+│  /proc, /sys 직접 읽기     OS 메트릭, 커널 파라미터           │
+│  os.ReadFile + 파서        설정 파일 (nginx.conf, my.cnf 등)  │
+│  /proc/{pid}/cmdline       프로세스 탐지, 버전 추출           │
+│  bufio.Scanner + regexp    로그 패턴 분석                     │
+│  exec.Command              nvidia-smi, sysctl, ulimit 등     │
+│  net.Dial + HTTP Client    포트 체크, API 호출                │
+├─────────────────────────────────────────────────────────────┤
+│ 계층 2: Go DB 드라이버 (10%)                                  │
+│                                                               │
+│  pgx                       PostgreSQL (pg_settings 등)        │
+│  go-sql-driver/mysql       MySQL/MariaDB (SHOW VARIABLES)    │
+│  godror                    Oracle (v$parameter, v$session)    │
+│  go-mssqldb                MSSQL (sys.configurations)        │
+│                                                               │
+│  * 인증: agent.yaml의 db_credentials 섹션                    │
+│  * 권한: 읽기 전용 계정 (SELECT/SHOW 만 필요)                │
+├─────────────────────────────────────────────────────────────┤
+│ 계층 3: 임베디드 스크립트 래핑 (5~10%)                        │
+│                                                               │
+│  //go:embed scripts/*.sh   Agent 바이너리에 스크립트 내장     │
+│  exec.Command("bash",...)  AIX/HP-UX/Solaris 전용 명령어     │
+│  Jolokia HTTP              WAS JMX (Jolokia 미사용 시 스크립트)│
+│  plugins/ 디렉토리          고객 맞춤 수집 스크립트            │
+│                                                               │
+│  * 스크립트 버전: Agent OTA 업데이트로 자동 관리              │
+│  * 출력: 표준 Evidence JSON 형식으로 변환                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 12.3 Evidence Collector 인터페이스
+
+기존 Monitoring Collector와 별도로, 진단용 Evidence Collector를 정의한다.
+
+```go
+// EvidenceCollector는 진단 항목(ITEM)을 위한 심층 수집을 수행한다.
+// Collector(실시간 메트릭)와 달리, 설정 파일·로그·버전 정보 등
+// 점검 시점의 스냅샷 데이터를 수집한다.
+type EvidenceCollector interface {
+    // ID는 이 Evidence Collector의 고유 식별자.
+    ID() string
+
+    // CoveredItems는 이 Collector가 커버하는 진단 항목 ID 목록.
+    CoveredItems() []string
+
+    // Collect는 Evidence 데이터를 수집하여 파일 목록으로 반환한다.
+    // 각 파일은 ITEM별 Evidence JSON 형식이다.
+    Collect(ctx context.Context, cfg EvidenceConfig) ([]EvidenceFile, error)
+}
+
+type EvidenceConfig struct {
+    Part        string            // aa, da, ia, all
+    ProjectID   string            // 프로젝트 식별자
+    Hostname    string            // 대상 호스트
+    DBCreds     map[string]DBCred // DB 인증 정보 (db_type → cred)
+    CustomArgs  map[string]string // 고객 맞춤 인자
+}
+
+type EvidenceFile struct {
+    ItemID      string // ITEM0012 등
+    FileName    string // linux_host01_os_kernel_config.json
+    Content     []byte // Evidence JSON
+    SchemaVer   string // evidence.os.v1
+}
+```
+
+### 12.4 Evidence Collector 목록
+
+| Collector | 계층 | 커버 ITEM | 수집 대상 |
+|-----------|:----:|----------|---------|
+| **OSEvidence** | 1 | ITEM0036~0040, 0063~0070 | 커널 파라미터, limits, 파일시스템, NTP, DNS, 스왑 |
+| **WebEvidence** | 1 | ITEM0006~0009, 0056 | nginx.conf, httpd.conf, SSL/TLS, 접근 로그 |
+| **WASEvidence** | 1+3 | ITEM0010~0035 | JVM 옵션, 쓰레드풀, GC 로그, 힙/쓰레드 덤프 |
+| **DBEvidence** | 1+2 | ITEM0050~0065 | DB 설정, 슬로우 쿼리, 테이블스페이스, 복제 |
+| **EOSEvidence** | 1 | ITEM0068 | 버전 탐지 → EOS 라이프사이클 DB 매칭 |
+| **SecurityEvidence** | 1 | ITEM0064~0067 | SSL/TLS, 패치, 계정 정책, 방화벽 |
+| **APMEvidence** | 1 | ITEM0069~0070 | 6종 APM SaaS API (WhaTap/Datadog/NR/DT/Scouter) |
+| **AILLMEvidence** | 1 | ITEM0200~0204, 0209~0212 | LLM 설정, 토큰 사용량, 프롬프트 거버넌스 |
+| **AIVectorDBEvidence** | 1 | ITEM0205~0206, 0213~0216 | VectorDB 설정, 인덱스, 임베딩, 청킹 |
+| **AIGPUEvidence** | 1 | ITEM0207~0208, 0217~0220 | GPU 설정, VRAM, 배칭, 양자화, KV 캐시 |
+| **AIGovernanceEvidence** | 1 | ITEM0221~0230 | 프롬프트 버전, PII, 가드레일, 감사 로그 |
+| **CrossAnalysisEvidence** | 1 | ITEM0058 + AI 교차 | IT↔AI 교차 분석용 통합 스냅샷 |
+
+### 12.5 데이터 흐름
+
+```
+diagnose 모드:
+  EvidenceCollector[]
+    → EvidenceFile[]
+    → ZIP 패키징 (project_host_timestamp.zip)
+    → 업로드 (HTTPS POST /api/v1/evidence/upload)
+    → Collection Server → aitop-backend 릴레이
+    → Rule+LLM 86개 항목 자동 진단
+    → 종합 보고서 생성
+
+full 모드:
+  Monitoring Collector[] → OTel 스트리밍 (24/7)
+       +
+  EvidenceCollector[] → ZIP 업로드 (스케줄/온디맨드)
+       +
+  Monitoring 메트릭을 Evidence 소스로 재활용 (중복 수집 제거)
+```
+
+### 12.6 agent.yaml 진단 설정 예시
+
+```yaml
+# 진단 모드 설정
+diagnosis:
+  enabled: true
+  schedule: "0 2 * * MON"    # 매주 월요일 02:00 자동 진단
+  part: all                   # aa, da, ia, all
+  upload_url: "https://aitop-backend.example.com/api/v1/evidence/upload"
+  project_token: "proj_xxxx"  # 프로젝트 인증 토큰
+
+  # DB 인증 정보 (계층 2 수집에 필요)
+  db_credentials:
+    postgresql:
+      host: "127.0.0.1"
+      port: 5432
+      user: "aitop_readonly"
+      password_env: "AITOP_PG_PASSWORD"  # 환경변수 참조 (평문 저장 금지)
+    mysql:
+      host: "127.0.0.1"
+      port: 3306
+      user: "aitop_readonly"
+      password_env: "AITOP_MYSQL_PASSWORD"
+
+  # 커스텀 스크립트 (계층 3)
+  custom_scripts:
+    - path: "/opt/aitop/plugins/collect-weblogic-jndi.sh"
+      items: ["ITEM0027"]
+      timeout: 30s
+```
+
+---
+
+## 13. 구현 로드맵
 
 ### Phase F: 에이전트 MVP (6주)
 
@@ -2535,11 +2710,49 @@ service ConfigService {
 | G-9 | OTel Metrics Collector | 모니터링 시스템 연동 | 8 |
 | G-10 | collect-export 모드 | 오프라인 ZIP 내보내기 | 8 |
 
+### Phase 31: 에이전트 일원화 — Diagnostic + Monitoring 통합 (ADR-011)
+
+| # | 작업 | 산출물 | 예상 기간 |
+|---|------|--------|---------|
+| **31-1** | **Go Agent 진단 모드** | | **2~3주** |
+| 31-1a | `--mode=diagnose` CLI 플래그 | main.go 모드 분기 | |
+| 31-1b | EvidenceCollector 인터페이스 | `internal/collector/evidence/` | |
+| 31-1c | OSEvidence (커널, limits, 파일시스템) | Go 네이티브 /proc 읽기 | |
+| 31-1d | WebEvidence (nginx.conf, httpd.conf) | os.ReadFile + 파서 | |
+| 31-1e | WASEvidence (JVM 옵션, GC 로그) | exec.Command + 파싱 | |
+| 31-1f | EOSEvidence (버전 → EOS DB 매칭) | eos-lifecycle-db.json embed | |
+| 31-1g | Evidence ZIP 생성 + 업로드 | archive/zip + HTTP POST | |
+| 31-1h | 기존 12종 Collector → Evidence 변환 어댑터 | 모니터링 데이터 재활용 | |
+| **31-2** | **DB Evidence (계층 2)** | | **2~3주** |
+| 31-2a | PostgreSQL Evidence (pgx 드라이버) | pg_settings, pg_stat 쿼리 | |
+| 31-2b | MySQL Evidence (go-sql-driver) | SHOW VARIABLES/STATUS | |
+| 31-2c | Oracle Evidence (godror) | v$parameter, v$session | |
+| 31-2d | MSSQL Evidence (go-mssqldb) | sys.configurations | |
+| 31-2e | agent.yaml db_credentials 파싱 | 환경변수 참조 지원 | |
+| **31-3** | **Backend 연동** | | **2~3주** |
+| 31-3a | Collection Server Evidence 수신 API | POST /api/v1/evidence/upload | |
+| 31-3b | aitop-backend 릴레이 | Collection Server → Backend 포워딩 | |
+| 31-3c | 진단 자동 트리거 | 수집 완료 → 자동 진단 실행 | |
+| 31-3d | Fleet에 진단 상태 표시 | UI 대시보드 연동 | |
+| **31-4** | **고급 Evidence + Full 모드** | | **3~4주** |
+| 31-4a | SecurityEvidence (SSL, 패치, 계정) | Go 네이티브 | |
+| 31-4b | APMEvidence (6종 SaaS 어댑터) | Go HTTP 클라이언트 | |
+| 31-4c | AI Evidence 전체 (LLM/VectorDB/GPU/Governance) | 기존 AI Collector 확장 | |
+| 31-4d | CrossAnalysisEvidence (IT↔AI 통합) | 스냅샷 통합기 | |
+| 31-4e | `--mode=collect-only` (에어갭 오프라인) | 1회 수집 → ZIP 내보내기 | |
+| 31-4f | `--mode=full` (모니터링+진단 통합) | cron 스케줄 기반 자동 진단 | |
+| 31-4g | 임베디드 스크립트 (계층 3) | //go:embed + exec.Command | |
+| **31-5** | **Java Agent EOL** | | **4~8주** |
+| 31-5a | 기능 동등성 테스트 (55+31 = 86항목) | Evidence 출력 비교 | |
+| 31-5b | 마이그레이션 가이드 문서 | Java → Go 전환 안내 | |
+| 31-5c | 병행 운영 기간 (3개월) | 양쪽 지원 | |
+| 31-5d | Java Agent EOL 선언 | 최종 버전 + 유지보수만 | |
+
 ### Phase H: 고도화 (12주)
 
 | # | 작업 | 산출물 |
 |---|------|--------|
-| H-1 | AIX/HP-UX/Solaris Agent | 레거시 Unix 지원 |
+| H-1 | AIX/HP-UX/Solaris Agent | 레거시 Unix 지원 (계층 3 스크립트 기반) |
 | H-2 | 증분 수집 + 오프라인 모드 | 변경분 감지, 로컬 버퍼링 → 자동 동기화 |
 | H-3 | eBPF Plugin (선택적) | 커널 수준 AI 워크로드 프로파일링 |
 | H-4 | Diagnostic Plugin (py-spy, pprof) | 런타임 프로파일링, Flamegraph |
@@ -2562,6 +2775,23 @@ service ConfigService {
 | OTel | ITEM0207 연동 | 전체 대시보드 보강 | 6시간(스냅샷) | StorageBackend¹ | net:Prometheus접근 |
 
 > ¹ **StorageBackend**: `storage.type` 설정에 따라 S3Backend(s3) / LocalBackend(local) / DualBackend(both) 중 하나가 선택됨 (§7.6 참조)
+
+### Evidence Collector 매핑표 (진단 모드 — §12 참조)
+
+| Evidence Collector | 수집 계층 | 커버 ITEM | 수집 방식 | 필요 조건 |
+|-------------------|:--------:|----------|---------|---------|
+| OSEvidence | 1 (Go 네이티브) | ITEM0036~0040, 0063~0070 | /proc, /sys, exec(sysctl) | root 또는 read 권한 |
+| WebEvidence | 1 | ITEM0006~0009, 0056 | 설정 파일 읽기 | read:nginx.conf 등 |
+| WASEvidence | 1+3 | ITEM0010~0035 | exec(jcmd) + 설정 읽기 | JDK tools 접근 |
+| DBEvidence | 2 (Go DB 드라이버) | ITEM0050~0065 | pgx/mysql/godror/mssql | DB 읽기 전용 계정 |
+| EOSEvidence | 1 | ITEM0068 | 버전 탐지 + embed DB | 없음 |
+| SecurityEvidence | 1 | ITEM0064~0067 | 설정/인증서 읽기 | read 권한 |
+| APMEvidence | 1 | ITEM0069~0070 | HTTP API 호출 | APM API Key |
+| AILLMEvidence | 1 | ITEM0200~0204, 0209~0212 | 설정 읽기 + API | read 권한 |
+| AIVectorDBEvidence | 1 | ITEM0205~0206, 0213~0216 | HTTP API | VectorDB 접근 |
+| AIGPUEvidence | 1 | ITEM0207~0208, 0217~0220 | nvidia-smi + 설정 | GPU 접근 |
+| AIGovernanceEvidence | 1 | ITEM0221~0230 | 설정 + 로그 읽기 | read 권한 |
+| CrossAnalysisEvidence | 1 | ITEM0058 + AI 교차 | 위 Collector 통합 | 없음 |
 
 ## 부록 B: 에러 코드 정의
 
