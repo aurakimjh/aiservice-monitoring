@@ -783,31 +783,35 @@ Part C (교차검증) 승인자: ____________ 서명: ____
 
 ## 6. Phase 7'/8'/9' 테스트 로드맵
 
+> **최종 업데이트**: 2026-03-24 — Phase 17 테스트 결과 반영, 완료/미완료 현행화
+> **테스트 결과 기록**: `test/` 디렉토리 ([섹션 9 참조](#9-test-디렉토리-구조-안내))
+
 ### 6-1. Phase 7' — E2E 통합 검증
 
 **목표**: 전체 시스템이 end-to-end로 올바르게 연동되는지 검증
 
-**매뉴얼 테스트 (Level 5 + Level 6)**:
+#### 완료 현황
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 7'-1 | docker-compose.e2e.yaml 기동 + 헬스체크 | Level 5 체크리스트 |
-| 7'-2 | Locust 부하 테스트 (200 users, 10분) | Locust HTML 리포트 |
-| 7'-3 | Playwright E2E 테스트 실행 | Playwright HTML 리포트 |
-| 7'-4 | 수동 시나리오 테스트 (RAG 질의/가드레일) | 시나리오 체크리스트 |
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|:----:|------|
+| 7'-1 | Docker 11컨테이너 기동 + 헬스체크 | **완료** | Phase 17에서 전체 PASS (2026-03-23) |
+| 7'-2 | 파이프라인 검증 (21개 체크포인트) | **완료** | 21/21 PASS — JWT, Heartbeat, Fleet, MinIO, Prometheus |
+| 7'-3 | Playwright E2E 5개 시나리오 | **완료** | 9/9 PASS — SRE, AI, Consultant, Agent, Navigation |
+| 7'-4 | a11y + Visual Regression | **미실행** | Playwright a11y/visual 프로젝트 미실행 |
 
-**AI 테스트 (AI-L3)**:
+#### To-Do (통합테스트 1차에서 수행)
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 7'-A1 | 프론트엔드/백엔드 API 경로 대조 | 불일치 목록 |
-| 7'-A2 | 요청/응답 타입 호환성 검증 | 타입 불일치 목록 |
-| 7'-A3 | WebSocket 이벤트 호환성 검증 | 이벤트 불일치 목록 |
-
-**교차검증**:
-- 매뉴얼 Level 5에서 발견한 API 오류와 AI-L3의 경로 불일치 대조
-- 양쪽에서 동일한 문제를 발견하면 확정 이슈로 등록
-- 한쪽에서만 발견한 문제는 재검증
+| # | 작업 | 우선순위 | 예상 기록 위치 |
+|---|------|:-------:|--------------|
+| 1 | **UI 전용 API 12개 엔드포인트 구현** | High | 변경이력 |
+|   | `/infra/hosts`, `/fleet/agents/{id}`, `/ai/services`, `/ai/gpu` | | |
+|   | `/ai/services/{id}/llm,rag,guardrail`, `/diagnostics/*` | | |
+| 2 | **Playwright a11y 테스트 실행** | Medium | 결과서_E2E |
+| 3 | **Playwright visual-regression 기준 스냅샷 생성** | Medium | `frontend/e2e/snapshots/` |
+| 4 | **Locust 부하 테스트** (200 users, 10분, 4 시나리오) | Medium | Locust HTML 리포트 |
+| 5 | **보안 감사** (`scripts/e2e/security-audit.sh`) | Medium | 결과서_E2E |
+| 6 | **트레이스 연속성** (`scripts/e2e/trace-continuity.sh`) | Medium | 결과서_E2E |
+| 7 | **AI-L3**: Frontend↔Backend API 경로/타입 대조 | Medium | 결과서_AI |
 
 **Playwright E2E 테스트 실행**:
 
@@ -834,7 +838,7 @@ npx playwright test e2e/a11y.spec.ts
 npx playwright show-report ../reports/playwright
 ```
 
-**완료 조건**: 모든 E2E 테스트 통과 + API 불일치 0개 + 부하 테스트 SLO 충족
+**완료 조건**: 모든 E2E 테스트 통과 + UI API FAIL 0건 + 부하 테스트 SLO 충족
 
 ---
 
@@ -842,28 +846,32 @@ npx playwright show-report ../reports/playwright
 
 **목표**: Helm Chart로 K8s 클러스터에 배포 가능한 상태인지 검증
 
-**매뉴얼 테스트 (Level 8)**:
+#### 완료 현황
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 8'-1 | Helm lint + template dry-run | lint 결과 |
-| 8'-2 | dev/prod values 렌더링 검증 | 렌더링된 YAML |
-| 8'-3 | RBAC/ServiceMonitor/PrometheusRule 검증 | 개별 템플릿 YAML |
-| 8'-4 | (선택) 실제 K8s 클러스터 배포 테스트 | kubectl 상태 |
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|:----:|------|
+| 8'-1 | Helm Chart 구조 생성 | **완료** | `helm/aiservice-monitoring/` (Chart.yaml, values, templates) |
+| 8'-2 | values-dev.yaml / values-prod.yaml | **완료** | dev/prod 분리 완료 |
+| 8'-3 | CI lint workflow | **완료** | `.github/workflows/lint.yaml`에 helm lint 포함 |
+| 8'-4 | Helm dry-run 검증 | **미실행** | 실제 template 렌더링 테스트 미수행 |
+| 8'-5 | K8s 실 배포 테스트 | **미실행** | 클러스터 환경 필요 |
 
-**AI 테스트 (AI-L4)**:
+#### To-Do
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 8'-A1 | Helm 템플릿 코드 분석 (보안 설정, 리소스 제한) | 분석 리포트 |
-| 8'-A2 | values.yaml 간 차이 분석 (dev vs prod) | 차이 목록 |
-| 8'-A3 | K8s 보안 베스트 프랙티스 준수 여부 | 준수 체크리스트 |
+| # | 작업 | 우선순위 | 비고 |
+|---|------|:-------:|------|
+| 1 | **`helm lint helm/aiservice-monitoring/`** | High | 기본 검증 |
+| 2 | **`helm template` dry-run** (기본/dev/prod 3종) | High | 렌더링 오류 확인 |
+| 3 | **RBAC / ServiceMonitor / PrometheusRule 검증** | Medium | 개별 템플릿 확인 |
+| 4 | **AI-L4**: Helm 보안 설정 분석 (리소스 제한, securityContext) | Medium | AI 코드 분석 |
+| 5 | **AI-L4**: values.yaml dev↔prod 차이 분석 | Low | 설정 일관성 |
+| 6 | **(선택) 실제 K8s 클러스터 배포** | Low | minikube/kind 환경 |
 
 **교차검증**:
 - Helm dry-run으로 발견한 문제와 AI 분석 결과 대조
 - AI가 지적한 보안 설정 미비를 매뉴얼로 재확인
 
-**완료 조건**: `helm lint` 통과 + 3개 환경(기본/dev/prod) 렌더링 성공 + 보안 이슈 0개
+**완료 조건**: `helm lint` 통과 + 3개 환경 렌더링 성공 + 보안 이슈 0개
 
 ---
 
@@ -871,22 +879,27 @@ npx playwright show-report ../reports/playwright
 
 **목표**: 정의된 SLO를 충족하도록 시스템을 튜닝하고, 지속적으로 모니터링할 수 있는 체계를 구축
 
-**매뉴얼 테스트 (Level 9)**:
+#### 완료 현황
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 9'-1 | Prometheus 알림 규칙 9개 검증 | test-alerts.sh 결과 |
-| 9'-2 | 부하 테스트 후 SLO 메트릭 측정 | SLO 대시보드 스크린샷 |
-| 9'-3 | Sampling 비용 시뮬레이션 | 비용 대조표 |
-| 9'-4 | SLO 미달 항목 원인 분석 + 튜닝 | 튜닝 보고서 |
+| 단계 | 작업 | 상태 | 비고 |
+|------|------|:----:|------|
+| 9'-1 | Prometheus 알림 규칙 9개 정의 | **완료** | CI에서 `promtool` 검증 통과 |
+| 9'-2 | SLO 페이지 (`/slo`) UI | **완료** | Phase 14에서 구현 |
+| 9'-3 | Sampling 정책 (Tail-based, 10종) | **완료** | Phase 6에서 구현 |
+| 9'-4 | SLO 실측치 측정 | **미실행** | 부하 테스트 후 측정 필요 |
+| 9'-5 | 알림 규칙 ↔ SLO 정의 일관성 검증 | **미실행** | |
 
-**AI 테스트 (AI-L5)**:
+#### To-Do
 
-| 단계 | 작업 | 산출물 |
-|------|------|--------|
-| 9'-A1 | 문서에 정의된 SLO와 코드 내 임계치 대조 | 불일치 목록 |
-| 9'-A2 | Prometheus 알림 규칙과 SLO 정의 일관성 검증 | 일관성 리포트 |
-| 9'-A3 | 성능 병목 코드 패턴 분석 (AI-L4 재실행) | 병목 목록 |
+| # | 작업 | 우선순위 | 비고 |
+|---|------|:-------:|------|
+| 1 | **알림 규칙 스크립트 실행** (`scripts/e2e/test-alerts.sh` 또는 CI) | High | 9개 규칙 검증 |
+| 2 | **Locust 부하 테스트 후 SLO 실측** | High | Phase 7' 부하 테스트와 연계 |
+| 3 | **SLO 대시보드에서 수치 확인** (`/slo` 페이지) | Medium | Prometheus 연동 확인 |
+| 4 | **Sampling 비용 시뮬레이션** (100/1000 RPS) | Medium | `reports/sampling-*.csv` 참조 |
+| 5 | **AI-L5**: 문서 SLO 정의 ↔ 코드 임계치 대조 | Medium | 불일치 여부 |
+| 6 | **AI-L5**: 알림 규칙 ↔ SLO 정의 일관성 검증 | Medium | |
+| 7 | **SLO 미달 항목 원인 분석 + 튜닝** | Low | 실측 후 수행 |
 
 **교차검증**:
 - 매뉴얼로 측정한 SLO 수치와 AI가 분석한 코드 성능 예측 대조
@@ -896,11 +909,11 @@ npx playwright show-report ../reports/playwright
 
 | SLO | 목표 | 현재치 | 상태 |
 |-----|------|--------|------|
-| 가용성 | > 99.5% | ___% | [ ] |
-| API P95 레이턴시 | < 2000ms | ___ms | [ ] |
-| TTFT P95 | < 3000ms | ___ms | [ ] |
-| Heartbeat 처리량 | > 50/초 | ___/초 | [ ] |
-| 에러율 | < 1% | ___% | [ ] |
+| 가용성 | > 99.5% | (부하 테스트 후 측정) | [ ] |
+| API P95 레이턴시 | < 2000ms | (부하 테스트 후 측정) | [ ] |
+| TTFT P95 | < 3000ms | (부하 테스트 후 측정) | [ ] |
+| Heartbeat 처리량 | > 50/초 | (부하 테스트 후 측정) | [ ] |
+| 에러율 | < 1% | (부하 테스트 후 측정) | [ ] |
 
 **완료 조건**: 5개 SLO 모두 목표 충족 + 알림 규칙 검증 PASS + 문서/코드 일관성 확인
 
@@ -1104,6 +1117,59 @@ wsl bash scripts/test-alerts.sh
 2. 실제 이슈라면 버그로 등록합니다
 3. 오판이라면 절차서 또는 프롬프트를 개선합니다
 4. 수정 후 해당 항목만 재테스트합니다
+
+---
+
+## 9. test/ 디렉토리 구조 안내
+
+> **2026-03-24 추가** — 체계적 테스트 관리를 위한 표준 디렉토리 구조
+
+모든 테스트 라운드의 절차서, 결과서, 교차검증, 변경이력은 프로젝트 루트의 `test/` 디렉토리에서 관리합니다.
+
+### 9.1 폴더 네이밍 규칙
+
+```
+test/{테스트유형}_{차수}_{YYYY-MM-DD}/
+```
+
+- **테스트유형**: `단위테스트` / `통합테스트` / `E2E테스트`
+- **차수**: `1차`, `2차`, `3차`, ...
+- **날짜**: 실행 시작일 (ISO 형식)
+
+### 9.2 라운드 내부 파일 구성
+
+| 파일 | 설명 |
+|------|------|
+| `절차서_{유형}_{N}차.md` | AI + 수동 실행 절차 |
+| `결과서_{유형}_{N}차_AI.md` | Claude Code AI 실행 결과 |
+| `결과서_{유형}_{N}차_수동.md` | 사용자 수동 검증 결과 |
+| `교차검증_{유형}_{N}차.md` | AI vs 수동 결과 대조표 |
+| `변경이력_{유형}_{N}차.md` | 테스트 중 발생한 코드/UI 변경 |
+| `logs/` | 원본 명령어 출력 (txt, json) |
+
+### 9.3 표준 템플릿
+
+새 라운드 생성 시 `test/templates/`에서 템플릿을 복사하여 사용합니다:
+
+- `test/templates/절차서_TEMPLATE.md`
+- `test/templates/결과서_TEMPLATE.md`
+- `test/templates/변경이력_TEMPLATE.md`
+
+### 9.4 교차검증 프로세스
+
+```
+1. AI 테스트 실행 → 결과서_AI.md 작성
+2. 사용자 수동 검증 → 결과서_수동.md 작성
+3. 양쪽 결과 대조 → 교차검증.md 작성
+4. 불일치 항목 → 원인 조사 후 최종 판정
+5. 코드 수정 발생 시 → 변경이력.md에 커밋 해시와 함께 기록
+```
+
+### 9.5 참고
+
+- `agent/test/` — Go 통합/계약 테스트 소스 코드 (변경하지 마세요)
+- `reports/` — 도구 자동 생성 리포트 (Playwright HTML, Coverage HTML)
+- `test/` — 사람이 읽는 구조화된 테스트 문서
 
 ---
 
