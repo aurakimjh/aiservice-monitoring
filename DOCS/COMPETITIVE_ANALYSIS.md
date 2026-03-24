@@ -430,6 +430,10 @@ Manual Analysis (수작업)          Recommend (권고)     ← 종합 보고서
 (컨설턴트 투입)                   Improve (개선)       ← Agentic AI 대화형 분석
 ```
 
+### 에이전트 일원화 결정 (ADR-011)
+
+경쟁 분석의 핵심 교훈: **모든 경쟁사는 에이전트 1개**다. AITOP은 현재 Diagnostic(Java)과 Monitoring(Go) 에이전트가 분리되어 있으나, **Go Agent 기반 단일 에이전트로 일원화**를 결정했다. 상세: [ADR-001_AGENT_UNIFICATION.md](./ADR-001_AGENT_UNIFICATION.md)
+
 AITOP은 모니터링 도구가 아니다. **AI 시대의 IT 운영 자동화 플랫폼**이다.
 
 - **Datadog이 보여주는 것**: "GPU 사용률 80%"
