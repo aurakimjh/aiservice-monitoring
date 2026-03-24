@@ -978,6 +978,80 @@ export interface MessageQueueMetrics {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Redis Cluster Types (Phase 26-5-6)
+// ═══════════════════════════════════════════════════════════════
+
+export interface RedisClusterMetrics {
+  engine: string;
+  host: string;
+  port: number;
+  clusterEnabled: boolean;
+  clusterState: 'ok' | 'fail';
+  clusterSize: number;
+  slotsAssigned: number;
+  slotsOK: number;
+  slotsPfail: number;
+  slotsFail: number;
+  knownNodes: number;
+  connectedSlaves: number;
+  migrationStatus?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Cache Alert Rule Types (Phase 26-5-7)
+// ═══════════════════════════════════════════════════════════════
+
+export interface CacheAlertRule {
+  name: string;
+  description: string;
+  condition: string;
+  threshold: number;
+  severity: 'warning' | 'critical';
+  actions: string[];
+}
+
+export interface CacheAlertEvent {
+  alertId: string;
+  ruleName: string;
+  instanceId: string;
+  host: string;
+  port: number;
+  engine: string;
+  severity: 'warning' | 'critical';
+  value: number;
+  threshold: number;
+  message: string;
+  triggeredAt: string;
+  actions: string[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Middleware Runtime Extended Types (Phase 26-4)
+// ═══════════════════════════════════════════════════════════════
+
+export interface GoroutineStats {
+  current: number;
+  baseline: number;
+  leakThreshold: number;
+  leakSuspected: boolean;
+  pprofUrl?: string;
+  warningLevel: 'ok' | 'warning' | 'critical';
+}
+
+export interface ConnPoolAlertEvent {
+  alertId: string;
+  poolName: string;
+  vendor: string;
+  severity: 'warning' | 'critical';
+  condition: string;
+  value: number;
+  threshold: number;
+  message: string;
+  triggeredAt: string;
+  action: string;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Continuous Profiling Types (Phase 21-1)
 // ═══════════════════════════════════════════════════════════════
 

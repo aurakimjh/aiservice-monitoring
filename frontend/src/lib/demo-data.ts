@@ -1593,6 +1593,60 @@ export function getMessageQueues(): MessageQueueMetrics[] {
   ];
 }
 
+// ── Redis Cluster (Phase 26-5-6) ────────────────────────────────────────
+
+export function getRedisClusterMetrics(): import('@/types/monitoring').RedisClusterMetrics[] {
+  return [
+    {
+      engine: 'redis', host: 'prod-redis-cluster-01', port: 6379,
+      clusterEnabled: true, clusterState: 'ok',
+      clusterSize: 6, slotsAssigned: 16384, slotsOK: 16384,
+      slotsPfail: 0, slotsFail: 0,
+      knownNodes: 6, connectedSlaves: 3,
+    },
+    {
+      engine: 'redis', host: 'prod-redis-cluster-02', port: 6379,
+      clusterEnabled: true, clusterState: 'fail',
+      clusterSize: 3, slotsAssigned: 16384, slotsOK: 14892,
+      slotsPfail: 1024, slotsFail: 468,
+      knownNodes: 3, connectedSlaves: 1,
+      migrationStatus: 'migrating',
+    },
+  ];
+}
+
+// ── Cache Alert Rules (Phase 26-5-7) ─────────────────────────────────────
+
+export function getCacheAlertRules(): import('@/types/monitoring').CacheAlertRule[] {
+  return [
+    { name: 'cache_low_hit_rate', description: 'Cache hit rate < 80% — possible cache churn or cold start', condition: 'hit_rate < 0.80', threshold: 0.80, severity: 'warning', actions: ['slack'] },
+    { name: 'cache_critical_hit_rate', description: 'Cache hit rate < 60% — severe cache inefficiency', condition: 'hit_rate < 0.60', threshold: 0.60, severity: 'critical', actions: ['pagerduty', 'slack'] },
+    { name: 'cache_high_memory', description: 'Cache memory usage > 80% of maxmemory', condition: 'used_memory/maxmemory > 0.80', threshold: 0.80, severity: 'warning', actions: ['slack'] },
+    { name: 'cache_critical_memory', description: 'Cache memory usage > 95% of maxmemory — eviction risk', condition: 'used_memory/maxmemory > 0.95', threshold: 0.95, severity: 'critical', actions: ['pagerduty'] },
+    { name: 'cache_replication_lag', description: 'Replication lag > 1MB — replica falling behind master', condition: 'replication_lag_bytes > 1048576', threshold: 1048576, severity: 'warning', actions: ['pagerduty', 'slack'] },
+    { name: 'cache_evictions_spike', description: 'Evicted keys > 1000 — memory pressure causing data loss', condition: 'evicted_keys > 1000', threshold: 1000, severity: 'critical', actions: ['pagerduty'] },
+    { name: 'cache_cluster_degraded', description: 'Redis Cluster has failed or pfail slots', condition: 'cluster_slots_fail > 0 OR cluster_slots_pfail > 0', threshold: 0, severity: 'critical', actions: ['pagerduty'] },
+  ];
+}
+
+export function getCacheAlertEvents(): import('@/types/monitoring').CacheAlertEvent[] {
+  const now = new Date().toISOString();
+  return [
+    { alertId: 'cache_prod-cache-01:6380_cache_high_memory', ruleName: 'cache_high_memory', instanceId: 'prod-cache-01:6380', host: 'prod-cache-01', port: 6380, engine: 'keydb', severity: 'warning', value: 0.781, threshold: 0.80, message: '[warning] keydb (prod-cache-01:6380) — Cache memory usage > 80% of maxmemory', triggeredAt: now, actions: ['slack'] },
+    { alertId: 'cache_prod-cache-01:6380_cache_evictions_spike', ruleName: 'cache_evictions_spike', instanceId: 'prod-cache-01:6380', host: 'prod-cache-01', port: 6380, engine: 'keydb', severity: 'critical', value: 245, threshold: 1000, message: '[warning] keydb (prod-cache-01:6380) — Evicted keys present', triggeredAt: now, actions: ['pagerduty'] },
+  ];
+}
+
+// ── Connection Pool Alerts (Phase 26-2-2) ────────────────────────────────
+
+export function getConnPoolAlertEvents(): import('@/types/monitoring').ConnPoolAlertEvent[] {
+  const now = new Date().toISOString();
+  return [
+    { alertId: 'conn_pool_HikariCP-primary_conn_pool_high_utilization', poolName: 'HikariCP-primary', vendor: 'hikaricp', severity: 'warning', condition: 'active/max >= 0.90', value: 0.94, threshold: 0.90, message: '[warning] HikariCP-primary: Connection pool utilization >= 90%', triggeredAt: now, action: 'pagerduty,slack' },
+    { alertId: 'conn_pool_EF-Core-Pool_conn_pool_pending_waits', poolName: 'EF-Core-Pool', vendor: 'ef_core', severity: 'warning', condition: 'wait_count > 0', value: 3, threshold: 0, message: '[warning] EF-Core-Pool: Connection pool has pending wait requests', triggeredAt: now, action: 'pagerduty' },
+  ];
+}
+
 // ── Profiling (Phase 21-1) ──────────────────────────────────────────────
 
 export function getProfilingProfiles(): import('@/types/monitoring').ProfileMetadata[] {
