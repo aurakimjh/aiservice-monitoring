@@ -742,32 +742,147 @@ requiredPrivileges: [read:app-config, exec:curl, read:/var/lib/milvus]
 UI 연동: GPU 클러스터 뷰, LLM 성능 대시보드, 호스트 상세 > GPU 탭
 대상 ITEM: ITEM0207~0208, ITEM0217~0220, ITEM0227~0229
 
-수집 대상:
+수집 대상 (공통 메트릭 — 모든 벤더):
   ┌──────────────────────────────────────────────────────────────┐
-  │ GPU 메트릭 (nvidia-smi) │ VRAM 사용/총량, 온도, 전력, SM%    │
-  │                          │ GPU별 프로세스, ECC 에러             │
+  │ GPU 메트릭 (벤더 공통)   │ VRAM 사용/총량, 온도, 전력, 사용률  │
+  │                          │ GPU별 프로세스, 에러                 │
   │                          │                                    │
   │ 모델 서빙 상태           │ /health, /v1/models 엔드포인트 호출  │
   │                          │ 큐 길이, 지연시간, 에러율             │
   │                          │                                    │
-  │ 배칭 설정                │ max_batch_size, continuous_batching │
-  │ 양자화 설정              │ quantization_method, bits            │
-  │ KV Cache 설정            │ size, PagedAttention 여부            │
-  │                          │                                    │
+  │ 배칭/양자화/KV Cache     │ max_batch_size, quant, paged attn   │
   │ K8s 리소스               │ GPU limits/requests, HPA 설정       │
   │ MLOps 설정               │ CI/CD 파이프라인, 모델 레지스트리     │
-  │                          │                                    │
-  │ OTel/Prometheus 스냅샷   │ /metrics 엔드포인트에서 시계열 스냅샷 │
-  │ (모니터링 연동 시)        │ TTFT, TPS, GPU 시계열              │
+  │ OTel/Prometheus 스냅샷   │ /metrics 에서 시계열 스냅샷          │
   └──────────────────────────────────────────────────────────────┘
 
-자동 탐지:
-  - nvidia-smi 실행 가능 여부
-  - 프로세스: vllm, text-generation-launcher, tritonserver, ollama
-  - K8s 리소스: nvidia.com/gpu
+멀티벤더 GPU 수집 아키텍처:
+  ┌──────────────────────────────────────────────────────────────┐
+  │              GPUCollector (통합 진입점)                        │
+  │                                                              │
+  │   detect() → 벤더 자동 탐지 → 해당 드라이버 활성화             │
+  │                                                              │
+  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌───────────┐│
+  │  │  NVIDIA    │ │  AMD       │ │  Intel     │ │  Apple    ││
+  │  │  Driver    │ │  Driver    │ │  Driver    │ │  Driver   ││
+  │  ├────────────┤ ├────────────┤ ├────────────┤ ├───────────┤│
+  │  │ ① go-nvml  │ │ ① sysfs   │ │ ① sysfs   │ │ ① ioreg   ││
+  │  │   (NVML)   │ │   amdgpu   │ │   i915/xe  │ │   IOKit   ││
+  │  │ ② DCGM     │ │ ② rocm-   │ │ ② Level   │ │ ② power-  ││
+  │  │   exporter  │ │   smi     │ │   Zero    │ │   metrics ││
+  │  │ ③ nvidia-  │ │ ③ amdsmi  │ │ ③ XPU Mgr │ │ ③ sysctl  ││
+  │  │   smi 폴백  │ │   lib    │ │           │ │           ││
+  │  └────────────┘ └────────────┘ └────────────┘ └───────────┘│
+  │                                                              │
+  │  ┌────────────────────────────────────────────────────────┐ │
+  │  │  vGPU 지원 (가상 GPU 환경)                               │ │
+  │  │                                                        │ │
+  │  │  NVIDIA vGPU (GRID):  go-nvml + /proc/driver/nvidia/   │ │
+  │  │  AMD MxGPU (SR-IOV):  sysfs VF(Virtual Function)       │ │
+  │  │  Intel GVT-g/SR-IOV:  sysfs + Level Zero               │ │
+  │  │  Cloud vGPU:          VM 내부에서 표준 드라이버 사용      │ │
+  │  │  K8s MIG:             DCGM + nvidia-smi mig 명령        │ │
+  │  └────────────────────────────────────────────────────────┘ │
+  └──────────────────────────────────────────────────────────────┘
 
-requiredPrivileges: [exec:nvidia-smi, exec:curl, exec:kubectl]
-supportedPlatforms: [linux]  # GPU 서버는 Linux 한정
+벤더별 수집 방법:
+
+  ┌─ NVIDIA ───────────────────────────────────────────────────┐
+  │ 우선순위 ① go-nvml (NVML C 라이브러리 Go 바인딩)             │
+  │   - nvidia-smi 불필요, 직접 API 호출                        │
+  │   - import "github.com/NVIDIA/go-nvml/pkg/nvml"            │
+  │   - 메트릭: 사용률, VRAM, 온도, 전력, ECC, 프로세스 목록     │
+  │                                                             │
+  │ 우선순위 ② DCGM Exporter (데이터센터)                        │
+  │   - Prometheus /metrics 스크래핑                             │
+  │   - 메트릭: 200+ GPU 카운터 (시계열)                         │
+  │                                                             │
+  │ 우선순위 ③ nvidia-smi (폴백)                                 │
+  │   - exec.Command + CSV 파싱 (현재 방식)                     │
+  │   - go-nvml 사용 불가 시에만                                 │
+  │                                                             │
+  │ vGPU: nvidia-smi vgpu -q + /proc/driver/nvidia/vgpu/       │
+  │ MIG:  nvidia-smi mig -lgip + DCGM MIG 프로파일              │
+  └─────────────────────────────────────────────────────────────┘
+
+  ┌─ AMD ──────────────────────────────────────────────────────┐
+  │ Radeon (소비자) / Radeon Pro / Instinct MI (데이터센터)       │
+  │                                                             │
+  │ 우선순위 ① sysfs 직접 읽기 (도구 설치 불필요)                │
+  │   /sys/class/drm/card*/device/                              │
+  │     gpu_busy_percent        GPU 사용률 (%)                  │
+  │     mem_info_vram_used      VRAM 사용량 (bytes)             │
+  │     mem_info_vram_total     VRAM 총량 (bytes)               │
+  │     hwmon/hwmon0/temp1_input  온도 (milli°C)                │
+  │     hwmon/hwmon0/power1_average  전력 (μW)                  │
+  │     current_link_speed      PCIe 링크 속도                  │
+  │     pp_dpm_sclk             GPU 클럭 (MHz)                  │
+  │     pp_dpm_mclk             메모리 클럭 (MHz)               │
+  │                                                             │
+  │ 우선순위 ② rocm-smi (ROCm 설치 시)                          │
+  │   rocm-smi --showuse --showmemuse --showtemp --showpower   │
+  │                                                             │
+  │ MxGPU (SR-IOV): 각 VF가 별도 PCI 디바이스로 노출             │
+  │   /sys/class/drm/card*/device/ 동일하게 접근                 │
+  └─────────────────────────────────────────────────────────────┘
+
+  ┌─ Intel ────────────────────────────────────────────────────┐
+  │ Arc (소비자) / Flex (데이터센터) / Max (HPC)                 │
+  │                                                             │
+  │ 우선순위 ① sysfs 직접 읽기                                   │
+  │   /sys/class/drm/card*/                                     │
+  │     gt/gt0/rps_cur_freq_mhz     현재 GPU 주파수             │
+  │     gt/gt0/rps_max_freq_mhz     최대 GPU 주파수             │
+  │     hwmon/hwmon0/energy1_input   에너지 사용량               │
+  │   /sys/class/drm/card*/device/vendor == 0x8086              │
+  │                                                             │
+  │ 우선순위 ② intel_gpu_top (intel-gpu-tools)                   │
+  │   JSON 출력 모드: intel_gpu_top -J -s 1000                  │
+  │                                                             │
+  │ 우선순위 ③ Level Zero API / XPU Manager (데이터센터)          │
+  │   xpumcli dump -d 0 -m 0,1,2,5,18                          │
+  │                                                             │
+  │ SR-IOV: Flex/Max에서 VF 지원, sysfs 동일 접근                │
+  └─────────────────────────────────────────────────────────────┘
+
+  ┌─ Apple Silicon ────────────────────────────────────────────┐
+  │ M1 / M2 / M3 / M4 (Pro/Max/Ultra)                          │
+  │                                                             │
+  │ 우선순위 ① ioreg (sudo 불필요)                               │
+  │   GPU 모델, 코어 수, VRAM(통합 메모리 할당)                  │
+  │   ioreg -l | grep -i "gpu-core-count\|model"               │
+  │                                                             │
+  │ 우선순위 ② powermetrics (sudo 필요)                          │
+  │   GPU Active Residency (%), 주파수 (MHz), 전력 (mW)         │
+  │   sudo powermetrics --samplers gpu_power -i 1000 -n 1      │
+  │                                                             │
+  │ 우선순위 ③ sysctl (일부 하드웨어 정보)                       │
+  │   sysctl -n machdep.cpu.brand_string                        │
+  │   sysctl hw.memsize (통합 메모리)                            │
+  │                                                             │
+  │ 제한: macOS에서만 동작, AI 추론 서버로 사용하는 경우에 해당    │
+  └─────────────────────────────────────────────────────────────┘
+
+벤더 자동 탐지:
+  1. /proc/driver/nvidia/ 또는 NVML → NVIDIA
+  2. /sys/class/drm/card*/device/vendor == 0x1002 → AMD
+  3. /sys/class/drm/card*/device/vendor == 0x8086 (+ discrete GPU) → Intel
+  4. runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" → Apple
+  5. 프로세스: vllm, tritonserver, ollama, text-generation-launcher
+  6. K8s: nvidia.com/gpu, amd.com/gpu, gpu.intel.com/i915
+
+수집 공통 출력 스키마 (벤더 무관):
+  ai.gpu_metrics.v1:
+    vendor: "nvidia" | "amd" | "intel" | "apple"
+    index, name, vram_used_mb, vram_total_mb, vram_percent
+    temperature_c, power_draw_w, utilization_percent
+    clock_mhz, memory_clock_mhz
+    is_virtual: true/false  (vGPU 여부)
+    mig_enabled: true/false (MIG 파티셔닝 여부)
+    processes: [{pid, name, memory_mb}]
+
+requiredPrivileges: [read:/sys/class/drm, read:/proc/driver/nvidia]
+supportedPlatforms: [linux, darwin]
 ```
 
 #### OTel Metrics Collector (모니터링 연동)
