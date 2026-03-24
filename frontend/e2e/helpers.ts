@@ -17,36 +17,24 @@ export async function loginAsDemo(page: Page, role: 'admin' | 'sre' | 'ai' | 'vi
     viewer: 'Viewer',
   };
 
-  // 최대 2회 시도 (Docker 환경에서 첫 시도 실패 시 재시도)
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // email/password 방식으로 직접 로그인 (Docker standalone 환경 안정성 확보)
+  for (let attempt = 0; attempt < 3; attempt++) {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
 
-    // 방법 1: 데모 버튼 클릭
-    const btn = page.locator(`button:has-text("${buttonText[role]}")`).first();
-    try {
-      await btn.waitFor({ state: 'visible', timeout: 5000 });
-      await btn.click();
-    } catch {
-      // 방법 2: email/password 입력
-      await page.fill('input[type="email"]', emails[role]);
-      await page.fill('input[type="password"]', role);
-      await page.click('button[type="submit"]');
-    }
+    // email/password 필드가 보일 때까지 대기
+    const emailInput = page.locator('input[type="email"]');
+    await emailInput.waitFor({ state: 'visible', timeout: 10_000 });
+    await emailInput.fill(emails[role]);
+    await page.fill('input[type="password"]', role);
+    await page.click('button[type="submit"]');
 
-    // 로그인 완료 대기
     try {
-      await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 10_000 });
-      return; // 성공 시 종료
-    } catch {
-      if (attempt === 0) continue; // 첫 시도 실패 → 재시도
-      // 2회 모두 실패 — 마지막으로 email/password 재시도
-      await page.goto('/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', emails[role]);
-      await page.fill('input[type="password"]', role);
-      await page.click('button[type="submit"]');
       await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
+      return; // 성공
+    } catch {
+      if (attempt < 2) continue; // 재시도
+      throw new Error(`loginAsDemo failed after 3 attempts for role: ${role}`);
     }
   }
 }

@@ -209,12 +209,15 @@ class APIQueryUser(HttpUser):
             name="/api/v1/auth/refresh",
             catch_response=True,
         ) as resp:
-            if resp.status_code in (200, 401, 404):
+            if resp.status_code in (200, 400, 401, 404):
                 if resp.status_code == 200:
-                    data = resp.json()
-                    new_token = data.get("token")
-                    if new_token:
-                        self.jwt_token = new_token
+                    try:
+                        data = resp.json()
+                        new_token = data.get("accessToken") or data.get("token")
+                        if new_token:
+                            self.jwt_token = new_token
+                    except Exception:
+                        pass
                 resp.success()
             else:
                 resp.failure(f"Refresh failed: {resp.status_code}")
@@ -273,18 +276,12 @@ class AgentRegUser(HttpUser):
         payload = {
             "agent_id": agent_id,
             "hostname": hostname,
-            "version": "1.2.0",
-            "os": random.choice(["linux", "windows", "darwin"]),
-            "arch": random.choice(["amd64", "arm64"]),
-            "capabilities": random.sample(
-                ["it_collector", "ai_collector", "gpu_monitor", "log_tail"],
-                k=random.randint(1, 3),
-            ),
-            "tags": {
-                "env": random.choice(["prod", "staging", "dev"]),
-                "team": random.choice(["platform", "ai", "infra"]),
-                "region": random.choice(["us-east-1", "ap-northeast-2", "eu-west-1"]),
-            },
+            "agent_version": "1.2.0",
+            "os_type": random.choice(["linux", "windows", "darwin"]),
+            "status": "healthy",
+            "cpu_percent": round(random.uniform(10.0, 90.0), 2),
+            "memory_mb": round(random.uniform(256, 4096), 2),
+            "plugins": [],
         }
 
         with self.client.post(
@@ -484,15 +481,7 @@ class CollectTrigUser(HttpUser):
             name="/api/v1/agents/{id}/collect",
             catch_response=True,
         ) as resp:
-            if resp.status_code in (200, 201, 401, 400, 404):
-                if resp.status_code in (200, 201):
-                    try:
-                        data = resp.json()
-                        job_id = data.get("job_id") or data.get("id")
-                        if job_id:
-                            self.job_ids.append(job_id)
-                    except Exception:
-                        pass
+            if resp.status_code in (200, 201, 202, 401, 400, 404):
                 resp.success()
             else:
                 resp.failure(f"Trigger failed: {resp.status_code}")

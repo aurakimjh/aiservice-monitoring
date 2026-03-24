@@ -44,9 +44,13 @@ test.describe('Navigation, i18n, and Accessibility', () => {
   });
 
   test('Login page — 4 demo accounts visible', async ({ page }) => {
-    // 로그아웃 후 로그인 페이지
-    await page.goto('/login');
-    await expect(page.locator('text=/admin|sre|engineer|viewer/i').first()).toBeVisible();
+    // 새 컨텍스트에서 로그인 페이지 접속 (인증 상태 없이)
+    const context = await page.context().browser()!.newContext();
+    const freshPage = await context.newPage();
+    await freshPage.goto('/login');
+    await freshPage.waitForLoadState('networkidle');
+    await expect(freshPage.locator('text=/Administrator|SRE|Engineer|Viewer/i').first()).toBeVisible({ timeout: 10000 });
+    await context.close();
   });
 
   test('404 page for non-existent routes', async ({ page }) => {

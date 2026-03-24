@@ -241,6 +241,16 @@ func (f *fleet) get(id string) (*agentRecord, bool) {
 	return a, ok
 }
 
+func (f *fleet) delete(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.agents[id]
+	if ok {
+		delete(f.agents, id)
+	}
+	return ok
+}
+
 // snapshot returns a copy safe for JSON serialisation (no lock needed on copy).
 func snapshot(rec *agentRecord) map[string]interface{} {
 	rec.mu.RLock()
@@ -624,6 +634,36 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, logger *slog.Lo
 			"status":   "queued",
 			"agent_id": agentID,
 		})
+	})
+
+	// ── DELETE /api/v1/agents/{id} ────────────────────────────────────────────
+	mux.HandleFunc("DELETE /api/v1/agents/", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.URL.Path[len("/api/v1/agents/"):]
+		if agentID == "" {
+			http.Error(w, "agent id required", http.StatusBadRequest)
+			return
+		}
+		if !f.delete(agentID) {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+		logger.Info("agent deleted", "agent_id", agentID)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// ── DELETE /api/v1/fleet/agents/{id} ──────────────────────────────────
+	mux.HandleFunc("DELETE /api/v1/fleet/agents/", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.URL.Path[len("/api/v1/fleet/agents/"):]
+		if agentID == "" {
+			http.Error(w, "agent id required", http.StatusBadRequest)
+			return
+		}
+		if !f.delete(agentID) {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+		logger.Info("agent deleted via fleet API", "agent_id", agentID)
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	// ── Fleet Group endpoints (/api/v1/fleet/groups) ────────────────────────
