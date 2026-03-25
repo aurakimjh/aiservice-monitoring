@@ -1545,7 +1545,97 @@ AITOP Phase 1~32 완료 현황  [ALL COMPLETE]
 | 9 | **OTel** | OTLP 수신 | Traces, Metrics, Logs | OTLP gRPC/HTTP Receiver |
 | 10 | **Cache** | Redis, Memcached | 적중률, 메모리, 키 수, 만료율 | INFO, STATS |
 | 11 | **MQ** | Kafka, RabbitMQ, NATS | Consumer Lag, 메시지 수, 처리율 | Admin API, JMX |
-| 12 | **Profiling** | Go, Python, Java, .NET | CPU Flame, Memory Alloc, Thread | pprof, async-profiler, CLR |
+| 12 | **Profiling** | Go, Python, Java, .NET | CPU Flame, Memory Alloc, Thread | pprof, async-profiler, CLR / **Attach 모드** |
+
+---
+
+## 원클릭 프로파일링 전략 (Phase 33)
+
+> **추가일**: 2026-03-25 | **연계**: [AGENT_DESIGN.md §14](./AGENT_DESIGN.md#14-runtime-attach-모듈--앱-재시작-없이-프로파일링)
+
+### 핵심 차별화
+
+경쟁사(Datadog APM, Dynatrace, Pinpoint)는 에이전트를 설치할 때 앱도 함께 재시작해야 한다.
+AITOP은 **Runtime Attach** 방식으로 **앱 재시작 없이 즉시 프로파일링**을 활성화한다.
+
+```
+경쟁사 방식:
+  에이전트 설치 → 앱 설정 변경 → [앱 재시작] → 프로파일링 시작
+  ↑ 프로덕션 환경에서 재시작은 서비스 영향 (다운타임, 리스크)
+
+AITOP 방식:
+  에이전트 설치 (1회) → UI에서 "Java Profiler 배포" 클릭 → 프로파일링 시작 (재시작 없음)
+```
+
+### 원클릭 프로파일링 전체 워크플로
+
+```
+[1단계] 에이전트 설치 (1회)
+  서버에 aitop-agent 바이너리 설치 → 이후 재설치 불필요
+
+[2단계] UI에서 프로파일링 플러그인 배포
+  /agents/{id} 화면 → "프로파일링 플러그인 배포" 버튼 클릭
+  → 언어 선택 (Java / Python / .NET / Node.js / Go)
+  → 서버 Plugin Registry에서 플러그인 파일 에이전트로 자동 전달
+
+[3단계] 에이전트 자동 Attach
+  에이전트가 대상 프로세스 PID 탐지 → Attach 방식으로 즉시 주입
+  Java:   VirtualMachine.attach(pid) → loadAgent(aitop-java-agent.jar)
+  Python: py-spy record --pid <pid>
+  .NET:   DiagnosticsClient(pid) → EventPipe 세션 시작
+  Node:   SIGUSR1 → CDP WebSocket 연결
+
+[4단계] 프로파일링 데이터 수집 시작
+  FlameGraph, Thread 덤프, GC 이벤트 → Collection Server → UI 실시간 표시
+```
+
+### 두 가지 프로파일링 모드
+
+| | 🟢 Attach 모드 (즉시 활성화) | 🔴 Full Install 모드 (앱 재시작) |
+|--|----------------------------|-------------------------------|
+| **앱 재시작** | 불필요 | 필요 |
+| **설정 반영** | 즉시 | 앱 재시작 시 |
+| **프로덕션 적합성** | 긴급 진단, 단기 분석 | 상시 APM, 완전 계측 |
+| **메소드 계측 범위** | 샘플링 + 런타임 로드 클래스 | 모든 클래스 (시작 시점 포함) |
+| **Java** | JVM Attach API | `-javaagent` 옵션 |
+| **Python** | py-spy 외부 샘플링 | sitecustomize 삽입 |
+| **.NET** | EventPipe (GC/CPU/Thread) | CLR Profiler (전체 계측) |
+| **Node.js** | CDP Inspector | `--require @aitop/profiler` |
+
+### UI 모드 선택 화면 설계
+
+```
+/agents/{id}/profiling 화면
+
+┌─────────────────────────────────────────────────────────────────┐
+│  프로파일링 설정                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  탐지된 프로세스: OrderService (Java 17, PID 12345)              │
+│                                                                 │
+│  프로파일링 모드 선택:                                            │
+│                                                                 │
+│  ● 🟢 Attach 모드 (재시작 없음 — 즉시 활성화)          [권장]    │
+│    · CPU Sampling + Thread 덤프 + HTTP/SQL 추적                 │
+│    · 메소드 레벨: 런타임 로드 클래스 한정                          │
+│    · 오버헤드: ~1~3%                                             │
+│                                                                 │
+│  ○ 🔴 Full Install 모드 (앱 재시작 필요 — 완전 계측)             │
+│    · 모든 메소드 진입/종료 계측 (클래스 로딩 시점 포함)            │
+│    · 오버헤드: ~3~8%                                             │
+│    ⚠️ 다음 재시작 시 활성화됩니다                                 │
+│                                                                 │
+│  [지금 시작]  [취소]                                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 경쟁 우위 요약
+
+| 관점 | AITOP (Attach 모드) | 기존 APM 경쟁사 |
+|------|-------------------|----------------|
+| 프로덕션 도입 마찰 | 재시작 없음 — 즉시 | 대부분 재시작 필요 |
+| 플러그인 배포 | UI 원클릭 → 자동 주입 | 수동 jar 배포 + 설정 변경 |
+| 언어 커버리지 | Java / Python / .NET / Node.js / Go | 언어별 개별 에이전트 |
+| 비용 | 에이전트 설치 1회 | 언어별 에이전트 + 라이선스 |
 
 ---
 
@@ -1561,7 +1651,7 @@ AITOP Phase 1~32 완료 현황  [ALL COMPLETE]
 ║   서비스를 운영할 수 있도록 하는                                          ║
 ║   "AI 서비스 운영의 표준 플랫폼"입니다.                                   ║
 ║                                                                         ║
-║   Phase 1~32가 완료된 지금,                                              ║
+║   Phase 1~33이 완료된 지금,                                              ║
 ║   우리는 기술적 완성도를 넘어                                             ║
 ║   시장에서의 승리를 향해 나아갑니다.                                       ║
 ║                                                                         ║
@@ -1582,4 +1672,5 @@ AITOP Phase 1~32 완료 현황  [ALL COMPLETE]
 > | v1.0.0 | 2026-03-22 | 최초 작성 (완성도 평가, 경쟁 분석, 로드맵) |
 > | v1.1.0 | 2026-03-23 | 핵심 가치 명시, Enterprise/Lite 배포 모드 추가 |
 > | v3.0.0 | 2026-03-24 | 전면 재작성 — Series A 전략 문서 (비전/시장/GTM/혁신 로드맵) |
+> | v3.1.0 | 2026-03-25 | Phase 33 반영 — 원클릭 프로파일링 전략, Attach 모드 vs Full Install 모드 비교, UI 모드 선택 화면 |
 > | v3.1.0 | 2026-03-25 | Phase 31~32 반영, AGPL-free 전환 완료, GPU 멀티벤더 지원 |

@@ -1,8 +1,8 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.5.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-25 (Phase 32 반영 — AGPL-free 인프라 전환: Tempo→Jaeger, Loki→stdout/file, MinIO→StorageBackend)
-> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료 | Phase 24~32 ✅ 완료
+> **문서 버전**: v1.6.0
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-25 (Phase 33 반영 — Runtime Attach 모듈: JVM Attach API / py-spy / EventPipe / 플러그인 배포 연계)
+> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료 | Phase 24~32 ✅ 완료 | Phase 33 (Runtime Attach + Plugin 배포) 📋 설계 완료
 > **관련 문서**:
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -29,7 +29,9 @@
 9. [통신 프로토콜 및 보안](#9-통신-프로토콜-및-보안)
 10. [배포 및 설치](#10-배포-및-설치)
 11. [API 명세](#11-api-명세)
-12. [구현 로드맵](#12-구현-로드맵)
+12. [진단 모드 — Diagnostic + Monitoring 통합](#12-진단-모드--diagnostic--monitoring-통합-adr-011)
+13. [구현 로드맵](#13-구현-로드맵)
+14. [Runtime Attach 모듈 — 앱 재시작 없이 프로파일링](#14-runtime-attach-모듈--앱-재시작-없이-프로파일링)
 
 ---
 
@@ -3095,9 +3097,197 @@ diagnosis:
 | H-1 | AIX/HP-UX/Solaris Agent | 레거시 Unix 지원 (계층 3 스크립트 기반) |
 | H-2 | 증분 수집 + 오프라인 모드 | 변경분 감지, 로컬 버퍼링 → 자동 동기화 |
 | H-3 | eBPF Plugin (선택적) | 커널 수준 AI 워크로드 프로파일링 |
-| H-4 | Diagnostic Plugin (py-spy, pprof) | 런타임 프로파일링, Flamegraph |
+| H-4 | Runtime Attach 모듈 (§14) | 재시작 없이 JVM Attach / py-spy / EventPipe / CDP 연결 + 플러그인 배포 |
 | H-5 | 멀티테넌트 Fleet 관리 | SaaS 모델, 테넌트 격리 |
 | H-6 | 원격 CLI 고급 기능 | 파일 전송, 세션 공유, 읽기 전용 모드 |
+
+---
+
+## 14. Runtime Attach 모듈 — 앱 재시작 없이 프로파일링
+
+> **추가일**: 2026-03-25 | **연계**: Phase 33 중앙 플러그인 시스템 (§13 Phase 33)
+>
+> 앱 재기동 없이 실행 중인 프로세스에 프로파일링을 동적으로 주입한다.
+> 플러그인 배포 시스템(Phase 33)과 연계하여 UI 한 번의 클릭으로 전체 워크플로를 자동화한다.
+
+### 14.1 언어별 Attach 방식
+
+#### Java — JVM Attach API
+
+```
+동작 원리: JDK tools.jar의 VirtualMachine.attach(pid) → loadAgent(jar)
+참조 구현: Arthas (alibaba/arthas), async-profiler
+
+워크플로:
+  1. 에이전트가 aitop-java-agent.jar를 플러그인 레지스트리에서 다운로드
+  2. VirtualMachine.attach(targetPid) 로 대상 JVM 연결
+  3. vm.loadAgent("/opt/aitop/plugins/aitop-java-agent.jar", args) 호출
+  4. 대상 JVM 내부에서 ByteBuddy 계측 활성화
+  5. 프로파일링 데이터 → OTel Exporter → Collection Server
+
+필요 조건:
+  - AITOP Agent와 대상 JVM이 동일 OS 사용자(또는 root)
+  - JDK (JRE 불가) — tools.jar 필요
+  - Java 9+ 환경: --add-opens 플래그 또는 JPMS 허용 필요
+```
+
+#### Python — py-spy 외부 스택 샘플링
+
+```
+동작 원리: 타겟 프로세스의 /proc/{pid}/mem 직접 읽기 (root 또는 ptrace 권한)
+참조 구현: py-spy (benfred/py-spy)
+
+워크플로:
+  1. 에이전트가 py-spy 바이너리를 플러그인으로 배포
+  2. py-spy record -o profile.svg --pid <targetPid> --duration 30 실행
+  3. FlameGraph SVG → OTel Span 연계 또는 직접 저장
+
+필요 조건:
+  - root 또는 SYS_PTRACE capability
+  - CPython 3.6+, PyPy 지원
+  - 대상 앱 재시작 불필요
+```
+
+#### .NET — EventPipe DiagnosticsClient
+
+```
+동작 원리: Unix Domain Socket (dotnet-diagnostic-{pid}) 통해 EventPipe 세션 열기
+참조 구현: dotnet-trace, dotnet-counters
+
+워크플로:
+  1. 에이전트가 DiagnosticsClient(pid) 연결
+  2. EventPipeSession 시작 — GC/Thread/CPU 이벤트 수집
+  3. .nettrace 포맷 스트리밍 → 파싱 → OTel Metric 변환
+
+지원 이벤트:
+  - System.Runtime (CPU, GC, Thread Pool)
+  - Microsoft-Windows-DotNETRuntime (메모리, 예외)
+  - 메소드 레벨 계측: 제한적 (Full 모드 CLR Profiler 필요)
+
+필요 조건:
+  - .NET 3.0+ Runtime (EventPipe API)
+  - 동일 사용자 또는 root
+  - 재시작 불필요; 메소드 레벨 계측은 Full 모드에서만 완전 지원
+```
+
+#### Node.js — V8 Inspector (Chrome DevTools Protocol)
+
+```
+동작 원리: --inspect 플래그로 9229 포트 열기 → WebSocket CDP 연결
+참조 구현: Chrome DevTools, clinic.js
+
+워크플로:
+  1. 대상 Node.js 프로세스에 SIGUSR1 시그널 → Inspector 활성화
+     (프로세스가 --inspect 없이 시작된 경우)
+  2. ws://127.0.0.1:9229 CDP 연결
+  3. Profiler.enable() → Profiler.start() → (N초 후) Profiler.stop()
+  4. CPU Profile JSON → FlameGraph 변환
+
+필요 조건:
+  - Node.js 6.3+
+  - --inspect 또는 SIGUSR1 수신 가능 환경
+  - 보안 주의: Inspector 포트 외부 노출 금지 (localhost bind 권장)
+```
+
+#### Go — pprof HTTP 엔드포인트
+
+```
+동작 원리: net/http/pprof 패키지가 /debug/pprof/ 엔드포인트 노출
+
+워크플로:
+  1. 에이전트가 http://localhost:6060/debug/pprof/profile?seconds=30 호출
+  2. CPU profile 수집 → go tool pprof 파싱 → FlameGraph 생성
+
+필요 조건:
+  - 대상 앱에 import _ "net/http/pprof" 및 HTTP 리스너 필요
+  - 엔드포인트가 닫혀 있으면 수집 불가 (코드 변경 또는 재시작 필요)
+```
+
+### 14.2 두 가지 프로파일링 모드 비교
+
+> 설정 반영 수준 아이콘: 🟢 즉시 적용 | 🔴 앱 재시작 필요
+
+| 항목 | 🟢 Attach 모드 (즉시) | 🔴 Full Install 모드 (앱 재시작) |
+|------|----------------------|-------------------------------|
+| **앱 재시작** | 불필요 ✅ | 필요 ⚠️ |
+| **설정 반영 시점** | 🟢 즉시 (수 초) | 🔴 다음 앱 재시작 시 |
+| **프로덕션 권장** | 긴급 진단, 단기 분석 | 상시 APM, 완전 메소드 프로파일링 |
+| **CPU 샘플링** | ✅ (샘플링 기반) | ✅ (계측 기반, 더 정밀) |
+| **메소드 레벨 계측** | ⚠️ 런타임 로드 클래스 한정 | ✅ 전 클래스 (로딩 시점 포함) |
+| **클래스 초기화 추적** | ❌ | ✅ |
+| **성능 오버헤드** | 낮음 (~1~3% CPU) | 중간 (~3~8% CPU) |
+| **Java** | 🟢 JVM Attach API + `loadAgent()` | 🔴 `-javaagent:/opt/aitop/aitop-java-agent.jar` |
+| **Python** | 🟢 py-spy 외부 샘플링 (PID 기반) | 🔴 `sitecustomize.py` 삽입 |
+| **.NET** | 🟢 EventPipe `DiagnosticsClient(pid)` | 🔴 CLR Profiler (`CORECLR_ENABLE_PROFILING=1`) |
+| **Node.js** | 🟢 CDP (SIGUSR1 → V8 Inspector) | 🔴 `--require @aitop/node-profiler` |
+| **Go** | 🟢 pprof HTTP 엔드포인트 폴링 | 🟢 동일 (Go는 Attach = Full) |
+
+### 14.2.1 UI 모드 선택 화면 설계
+
+```
+/agents/{id}/profiling 화면
+
+┌─────────────────────────────────────────────────────────────────┐
+│  프로파일링 설정                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  탐지된 프로세스: OrderService (Java 17, PID 12345)              │
+│                                                                 │
+│  프로파일링 모드 선택:                                            │
+│                                                                 │
+│  ● 🟢 Attach 모드 (재시작 없음 — 즉시 활성화)          [권장]    │
+│    · CPU Sampling + Thread 덤프 + HTTP/SQL 추적                 │
+│    · 메소드 레벨: 런타임 로드 클래스 한정                          │
+│    · 오버헤드: ~1~3%                                             │
+│                                                                 │
+│  ○ 🔴 Full Install 모드 (앱 재시작 필요 — 완전 계측)             │
+│    · 모든 메소드 진입/종료 계측 (클래스 로딩 시점 포함)            │
+│    · 오버헤드: ~3~8%                                             │
+│    ⚠️ 다음 앱 재시작 시 활성화됩니다                              │
+│                                                                 │
+│  [지금 시작]  [취소]                                              │
+└─────────────────────────────────────────────────────────────────┘
+
+상태 표시:
+  🟢 Attach 활성 중 — OrderService PID 12345 (Java 17)
+  🔴 Full Install 대기 중 — 다음 재시작 후 활성화
+  ❌ Attach 실패 — ATTACH_JDK_REQUIRED: JRE만 설치됨 (JDK 필요)
+```
+
+### 14.3 플러그인 배포 연계 (Phase 33)
+
+Phase 33 중앙 플러그인 시스템과 결합하여 UI 원클릭 프로파일링을 제공한다.
+
+```
+전체 워크플로:
+  ① 에이전트 설치 (1회, aitop-agent install)
+       ↓
+  ② UI → "Java Profiler 배포" 클릭
+       ↓
+  ③ 서버 Plugin Registry → 에이전트에 배포 명령 전송
+       ↓
+  ④ 에이전트가 aitop-java-agent.jar 다운로드 → /opt/aitop/plugins/ 배치
+       ↓
+  ⑤ 에이전트가 JVM Attach API로 실행 중인 JVM에 자동 주입
+       ↓
+  ⑥ 프로파일링 데이터 수집 시작 → UI FlameGraph 표시
+```
+
+| 플러그인 파일 | 언어 | 배포 방식 | Attach 수단 |
+|-------------|------|---------|------------|
+| `aitop-java-agent.jar` | Java | Plugin Registry → 에이전트 자동 다운로드 | VirtualMachine.attach(pid) + loadAgent() |
+| `Aitop.Profiler.dll` | .NET | Plugin Registry → 에이전트 자동 다운로드 | EventPipe DiagnosticsClient |
+| `py-spy` (바이너리) | Python | Plugin Registry → 에이전트 자동 다운로드 | PID 기반 외부 샘플링 |
+| `@aitop/node-profiler` | Node.js | Plugin Registry → npm 패키지 배포 | CDP WebSocket |
+
+### 14.4 Attach 모드 에러 코드
+
+| 코드 | 의미 | 조치 |
+|------|------|------|
+| `ATTACH_PERMISSION_DENIED` | 대상 프로세스 소유자와 AITOP Agent 실행 사용자 불일치 | root 실행 또는 사용자 일치 확인 |
+| `ATTACH_JDK_REQUIRED` | JRE만 설치됨 (tools.jar 없음) | JDK 설치 필요 |
+| `ATTACH_PORT_UNAVAILABLE` | Node.js Inspector / Go pprof 포트 비활성 | SIGUSR1 전송 또는 앱 설정 확인 |
+| `ATTACH_EVENTPIPE_UNSUPPORTED` | .NET 버전 < 3.0 | Full 모드 CLR Profiler로 전환 |
+| `ATTACH_ALREADY_ACTIVE` | 이미 프로파일링 세션 활성 | 기존 세션 종료 후 재시도 |
 
 ---
 
