@@ -244,7 +244,7 @@ export default function AgentProfilingPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard title="Detected Processes" value={processes.length} subtitle="attachable" status="healthy" />
-        <KPICard title="Active Sessions" value={activeCount} subtitle="profiling" status={activeCount > 0 ? 'healthy' : 'unknown'} />
+        <KPICard title="Active Sessions" value={activeCount} subtitle="profiling" status={activeCount > 0 ? 'healthy' : undefined} />
         <KPICard title="Failed" value={failedCount} subtitle="attach errors" status={failedCount > 0 ? 'critical' : 'healthy'} />
         <KPICard title="Total Sessions" value={sessions.length} subtitle="all time" status="healthy" />
       </div>

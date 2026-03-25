@@ -1162,26 +1162,7 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}})
 	})
 
-	// ── Fleet Plugins endpoint (/api/v1/fleet/plugins) ──────────────────────
-
-	mux.HandleFunc("GET /api/v1/fleet/plugins", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}})
-	})
-
-	mux.HandleFunc("POST /api/v1/fleet/plugins/deploy", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			PluginName string   `json:"pluginName"`
-			TargetType string   `json:"targetType"`
-			TargetID   string   `json:"targetId"`
-			AgentIDs   []string `json:"agentIds"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		logger.Info("plugin deploy queued", "plugin", body.PluginName, "target", body.TargetType)
-		writeJSON(w, http.StatusAccepted, map[string]interface{}{"queued": 1})
-	})
+	// Fleet Plugins — registerPluginRoutes()에서 처리 (plugin_api.go)
 
 	// ── Fleet Updates endpoints (/api/v1/fleet/updates) ─────────────────────
 

@@ -79,7 +79,7 @@ function ClusterCard({ cluster }: { cluster: RedisClusterMetrics }) {
             <span className="tabular-nums font-medium" style={{ color: statusColor }}>{healthyPct}%</span>
           </div>
           <EChartsWrapper
-            style={{ height: 32 }}
+            height={32}
             option={{
               grid: { top: 0, bottom: 0, left: 0, right: 0 },
               xAxis: { type: 'value', show: false, max: cluster.slotsAssigned },

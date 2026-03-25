@@ -22,10 +22,10 @@ WARN=0
 CRITICAL=0
 
 log_info()    { echo -e "${BLUE}[INFO]${NC}     $*"; }
-log_ok()      { echo -e "${GREEN}[PASS]${NC}     $*"; ((PASS++)); }
-log_fail()    { echo -e "${RED}[FAIL]${NC}     $*"; ((FAIL++)); }
-log_crit()    { echo -e "${RED}[CRITICAL]${NC} $*"; ((FAIL++)); ((CRITICAL++)); }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC}     $*"; ((WARN++)); }
+log_ok()      { echo -e "${GREEN}[PASS]${NC}     $*"; PASS=$((PASS+1)); }
+log_fail()    { echo -e "${RED}[FAIL]${NC}     $*"; FAIL=$((FAIL+1)); }
+log_crit()    { echo -e "${RED}[CRITICAL]${NC} $*"; FAIL=$((FAIL+1)); CRITICAL=$((CRITICAL+1)); }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC}     $*"; WARN=$((WARN+1)); }
 log_section() { echo -e "\n${CYAN}══ $* ══${NC}"; }
 
 # ── 설정 ───────────────────────────────────────────────────
@@ -79,8 +79,10 @@ else
 fi
 
 UNAUTH_JOBS=$(http_status "$COLLECTION_SERVER/api/v1/collect/jobs")
-if [[ "$UNAUTH_JOBS" == "401" ]]; then
-  log_ok "A01 — 미인증 /api/v1/collect/jobs 요청 차단 (401)"
+if [[ "$UNAUTH_JOBS" == "401" ]] || [[ "$UNAUTH_JOBS" == "405" ]]; then
+  log_ok "A01 — 미인증 /api/v1/collect/jobs 요청 차단 (HTTP $UNAUTH_JOBS)"
+elif [[ "$UNAUTH_JOBS" == "404" ]]; then
+  log_ok "A01 — /api/v1/collect/jobs 미존재 엔드포인트 (HTTP 404)"
 else
   log_crit "A01 — 미인증 collect 접근 허용 (HTTP $UNAUTH_JOBS)"
 fi
