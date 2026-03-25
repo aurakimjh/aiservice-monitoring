@@ -1,8 +1,8 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.6.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-25 (Phase 33 반영 — Runtime Attach 모듈: JVM Attach API / py-spy / EventPipe / 플러그인 배포 연계)
-> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료 | Phase 24~32 ✅ 완료 | Phase 33 (Runtime Attach + Plugin 배포) 📋 설계 완료
+> **문서 버전**: v1.7.0
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF Collector 모듈: on-CPU·off-CPU·memory 프로파일링, folded stack 수집, JIT 심볼 해석)
+> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료 | Phase 24~33 ✅ 완료 | Phase 35 (perf/eBPF Collector + 플레임그래프) 📋 설계 완료
 > **관련 문서**:
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -32,6 +32,7 @@
 12. [진단 모드 — Diagnostic + Monitoring 통합](#12-진단-모드--diagnostic--monitoring-통합-adr-011)
 13. [구현 로드맵](#13-구현-로드맵)
 14. [Runtime Attach 모듈 — 앱 재시작 없이 프로파일링](#14-runtime-attach-모듈--앱-재시작-없이-프로파일링)
+15. [perf/eBPF Collector 모듈 — 커널+유저 통합 시스템 프로파일링](#15-perfebpf-collector-모듈--커널유저-통합-시스템-프로파일링)
 
 ---
 
@@ -3291,6 +3292,221 @@ Phase 33 중앙 플러그인 시스템과 결합하여 UI 원클릭 프로파일
 
 ---
 
+## 15. perf/eBPF Collector 모듈 — 커널+유저 통합 시스템 프로파일링
+
+> **Phase 35** | **설정 반영 수준**: 🟡 에이전트 재기동 (CAP_SYS_ADMIN 또는 CAP_BPF + CAP_PERFMON 필요)
+> **출력 포맷**: Brendan Gregg 표준 folded stack → Collection Server 전송 → 플레임그래프 동적 생성
+
+### 15.1 개요
+
+perf/eBPF Collector는 커널과 유저 공간 양쪽의 스택 트레이스를 통합 수집하여 시스템 레벨 성능 병목을 분석한다. Linux `perf` 서브시스템과 eBPF 기반 도구를 활용하여 재시작 없이 실행 중인 프로세스를 프로파일링하며, 결과를 folded stack 포맷으로 Collection Server에 전송한다.
+
+```
+perf/eBPF Collector 데이터 흐름:
+
+에이전트 (Linux Host)
+  │
+  ├── perf record → perf script
+  │     └── 커널+유저 통합 스택 트레이스 (symbol 해석 포함)
+  │
+  ├── eBPF (cilium/ebpf Go 라이브러리 또는 BCC/bpftrace)
+  │     ├── on-CPU  프로파일러 — 어떤 함수가 CPU를 점유하는가
+  │     ├── off-CPU 프로파일러 — 어떤 함수가 I/O·Lock 대기 중인가
+  │     └── memory  프로파일러 — 어떤 함수가 heap 할당을 유발하는가
+  │
+  └── folded stack 포맷으로 압축 → gRPC → Collection Server
+```
+
+### 15.2 수집 설정
+
+| 항목 | 기본값 | 설명 |
+|------|--------|------|
+| `sampling_frequency` | `99` Hz | perf/eBPF 샘플링 주파수 (99Hz — 100Hz 피하여 타이머 편향 방지) |
+| `duration` | `30` s | 1회 프로파일링 수집 기간 |
+| `target` | `all` | `all`=시스템 전체 / `pid:<PID>`=특정 프로세스 |
+| `profile_types` | `["cpu","offcpu","memory"]` | 수집할 프로파일 타입 조합 |
+| `stack_depth` | `127` | 최대 스택 프레임 깊이 |
+| `output_format` | `folded` | 출력 포맷 (Brendan Gregg folded stack 표준) |
+
+```yaml
+# agent.yaml 예시
+profiling:
+  perf_ebpf:
+    enabled: true
+    sampling_frequency: 99       # Hz
+    duration: 30                 # seconds
+    target: all                  # all | pid:<PID>
+    profile_types:
+      - cpu
+      - offcpu
+      - memory
+    stack_depth: 127
+    symbol_resolvers:
+      java: perf-map-agent       # JIT 심볼 맵 생성
+      python: py-spy             # 또는 perf + python frame pointer 패치
+      nodejs: perf-basic-prof    # --perf-basic-prof V8 JIT 심볼
+      go: dwarf                  # 기본 DWARF 심볼 (추가 설정 불필요)
+```
+
+### 15.3 프로파일 타입별 수집 방식
+
+#### on-CPU 프로파일링 (어떤 함수가 CPU를 많이 쓰는가)
+
+```
+수집 원리:
+  eBPF perf_event_open(PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CPU_CLOCK)
+  → 99Hz 타이머 인터럽트 발생 시마다 현재 실행 중인 스택 트레이스 기록
+  → user+kernel 통합 스택 (PERF_SAMPLE_STACK_USER | PERF_SAMPLE_CALLCHAIN)
+
+folded stack 출력 예시:
+  java;java_start;main;HttpServer.handle;OrderService.createOrder;DB.query 42
+  java;java_start;main;HttpServer.handle;OrderService.createOrder 8
+  kthread;worker_thread;io_schedule 3
+```
+
+#### off-CPU 프로파일링 (어떤 함수가 I/O·Lock 대기 중인가)
+
+```
+수집 원리:
+  eBPF kprobe → finish_task_switch() 훅
+  → 컨텍스트 스위치 발생 시 sleep 시작·종료 타임스탬프 기록
+  → 대기 시간 × 스택 트레이스 → 가중치 folded stack 생성
+
+folded stack 출력 예시 (단위: microseconds):
+  java;java_start;main;OrderService.createOrder;DB.query;socket_read_wait 15230
+  java;java_start;main;OrderService.createOrder;ReentrantLock.lock 3840
+```
+
+#### memory 프로파일링 (어떤 함수가 heap 할당을 유발하는가)
+
+```
+수집 원리:
+  eBPF uprobe → malloc/free / mmap / new 훅 (언어별 allocator)
+  Java: AsyncGetCallTrace + JVMTI Heap Sampling (Java 11+)
+  Go  : runtime.mallocgc uprobe
+  → 할당 바이트 수 × 스택 트레이스 → 가중치 folded stack 생성
+
+folded stack 출력 예시 (단위: bytes):
+  java;main;OrderService.createOrder;ArrayList.add;Object[] 204800
+  go;main.handleRequest;json.Marshal;bytes.Buffer.Write 81920
+```
+
+### 15.4 언어별 JIT 심볼 해석
+
+JIT 컴파일 언어는 런타임 생성 코드에 대한 심볼 맵이 필요하다.
+
+| 언어 | 심볼 해석 방법 | 사전 조건 |
+|------|-------------|---------|
+| **Java** | `perf-map-agent` — JVM Attach API로 JIT 심볼 맵 생성 (`/tmp/perf-<pid>.map`) | JDK 11+, Runtime Attach 모듈(§14) 연계 |
+| **Python** | `py-spy` 통합 또는 `perf` + CPython frame pointer 패치 | CPython 3.12+ (frame pointer 기본 활성) |
+| **Node.js** | `--perf-basic-prof` 실행 시 V8 JIT 심볼 자동 기록 (`/tmp/perf-<pid>.map`) | Node.js 프로세스 재시작 또는 SIGUSR2 트리거 |
+| **Go** | 기본 DWARF 심볼 포함 — 별도 설정 불필요 | Go 1.17+ (`-trimpath` 미사용 시) |
+| **.NET** | `crossgen2` PerfMap 생성 또는 EventPipe + perf 연계 | .NET 6+ |
+
+```
+Java perf-map-agent 연계 워크플로:
+
+① 에이전트가 타겟 JVM PID 탐지 (Runtime Attach 모듈 §14 활용)
+② perf-map-agent.jar → VirtualMachine.attach(pid) + loadAgent()
+③ /tmp/perf-<pid>.map 생성 (JIT 컴파일 함수 주소 → 이름 매핑)
+④ perf record 또는 eBPF 수집 실행
+⑤ perf script 단계에서 .map 파일 자동 참조 → 심볼 해석
+⑥ folded stack에 "OrderService.createOrder" 같은 사람이 읽을 수 있는 이름 포함
+```
+
+### 15.5 Collection Server — 플레임그래프 생성 엔진
+
+에이전트가 folded stack 원본을 전송하면, Collection Server가 요청 시 플레임그래프를 동적으로 생성한다.
+
+#### 15.5.1 저장 및 생성 전략
+
+| 항목 | 내용 |
+|------|------|
+| **원본 저장** | folded stack (gzip 압축) → StorageBackend (S3/Local) |
+| **플레임그래프** | 요청 시 동적 생성 (캐시 TTL 5분) — SVG / JSON 포맷 |
+| **알고리즘** | Brendan Gregg FlameGraph 알고리즘 — Go 구현 |
+| **타입별 렌더링** | on-CPU(주황) / off-CPU(파랑) / memory(녹색) / mixed |
+| **diff 지원** | 시간 범위 A vs B 비교 — 빨강(증가) / 파랑(감소) |
+
+#### 15.5.2 플레임그래프 API
+
+```
+GET /api/v1/profiling/flamegraph
+  ?agent_id=<agent_id>
+  &type=cpu|offcpu|memory|mixed
+  &from=<unix_ms>
+  &to=<unix_ms>
+  &format=svg|json
+  &diff_from=<unix_ms>    # diff 뷰: 비교 시작 기간 (선택)
+  &diff_to=<unix_ms>      # diff 뷰: 비교 종료 기간 (선택)
+
+응답 (format=svg):
+  Content-Type: image/svg+xml
+  <svg ...>플레임그래프 SVG 콘텐츠</svg>
+
+응답 (format=json):
+  Content-Type: application/json
+  {
+    "name": "root",
+    "value": 10000,
+    "children": [
+      { "name": "java", "value": 7500, "children": [...] },
+      { "name": "kthread", "value": 2500, "children": [...] }
+    ]
+  }
+
+GET /api/v1/profiling/stacks
+  ?agent_id=<agent_id>
+  &from=<unix_ms>
+  &to=<unix_ms>
+  → folded stack 원본 다운로드 (gzip)
+
+POST /api/v1/profiling/trigger
+  Body: { "agent_id": "...", "type": "cpu", "duration": 30, "pid": 12345 }
+  → 즉시 프로파일링 수집 트리거 (비동기, job_id 반환)
+```
+
+#### 15.5.3 diff 플레임그래프 생성
+
+```
+사용 시나리오: 성능 최적화 before/after 검증
+
+A 구간 (최적화 전) folded stack
+  + B 구간 (최적화 후) folded stack
+        ↓
+  normalized diff 계산
+  (A 총 샘플 수 기준으로 B를 정규화 후 차분)
+        ↓
+  양수(B>A) → 빨강 (증가한 함수)
+  음수(B<A) → 파랑 (감소한 함수 — 최적화 효과)
+  변화없음  → 회색
+```
+
+### 15.6 필요 권한 및 에러 코드
+
+#### 권한 요구사항
+
+| 권한 | 용도 | 설정 방법 |
+|------|------|----------|
+| `CAP_SYS_ADMIN` | perf_event_open 전체 기능 (기존 방식) | `setcap cap_sys_admin+ep /usr/local/bin/aitop-agent` |
+| `CAP_BPF` + `CAP_PERFMON` | eBPF 프로그램 로드 + perf 이벤트 (Linux 5.8+, 최소 권한) | `setcap cap_bpf,cap_perfmon+ep /usr/local/bin/aitop-agent` |
+| `CAP_SYS_PTRACE` | py-spy 외부 프로세스 샘플링 | 별도 setcap 또는 `--privileged` (컨테이너) |
+
+> **설정 반영 수준**: 🟡 에이전트 재기동 — 권한 변경 후 에이전트 프로세스 재시작 필요
+
+#### perf/eBPF 전용 에러 코드
+
+| 코드 | 의미 | 조치 |
+|------|------|------|
+| `EBPF_CAP_MISSING` | CAP_BPF 또는 CAP_PERFMON 미부여 | `setcap cap_bpf,cap_perfmon+ep` 실행 후 재기동 |
+| `EBPF_KERNEL_VERSION` | Linux 커널 4.9 미만 (eBPF kprobe 미지원) | perf-only 모드로 폴백 또는 커널 업그레이드 |
+| `PERF_MAP_NOT_FOUND` | Java JIT 심볼 맵 없음 | perf-map-agent Attach 선행 실행 필요 |
+| `SYMBOL_UNKNOWN` | 심볼 해석 실패 (JIT 함수명 `[unknown]` 출력) | JIT 심볼 해석 §15.4 설정 확인 |
+| `PROFILING_ALREADY_ACTIVE` | 동일 PID 대상 프로파일링 세션 진행 중 | 기존 세션 종료 후 재시도 |
+| `DURATION_LIMIT_EXCEEDED` | 요청 수집 기간 > 최대 허용 (300s) | duration 값 축소 |
+
+---
+
 ## 부록 A: Collector 전체 매핑표
 
 | Collector | 대상 ITEM | UI 화면 | 수집 주기 | 저장소 | 필요 권한 |
@@ -3303,6 +3519,7 @@ Phase 33 중앙 플러그인 시스템과 결합하여 UI 원클릭 프로파일
 | AI-VectorDB | ITEM0205~0206, 0213~0216, 0224~0226 | RAG 파이프라인, VectorDB | 6시간 | StorageBackend¹ + Prometheus | exec:curl, read:설정 |
 | AI-GPU | ITEM0207~0208, 0217~0220, 0227~0229 | GPU 클러스터, LLM 성능 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | exec:nvidia-smi |
 | OTel | ITEM0207 연동 | 전체 대시보드 보강 | 6시간(스냅샷) | StorageBackend¹ | net:Prometheus접근 |
+| perf/eBPF | folded stack (on-CPU/off-CPU/memory) | /profiling 플레임그래프 뷰 | 온디맨드 (기본 30s) | StorageBackend¹ (gzip) | CAP_BPF+CAP_PERFMON 또는 CAP_SYS_ADMIN |
 
 > ¹ **StorageBackend**: `storage.type` 설정에 따라 S3Backend(s3) / LocalBackend(local) / DualBackend(both) 중 하나가 선택됨 (§7.6 참조)
 
