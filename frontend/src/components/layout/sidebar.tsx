@@ -28,6 +28,7 @@ import {
   Workflow,
   TrendingUp,
   Store,
+  Timer,
 } from 'lucide-react';
 import { Tooltip } from '@/components/ui';
 
@@ -54,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Bell, i18nKey: 'nav.alerts', href: '/alerts' },
   { icon: Cpu, i18nKey: 'nav.agents', href: '/agents' },
   { icon: Cloud, i18nKey: 'nav.cloud', href: '/cloud', dividerBefore: true },
+  { icon: Timer, i18nKey: 'nav.batch', href: '/batch' },
   { icon: Workflow, i18nKey: 'nav.pipelines', href: '/pipelines' },
   { icon: TrendingUp, i18nKey: 'nav.business', href: '/business' },
   { icon: Store, i18nKey: 'nav.marketplace', href: '/marketplace' },

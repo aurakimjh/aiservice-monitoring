@@ -1,4 +1,4 @@
-import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile, AgentConfig, ConfigRevision, SDKDetection, GroupDashboard, MiddlewareRuntime, RedisMetrics, MessageQueueMetrics, PluginRegistryItem, PluginDeployHistory, PluginAgentStatus } from '@/types/monitoring';
+import type { Project, Host, Service, AIService, AlertEvent, Endpoint, DeploymentEvent, ServiceDependency, Transaction, TransactionSpan, TransactionStatus, Trace, TraceSpan, LogEntry, LogLevel, LogPattern, MetricDefinition, RAGPipelineData, AgentExecution, GuardrailData, CollectionJob, AgentPlugin, DiagnosticRun, DiagnosticItem, AlertPolicy, IncidentDetail, NotificationChannel, SLODefinition, CostBreakdown, ExecutiveSummary, DashboardConfig, Notebook, Tenant, Status, AgentGroup, UpdateStatus, CollectionSchedule, EvalJob, EvalSample, ABTestComparison, PromptEntry, ModelCostProfile, CacheAnalysis, CostRecommendation, BudgetAlert, Anomaly, DynamicThreshold, ReportTemplate, GeneratedReport, SyntheticProbe, MethodProfile, AgentConfig, ConfigRevision, SDKDetection, GroupDashboard, MiddlewareRuntime, RedisMetrics, MessageQueueMetrics, PluginRegistryItem, PluginDeployHistory, PluginAgentStatus, BatchJob, BatchExecution, BatchExecutionDetail, BatchSQLProfile, BatchMethodProfile, BatchAlertRule, BatchAlertHistory, BatchXLogPoint } from '@/types/monitoring';
 
 // ═══════════════════════════════════════════════════════════════
 // Demo Data — 백엔드 없이 프론트엔드 개발/데모용
@@ -2436,5 +2436,483 @@ export function getPluginAgentStatus(pluginName: string): PluginAgentStatus[] {
   return statusSets[pluginName] || [
     { agent_id: 'agent-01', hostname: 'host-01', version: '1.0.0', status: 'installed', installed_at: new Date(Date.now() - 86400_000).toISOString() },
     { agent_id: 'agent-02', hostname: 'host-02', version: '1.0.0', status: 'pending' },
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 38: Batch Monitoring Demo Data
+// ═══════════════════════════════════════════════════════════════
+
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
+
+export function getBatchJobs(): BatchJob[] {
+  const now = Date.now();
+  return [
+    {
+      name: 'daily-order-settlement',
+      schedule: '0 2 * * *',
+      schedule_human: '매일 02:00',
+      language: 'java',
+      scheduler: 'cron',
+      hostname: 'batch-prod-01',
+      status: 'completed',
+      last_execution_at: new Date(now - 22 * HOUR).toISOString(),
+      next_execution_at: new Date(now + 2 * HOUR).toISOString(),
+      avg_duration_ms: 900_000,
+      success_rate: 92.3,
+      total_executions: 26,
+      failed_count_24h: 0,
+    },
+    {
+      name: 'customer-email-campaign',
+      schedule: '0 9 * * *',
+      schedule_human: '매일 09:00',
+      language: 'python',
+      scheduler: 'celery',
+      hostname: 'batch-prod-02',
+      status: 'completed',
+      last_execution_at: new Date(now - 15 * HOUR).toISOString(),
+      next_execution_at: new Date(now + 9 * HOUR).toISOString(),
+      avg_duration_ms: 2_700_000,
+      success_rate: 100.0,
+      total_executions: 18,
+      failed_count_24h: 0,
+    },
+    {
+      name: 'data-warehouse-etl',
+      schedule: '0 4 * * *',
+      schedule_human: '매일 04:00',
+      language: 'python',
+      scheduler: 'airflow',
+      hostname: 'etl-prod-01',
+      status: 'completed',
+      last_execution_at: new Date(now - 20 * HOUR).toISOString(),
+      next_execution_at: new Date(now + 4 * HOUR).toISOString(),
+      avg_duration_ms: 2_400_000,
+      success_rate: 90.0,
+      total_executions: 30,
+      failed_count_24h: 0,
+    },
+    {
+      name: 'hourly-backup',
+      schedule: '0 * * * *',
+      schedule_human: '매시 정각',
+      language: 'shell',
+      scheduler: 'cron',
+      hostname: 'batch-prod-01',
+      status: 'running',
+      last_execution_at: new Date(now - 30_000).toISOString(),
+      next_execution_at: new Date(now + HOUR).toISOString(),
+      avg_duration_ms: 180_000,
+      success_rate: 96.0,
+      total_executions: 120,
+      failed_count_24h: 1,
+    },
+    {
+      name: 'monthly-report-gen',
+      schedule: '0 3 1 * *',
+      schedule_human: '매월 1일 03:00',
+      language: 'go',
+      scheduler: 'systemd',
+      hostname: 'report-prod-01',
+      status: 'idle',
+      last_execution_at: new Date(now - 24 * DAY).toISOString(),
+      next_execution_at: new Date(now + 6 * DAY).toISOString(),
+      avg_duration_ms: 480_000,
+      success_rate: 100.0,
+      total_executions: 6,
+      failed_count_24h: 0,
+    },
+    {
+      name: 'inventory-sync',
+      schedule: '*/30 * * * *',
+      schedule_human: '30분 마다',
+      language: 'java',
+      scheduler: 'quartz',
+      hostname: 'batch-prod-01',
+      status: 'running',
+      last_execution_at: new Date(now - 60_000).toISOString(),
+      next_execution_at: new Date(now + 29 * 60_000).toISOString(),
+      avg_duration_ms: 120_000,
+      success_rate: 93.3,
+      total_executions: 45,
+      failed_count_24h: 1,
+    },
+    {
+      name: 'ml-model-retrain',
+      schedule: '0 0 * * 0',
+      schedule_human: '매주 일요일 00:00',
+      language: 'python',
+      scheduler: 'airflow',
+      hostname: 'gpu-train-01',
+      status: 'completed',
+      last_execution_at: new Date(now - 5 * DAY).toISOString(),
+      next_execution_at: new Date(now + 2 * DAY).toISOString(),
+      avg_duration_ms: 9_000_000,
+      success_rate: 100.0,
+      total_executions: 8,
+      failed_count_24h: 0,
+    },
+  ];
+}
+
+export function getBatchExecutions(jobName?: string): BatchExecution[] {
+  const now = Date.now();
+  const all: BatchExecution[] = [
+    // daily-order-settlement
+    { execution_id: 'bexec-000001', job_name: 'daily-order-settlement', pid: 15001, language: 'java', scheduler: 'cron', command: 'java -jar order-batch.jar --spring.batch.job.names=orderSettlement', state: 'COMPLETED', started_at: new Date(now - 22 * HOUR).toISOString(), ended_at: new Date(now - 22 * HOUR + 900_000).toISOString(), exit_code: 0, duration_ms: 900_000, cpu_avg: 45.2, cpu_max: 82.5, memory_avg: 536_870_912, memory_max: 805_306_368, io_read_total: 2_147_483_648, io_write_total: 524_288_000, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000002', job_name: 'daily-order-settlement', pid: 14890, language: 'java', scheduler: 'cron', command: 'java -jar order-batch.jar --spring.batch.job.names=orderSettlement', state: 'COMPLETED', started_at: new Date(now - 46 * HOUR).toISOString(), ended_at: new Date(now - 46 * HOUR + 840_000).toISOString(), exit_code: 0, duration_ms: 840_000, cpu_avg: 42.8, cpu_max: 79.1, memory_avg: 524_288_000, memory_max: 754_974_720, io_read_total: 1_992_294_400, io_write_total: 503_316_480, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000003', job_name: 'daily-order-settlement', pid: 14702, language: 'java', scheduler: 'cron', command: 'java -jar order-batch.jar --spring.batch.job.names=orderSettlement', state: 'FAILED', started_at: new Date(now - 70 * HOUR).toISOString(), ended_at: new Date(now - 70 * HOUR + 300_000).toISOString(), exit_code: 1, duration_ms: 300_000, cpu_avg: 55.0, cpu_max: 90.3, memory_avg: 629_145_600, memory_max: 996_147_200, io_read_total: 838_860_800, io_write_total: 52_428_800, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000004', job_name: 'daily-order-settlement', pid: 14501, language: 'java', scheduler: 'cron', command: 'java -jar order-batch.jar --spring.batch.job.names=orderSettlement', state: 'COMPLETED', started_at: new Date(now - 94 * HOUR).toISOString(), ended_at: new Date(now - 94 * HOUR + 960_000).toISOString(), exit_code: 0, duration_ms: 960_000, cpu_avg: 44.0, cpu_max: 80.0, memory_avg: 534_773_760, memory_max: 786_432_000, io_read_total: 2_202_009_600, io_write_total: 545_259_520, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    // customer-email-campaign
+    { execution_id: 'bexec-000005', job_name: 'customer-email-campaign', pid: 22001, language: 'python', scheduler: 'celery', command: 'celery worker -A campaign.tasks --concurrency=4', state: 'COMPLETED', started_at: new Date(now - 15 * HOUR).toISOString(), ended_at: new Date(now - 15 * HOUR + 2_700_000).toISOString(), exit_code: 0, duration_ms: 2_700_000, cpu_avg: 25.3, cpu_max: 60.1, memory_avg: 268_435_456, memory_max: 402_653_184, io_read_total: 104_857_600, io_write_total: 52_428_800, detected_via: 'framework_pattern', hostname: 'batch-prod-02' },
+    { execution_id: 'bexec-000006', job_name: 'customer-email-campaign', pid: 21800, language: 'python', scheduler: 'celery', command: 'celery worker -A campaign.tasks --concurrency=4', state: 'COMPLETED', started_at: new Date(now - 39 * HOUR).toISOString(), ended_at: new Date(now - 39 * HOUR + 2_520_000).toISOString(), exit_code: 0, duration_ms: 2_520_000, cpu_avg: 24.1, cpu_max: 58.5, memory_avg: 260_046_848, memory_max: 387_973_120, io_read_total: 99_614_720, io_write_total: 50_331_648, detected_via: 'framework_pattern', hostname: 'batch-prod-02' },
+    { execution_id: 'bexec-000007', job_name: 'customer-email-campaign', pid: 21600, language: 'python', scheduler: 'celery', command: 'celery worker -A campaign.tasks --concurrency=4', state: 'COMPLETED', started_at: new Date(now - 63 * HOUR).toISOString(), ended_at: new Date(now - 63 * HOUR + 3_000_000).toISOString(), exit_code: 0, duration_ms: 3_000_000, cpu_avg: 26.5, cpu_max: 62.0, memory_avg: 272_629_760, memory_max: 408_944_640, io_read_total: 115_343_360, io_write_total: 57_671_680, detected_via: 'framework_pattern', hostname: 'batch-prod-02' },
+    // data-warehouse-etl
+    { execution_id: 'bexec-000008', job_name: 'data-warehouse-etl', pid: 33001, language: 'python', scheduler: 'airflow', command: 'airflow tasks run data_warehouse_etl extract 2026-03-25', state: 'COMPLETED', started_at: new Date(now - 20 * HOUR).toISOString(), ended_at: new Date(now - 20 * HOUR + 2_700_000).toISOString(), exit_code: 0, duration_ms: 2_700_000, cpu_avg: 35.4, cpu_max: 72.1, memory_avg: 1_073_741_824, memory_max: 1_610_612_736, io_read_total: 5_368_709_120, io_write_total: 3_221_225_472, detected_via: 'framework_pattern', hostname: 'etl-prod-01' },
+    { execution_id: 'bexec-000009', job_name: 'data-warehouse-etl', pid: 32800, language: 'python', scheduler: 'airflow', command: 'airflow tasks run data_warehouse_etl extract 2026-03-24', state: 'COMPLETED', started_at: new Date(now - 44 * HOUR).toISOString(), ended_at: new Date(now - 44 * HOUR + 2_400_000).toISOString(), exit_code: 0, duration_ms: 2_400_000, cpu_avg: 33.2, cpu_max: 70.5, memory_avg: 1_027_604_480, memory_max: 1_468_006_400, io_read_total: 5_033_164_800, io_write_total: 3_040_870_400, detected_via: 'framework_pattern', hostname: 'etl-prod-01' },
+    { execution_id: 'bexec-000010', job_name: 'data-warehouse-etl', pid: 32600, language: 'python', scheduler: 'airflow', command: 'airflow tasks run data_warehouse_etl extract 2026-03-23', state: 'FAILED', started_at: new Date(now - 68 * HOUR).toISOString(), ended_at: new Date(now - 68 * HOUR + 180_000).toISOString(), exit_code: 1, duration_ms: 180_000, cpu_avg: 15.0, cpu_max: 40.0, memory_avg: 419_430_400, memory_max: 629_145_600, io_read_total: 209_715_200, io_write_total: 10_485_760, detected_via: 'framework_pattern', hostname: 'etl-prod-01' },
+    // hourly-backup
+    { execution_id: 'bexec-000011', job_name: 'hourly-backup', pid: 44001, language: 'shell', scheduler: 'cron', command: '/opt/scripts/backup.sh --target /data/backup --compress', state: 'COMPLETED', started_at: new Date(now - 1 * HOUR).toISOString(), ended_at: new Date(now - 1 * HOUR + 180_000).toISOString(), exit_code: 0, duration_ms: 180_000, cpu_avg: 12.5, cpu_max: 30.2, memory_avg: 67_108_864, memory_max: 134_217_728, io_read_total: 524_288_000, io_write_total: 524_288_000, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000012', job_name: 'hourly-backup', pid: 43900, language: 'shell', scheduler: 'cron', command: '/opt/scripts/backup.sh --target /data/backup --compress', state: 'COMPLETED', started_at: new Date(now - 2 * HOUR).toISOString(), ended_at: new Date(now - 2 * HOUR + 190_000).toISOString(), exit_code: 0, duration_ms: 190_000, cpu_avg: 13.1, cpu_max: 31.5, memory_avg: 69_206_016, memory_max: 136_314_880, io_read_total: 534_773_760, io_write_total: 534_773_760, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000013', job_name: 'hourly-backup', pid: 43800, language: 'shell', scheduler: 'cron', command: '/opt/scripts/backup.sh --target /data/backup --compress', state: 'COMPLETED', started_at: new Date(now - 3 * HOUR).toISOString(), ended_at: new Date(now - 3 * HOUR + 175_000).toISOString(), exit_code: 0, duration_ms: 175_000, cpu_avg: 11.8, cpu_max: 28.9, memory_avg: 65_011_712, memory_max: 131_072_000, io_read_total: 513_802_240, io_write_total: 513_802_240, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000014', job_name: 'hourly-backup', pid: 43700, language: 'shell', scheduler: 'cron', command: '/opt/scripts/backup.sh --target /data/backup --compress', state: 'FAILED', started_at: new Date(now - 4 * HOUR).toISOString(), ended_at: new Date(now - 4 * HOUR + 10_000).toISOString(), exit_code: 2, duration_ms: 10_000, cpu_avg: 5.0, cpu_max: 10.0, memory_avg: 33_554_432, memory_max: 50_331_648, io_read_total: 1_048_576, io_write_total: 0, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+    // monthly-report-gen
+    { execution_id: 'bexec-000015', job_name: 'monthly-report-gen', pid: 55001, language: 'go', scheduler: 'systemd', command: '/usr/local/bin/report-gen --month 2026-03 --output /reports/', state: 'COMPLETED', started_at: new Date(now - 24 * DAY).toISOString(), ended_at: new Date(now - 24 * DAY + 480_000).toISOString(), exit_code: 0, duration_ms: 480_000, cpu_avg: 30.0, cpu_max: 55.0, memory_avg: 209_715_200, memory_max: 367_001_600, io_read_total: 314_572_800, io_write_total: 157_286_400, detected_via: 'scheduler_child', hostname: 'report-prod-01' },
+    { execution_id: 'bexec-000016', job_name: 'monthly-report-gen', pid: 54800, language: 'go', scheduler: 'systemd', command: '/usr/local/bin/report-gen --month 2026-02 --output /reports/', state: 'COMPLETED', started_at: new Date(now - 54 * DAY).toISOString(), ended_at: new Date(now - 54 * DAY + 450_000).toISOString(), exit_code: 0, duration_ms: 450_000, cpu_avg: 28.5, cpu_max: 52.0, memory_avg: 199_229_440, memory_max: 346_030_080, io_read_total: 293_601_280, io_write_total: 146_800_640, detected_via: 'scheduler_child', hostname: 'report-prod-01' },
+    // inventory-sync
+    { execution_id: 'bexec-000017', job_name: 'inventory-sync', pid: 66001, language: 'java', scheduler: 'quartz', command: 'java -cp inventory-service.jar com.example.InventorySyncJob', state: 'COMPLETED', started_at: new Date(now - 30 * 60_000).toISOString(), ended_at: new Date(now - 30 * 60_000 + 120_000).toISOString(), exit_code: 0, duration_ms: 120_000, cpu_avg: 20.0, cpu_max: 45.0, memory_avg: 268_435_456, memory_max: 402_653_184, io_read_total: 52_428_800, io_write_total: 31_457_280, detected_via: 'framework_pattern', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000018', job_name: 'inventory-sync', pid: 65900, language: 'java', scheduler: 'quartz', command: 'java -cp inventory-service.jar com.example.InventorySyncJob', state: 'COMPLETED', started_at: new Date(now - 60 * 60_000).toISOString(), ended_at: new Date(now - 60 * 60_000 + 135_000).toISOString(), exit_code: 0, duration_ms: 135_000, cpu_avg: 21.5, cpu_max: 47.0, memory_avg: 272_629_760, memory_max: 408_944_640, io_read_total: 54_525_952, io_write_total: 33_554_432, detected_via: 'framework_pattern', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000019', job_name: 'inventory-sync', pid: 65800, language: 'java', scheduler: 'quartz', command: 'java -cp inventory-service.jar com.example.InventorySyncJob', state: 'COMPLETED', started_at: new Date(now - 90 * 60_000).toISOString(), ended_at: new Date(now - 90 * 60_000 + 110_000).toISOString(), exit_code: 0, duration_ms: 110_000, cpu_avg: 19.0, cpu_max: 42.0, memory_avg: 262_144_000, memory_max: 393_216_000, io_read_total: 50_331_648, io_write_total: 29_360_128, detected_via: 'framework_pattern', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000020', job_name: 'inventory-sync', pid: 65700, language: 'java', scheduler: 'quartz', command: 'java -cp inventory-service.jar com.example.InventorySyncJob', state: 'FAILED', started_at: new Date(now - 120 * 60_000).toISOString(), ended_at: new Date(now - 120 * 60_000 + 30_000).toISOString(), exit_code: 1, duration_ms: 30_000, cpu_avg: 10.0, cpu_max: 25.0, memory_avg: 209_715_200, memory_max: 314_572_800, io_read_total: 5_242_880, io_write_total: 1_048_576, detected_via: 'framework_pattern', hostname: 'batch-prod-01' },
+    // ml-model-retrain
+    { execution_id: 'bexec-000021', job_name: 'ml-model-retrain', pid: 77001, language: 'python', scheduler: 'airflow', command: 'python /opt/ml/retrain_pipeline.py --model recommendation-v3 --epochs 50', state: 'COMPLETED', started_at: new Date(now - 5 * DAY).toISOString(), ended_at: new Date(now - 5 * DAY + 9_000_000).toISOString(), exit_code: 0, duration_ms: 9_000_000, cpu_avg: 75.2, cpu_max: 98.5, memory_avg: 4_294_967_296, memory_max: 6_442_450_944, io_read_total: 10_737_418_240, io_write_total: 2_147_483_648, detected_via: 'framework_pattern', hostname: 'gpu-train-01' },
+    { execution_id: 'bexec-000022', job_name: 'ml-model-retrain', pid: 76800, language: 'python', scheduler: 'airflow', command: 'python /opt/ml/retrain_pipeline.py --model recommendation-v3 --epochs 50', state: 'COMPLETED', started_at: new Date(now - 12 * DAY).toISOString(), ended_at: new Date(now - 12 * DAY + 9_900_000).toISOString(), exit_code: 0, duration_ms: 9_900_000, cpu_avg: 73.8, cpu_max: 97.2, memory_avg: 3_984_588_800, memory_max: 6_081_740_800, io_read_total: 9_961_472_000, io_write_total: 1_992_294_400, detected_via: 'framework_pattern', hostname: 'gpu-train-01' },
+    // Currently running
+    { execution_id: 'bexec-000023', job_name: 'inventory-sync', pid: 66100, language: 'java', scheduler: 'quartz', command: 'java -cp inventory-service.jar com.example.InventorySyncJob', state: 'RUNNING', started_at: new Date(now - 60_000).toISOString(), exit_code: 0, duration_ms: 60_000, cpu_avg: 18.0, cpu_max: 35.0, memory_avg: 251_658_240, memory_max: 314_572_800, io_read_total: 10_485_760, io_write_total: 5_242_880, detected_via: 'framework_pattern', hostname: 'batch-prod-01' },
+    { execution_id: 'bexec-000024', job_name: 'hourly-backup', pid: 44100, language: 'shell', scheduler: 'cron', command: '/opt/scripts/backup.sh --target /data/backup --compress', state: 'RUNNING', started_at: new Date(now - 30_000).toISOString(), exit_code: 0, duration_ms: 30_000, cpu_avg: 8.0, cpu_max: 15.0, memory_avg: 50_331_648, memory_max: 67_108_864, io_read_total: 104_857_600, io_write_total: 52_428_800, detected_via: 'scheduler_child', hostname: 'batch-prod-01' },
+  ];
+
+  if (jobName) {
+    return all.filter((e) => e.job_name === jobName);
+  }
+  return all;
+}
+
+export function getBatchExecutionDetail(id: string): BatchExecutionDetail | null {
+  const execs = getBatchExecutions();
+  const exec = execs.find((e) => e.execution_id === id);
+  if (!exec) return null;
+
+  const startTime = new Date(exec.started_at).getTime();
+  const duration = exec.duration_ms;
+  const points = 30;
+  const interval = Math.max(duration / points, 1000);
+
+  const cpuTimeline: [number, number][] = Array.from({ length: points }, (_, i) => [
+    startTime + i * interval,
+    Math.max(0, exec.cpu_avg + (Math.random() - 0.5) * 30),
+  ]);
+
+  const memoryTimeline: [number, number][] = Array.from({ length: points }, (_, i) => [
+    startTime + i * interval,
+    Math.max(0, exec.memory_avg + (Math.random() - 0.3) * exec.memory_avg * 0.3),
+  ]);
+
+  const ioTimeline: [number, number][] = Array.from({ length: points }, (_, i) => [
+    startTime + i * interval,
+    Math.max(0, (exec.io_read_total + exec.io_write_total) / points * (0.5 + Math.random())),
+  ]);
+
+  const detail: BatchExecutionDetail = {
+    ...exec,
+    cpu_timeline: cpuTimeline,
+    memory_timeline: memoryTimeline,
+    io_timeline: ioTimeline,
+  };
+
+  if (exec.language === 'java') {
+    detail.jvm_metrics = {
+      gc_count: 142,
+      gc_time_ms: 3200,
+      heap_used_bytes: exec.memory_max * 0.85,
+      heap_max_bytes: exec.memory_max * 1.2,
+      thread_count: 48,
+      class_loaded: 12450,
+    };
+  }
+
+  return detail;
+}
+
+export function getBatchSQLProfile(executionId: string): BatchSQLProfile[] {
+  void executionId;
+  return [
+    { sql: 'SELECT o.order_id, o.customer_id, o.total_amount, oi.product_id FROM orders o JOIN order_items oi ON o.order_id = oi.order_id WHERE o.status = ? AND o.created_at >= ?', execution_count: 15420, total_time_ms: 45200, avg_time_ms: 2.93, max_time_ms: 125, min_time_ms: 0.8 },
+    { sql: 'UPDATE settlement_log SET status = ?, settled_amount = ?, settled_at = NOW() WHERE batch_id = ? AND order_id = ?', execution_count: 15420, total_time_ms: 32100, avg_time_ms: 2.08, max_time_ms: 89, min_time_ms: 0.5 },
+    { sql: 'INSERT INTO settlement_summary (batch_date, total_orders, total_amount, fee_amount, net_amount) VALUES (?, ?, ?, ?, ?)', execution_count: 1, total_time_ms: 15, avg_time_ms: 15, max_time_ms: 15, min_time_ms: 15 },
+    { sql: 'SELECT c.customer_id, c.name, c.email, c.tier FROM customers c WHERE c.customer_id IN (?, ?, ?, ...)', execution_count: 3200, total_time_ms: 12800, avg_time_ms: 4.0, max_time_ms: 210, min_time_ms: 1.2 },
+    { sql: 'SELECT p.payment_id, p.method, p.amount FROM payments p WHERE p.order_id = ? AND p.status = ?', execution_count: 15420, total_time_ms: 28500, avg_time_ms: 1.85, max_time_ms: 78, min_time_ms: 0.4 },
+    { sql: 'INSERT INTO audit_log (action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, NOW())', execution_count: 30840, total_time_ms: 18200, avg_time_ms: 0.59, max_time_ms: 45, min_time_ms: 0.2 },
+    { sql: 'SELECT SUM(amount) as total, COUNT(*) as cnt FROM refunds WHERE order_id = ? AND status = ?', execution_count: 1200, total_time_ms: 4800, avg_time_ms: 4.0, max_time_ms: 95, min_time_ms: 1.0 },
+    { sql: 'UPDATE orders SET settlement_status = ?, settlement_batch_id = ? WHERE order_id = ?', execution_count: 15420, total_time_ms: 22100, avg_time_ms: 1.43, max_time_ms: 65, min_time_ms: 0.3 },
+  ];
+}
+
+export function getBatchMethodProfile(executionId: string): BatchMethodProfile[] {
+  void executionId;
+  return [
+    { class_name: 'com.example.batch.OrderSettlementTasklet', method_name: 'execute', full_name: 'com.example.batch.OrderSettlementTasklet.execute', call_count: 1, total_time_ms: 890000, avg_time_ms: 890000, self_time_ms: 2500 },
+    { class_name: 'com.example.batch.OrderSettlementTasklet', method_name: 'processChunk', full_name: 'com.example.batch.OrderSettlementTasklet.processChunk', call_count: 155, total_time_ms: 850000, avg_time_ms: 5484, self_time_ms: 45000 },
+    { class_name: 'com.example.repository.OrderRepository', method_name: 'findPendingOrders', full_name: 'com.example.repository.OrderRepository.findPendingOrders', call_count: 155, total_time_ms: 185000, avg_time_ms: 1194, self_time_ms: 185000 },
+    { class_name: 'com.example.service.PaymentService', method_name: 'settlePayment', full_name: 'com.example.service.PaymentService.settlePayment', call_count: 15420, total_time_ms: 320000, avg_time_ms: 20.75, self_time_ms: 120000 },
+    { class_name: 'com.example.service.AuditService', method_name: 'logSettlement', full_name: 'com.example.service.AuditService.logSettlement', call_count: 15420, total_time_ms: 95000, avg_time_ms: 6.16, self_time_ms: 95000 },
+    { class_name: 'org.springframework.batch.core.step.tasklet.TaskletStep', method_name: 'doExecute', full_name: 'org.springframework.batch.core.step.tasklet.TaskletStep.doExecute', call_count: 1, total_time_ms: 892000, avg_time_ms: 892000, self_time_ms: 1200 },
+    { class_name: 'com.example.batch.SettlementWriter', method_name: 'write', full_name: 'com.example.batch.SettlementWriter.write', call_count: 155, total_time_ms: 210000, avg_time_ms: 1355, self_time_ms: 25000 },
+    { class_name: 'com.zaxxer.hikari.HikariDataSource', method_name: 'getConnection', full_name: 'com.zaxxer.hikari.HikariDataSource.getConnection', call_count: 31000, total_time_ms: 15500, avg_time_ms: 0.5, self_time_ms: 15500 },
+  ];
+}
+
+export function getBatchXLogData(): BatchXLogPoint[] {
+  const now = Date.now();
+  const points: BatchXLogPoint[] = [];
+  const jobs = ['daily-order-settlement', 'customer-email-campaign', 'data-warehouse-etl', 'hourly-backup', 'inventory-sync', 'ml-model-retrain', 'monthly-report-gen'];
+
+  // Generate 30 days of scatter data
+  for (let day = 0; day < 30; day++) {
+    const dayOffset = day * DAY;
+
+    // daily-order-settlement: ~15min, occasional failure
+    if (day < 28) {
+      const dur = 12 + Math.random() * 8;
+      const failed = day === 5 || day === 18;
+      points.push({
+        execution_id: `xlog-dos-${day}`,
+        job_name: 'daily-order-settlement',
+        started_at: new Date(now - dayOffset - 22 * HOUR).toISOString(),
+        duration_min: failed ? 5 : dur,
+        status: failed ? 'failed' : (dur > 18 ? 'slow' : 'success'),
+        io_total: 2_000_000_000 + Math.random() * 500_000_000,
+      });
+    }
+
+    // customer-email-campaign: ~45min
+    if (day < 25) {
+      const dur = 38 + Math.random() * 15;
+      points.push({
+        execution_id: `xlog-cec-${day}`,
+        job_name: 'customer-email-campaign',
+        started_at: new Date(now - dayOffset - 15 * HOUR).toISOString(),
+        duration_min: dur,
+        status: dur > 50 ? 'slow' : 'success',
+        io_total: 100_000_000 + Math.random() * 50_000_000,
+      });
+    }
+
+    // data-warehouse-etl: ~45min, occasional failure
+    if (day < 28) {
+      const dur = 35 + Math.random() * 20;
+      const failed = day === 8;
+      points.push({
+        execution_id: `xlog-etl-${day}`,
+        job_name: 'data-warehouse-etl',
+        started_at: new Date(now - dayOffset - 20 * HOUR).toISOString(),
+        duration_min: failed ? 3 : dur,
+        status: failed ? 'failed' : (dur > 50 ? 'slow' : 'success'),
+        io_total: 5_000_000_000 + Math.random() * 2_000_000_000,
+      });
+    }
+
+    // hourly-backup: ~3min, many per day
+    for (let h = 0; h < 24; h++) {
+      if (day > 7) continue; // only recent 7 days
+      const dur = 2.5 + Math.random() * 1.5;
+      const failed = day === 0 && h === 20;
+      points.push({
+        execution_id: `xlog-hb-${day}-${h}`,
+        job_name: 'hourly-backup',
+        started_at: new Date(now - dayOffset - h * HOUR).toISOString(),
+        duration_min: failed ? 0.17 : dur,
+        status: failed ? 'failed' : 'success',
+        io_total: 500_000_000 + Math.random() * 100_000_000,
+      });
+    }
+
+    // inventory-sync: ~2min, many per day
+    for (let slot = 0; slot < 48; slot++) {
+      if (day > 3) continue; // only recent 3 days
+      const dur = 1.5 + Math.random() * 1.0;
+      const failed = day === 0 && slot === 44;
+      points.push({
+        execution_id: `xlog-is-${day}-${slot}`,
+        job_name: 'inventory-sync',
+        started_at: new Date(now - dayOffset - slot * 30 * 60_000).toISOString(),
+        duration_min: failed ? 0.5 : dur,
+        status: failed ? 'failed' : 'success',
+        io_total: 50_000_000 + Math.random() * 20_000_000,
+      });
+    }
+
+    // ml-model-retrain: ~150min, weekly
+    if (day % 7 === 0 && day < 28) {
+      const dur = 140 + Math.random() * 25;
+      points.push({
+        execution_id: `xlog-ml-${day}`,
+        job_name: 'ml-model-retrain',
+        started_at: new Date(now - dayOffset - 5 * DAY).toISOString(),
+        duration_min: dur,
+        status: dur > 160 ? 'slow' : 'success',
+        io_total: 10_000_000_000 + Math.random() * 2_000_000_000,
+      });
+    }
+  }
+
+  return points;
+}
+
+export function getBatchAlertRules(): BatchAlertRule[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'ba-rule-001',
+      name: 'Order Settlement SLA',
+      target_job: 'daily-order-settlement',
+      enabled: true,
+      conditions: { duration_threshold_min: 60, sla_deadline: '03:00' },
+      channels: { slack_webhook: 'https://hooks.slack.com/services/T00/B00/xxx' },
+      cooldown_min: 30,
+      last_triggered_at: new Date(now - 3 * DAY).toISOString(),
+      created_at: new Date(now - 30 * DAY).toISOString(),
+    },
+    {
+      id: 'ba-rule-002',
+      name: 'Batch Failure Alert',
+      target_job: '*',
+      enabled: true,
+      conditions: { failure_threshold: 1 },
+      channels: { slack_webhook: 'https://hooks.slack.com/services/T00/B00/xxx', email: ['ops-team@company.com', 'batch-admin@company.com'] },
+      cooldown_min: 15,
+      last_triggered_at: new Date(now - 4 * HOUR).toISOString(),
+      created_at: new Date(now - 60 * DAY).toISOString(),
+    },
+    {
+      id: 'ba-rule-003',
+      name: 'ETL Slow Warning',
+      target_job: 'data-warehouse-etl',
+      enabled: true,
+      conditions: { duration_threshold_min: 120 },
+      channels: { pagerduty_key: 'pd-key-xxxx' },
+      cooldown_min: 60,
+      last_triggered_at: new Date(now - 10 * DAY).toISOString(),
+      created_at: new Date(now - 45 * DAY).toISOString(),
+    },
+    {
+      id: 'ba-rule-004',
+      name: 'High CPU Usage',
+      target_job: '*',
+      enabled: true,
+      conditions: { cpu_threshold: 90 },
+      channels: { email: ['ops-team@company.com'] },
+      cooldown_min: 30,
+      last_triggered_at: new Date(now - 70 * HOUR).toISOString(),
+      created_at: new Date(now - 20 * DAY).toISOString(),
+    },
+    {
+      id: 'ba-rule-005',
+      name: 'ML Training Timeout',
+      target_job: 'ml-model-retrain',
+      enabled: false,
+      conditions: { duration_threshold_min: 180 },
+      channels: { slack_webhook: 'https://hooks.slack.com/services/T00/B00/yyy', email: ['ml-team@company.com'] },
+      cooldown_min: 120,
+      created_at: new Date(now - 15 * DAY).toISOString(),
+    },
+    {
+      id: 'ba-rule-006',
+      name: 'Backup Failure',
+      target_job: 'hourly-backup',
+      enabled: true,
+      conditions: { failure_threshold: 2 },
+      channels: { webhook_url: 'https://internal.company.com/hooks/batch-alerts' },
+      cooldown_min: 60,
+      last_triggered_at: new Date(now - 2 * DAY).toISOString(),
+      created_at: new Date(now - 25 * DAY).toISOString(),
+    },
+  ];
+}
+
+export function getBatchAlertHistory(): BatchAlertHistory[] {
+  const now = Date.now();
+  return [
+    {
+      alert_id: 'ba-hist-001',
+      rule_id: 'ba-rule-002',
+      rule_name: 'Batch Failure Alert',
+      job_name: 'hourly-backup',
+      execution_id: 'bexec-000014',
+      message: 'hourly-backup failed with exit code 2: disk full /data/backup',
+      severity: 'critical',
+      channels_notified: ['slack', 'email'],
+      triggered_at: new Date(now - 4 * HOUR).toISOString(),
+      resolved_at: new Date(now - 3 * HOUR).toISOString(),
+    },
+    {
+      alert_id: 'ba-hist-002',
+      rule_id: 'ba-rule-002',
+      rule_name: 'Batch Failure Alert',
+      job_name: 'inventory-sync',
+      execution_id: 'bexec-000020',
+      message: 'inventory-sync failed with exit code 1: DB connection pool exhausted',
+      severity: 'critical',
+      channels_notified: ['slack', 'email'],
+      triggered_at: new Date(now - 2 * HOUR).toISOString(),
+    },
+    {
+      alert_id: 'ba-hist-003',
+      rule_id: 'ba-rule-004',
+      rule_name: 'High CPU Usage',
+      job_name: 'daily-order-settlement',
+      execution_id: 'bexec-000003',
+      message: 'CPU max reached 90.3% during daily-order-settlement execution',
+      severity: 'warning',
+      channels_notified: ['email'],
+      triggered_at: new Date(now - 70 * HOUR).toISOString(),
+      resolved_at: new Date(now - 70 * HOUR + 300_000).toISOString(),
+    },
+    {
+      alert_id: 'ba-hist-004',
+      rule_id: 'ba-rule-001',
+      rule_name: 'Order Settlement SLA',
+      job_name: 'daily-order-settlement',
+      execution_id: 'bexec-000003',
+      message: 'daily-order-settlement SLA breach: failed before deadline 03:00',
+      severity: 'critical',
+      channels_notified: ['slack'],
+      triggered_at: new Date(now - 3 * DAY).toISOString(),
+      resolved_at: new Date(now - 3 * DAY + HOUR).toISOString(),
+    },
+    {
+      alert_id: 'ba-hist-005',
+      rule_id: 'ba-rule-003',
+      rule_name: 'ETL Slow Warning',
+      job_name: 'data-warehouse-etl',
+      message: 'data-warehouse-etl duration exceeded 120min threshold (actual: 135min)',
+      severity: 'warning',
+      channels_notified: ['pagerduty'],
+      triggered_at: new Date(now - 10 * DAY).toISOString(),
+      resolved_at: new Date(now - 10 * DAY + 15 * 60_000).toISOString(),
+    },
+    {
+      alert_id: 'ba-hist-006',
+      rule_id: 'ba-rule-006',
+      rule_name: 'Backup Failure',
+      job_name: 'hourly-backup',
+      message: 'hourly-backup has 2+ consecutive failures',
+      severity: 'critical',
+      channels_notified: ['webhook'],
+      triggered_at: new Date(now - 2 * DAY).toISOString(),
+      resolved_at: new Date(now - 2 * DAY + 30 * 60_000).toISOString(),
+    },
   ];
 }

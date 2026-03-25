@@ -1427,3 +1427,122 @@ export interface DeployRequest {
   };
   scheduled_at?: string;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 38: Batch Monitoring Types
+// ═══════════════════════════════════════════════════════════════
+
+export interface BatchJob {
+  name: string;
+  schedule: string;
+  schedule_human: string;
+  language: string;
+  scheduler: string;
+  hostname: string;
+  status: 'running' | 'completed' | 'failed' | 'idle';
+  last_execution_at?: string;
+  next_execution_at?: string;
+  avg_duration_ms: number;
+  success_rate: number;
+  total_executions: number;
+  failed_count_24h: number;
+}
+
+export interface BatchExecution {
+  execution_id: string;
+  job_name: string;
+  pid: number;
+  language: string;
+  scheduler: string;
+  command: string;
+  state: 'DETECTED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  started_at: string;
+  ended_at?: string;
+  exit_code: number;
+  duration_ms: number;
+  cpu_avg: number;
+  cpu_max: number;
+  memory_avg: number;
+  memory_max: number;
+  io_read_total: number;
+  io_write_total: number;
+  detected_via: string;
+  hostname: string;
+}
+
+export interface BatchSQLProfile {
+  sql: string;
+  execution_count: number;
+  total_time_ms: number;
+  avg_time_ms: number;
+  max_time_ms: number;
+  min_time_ms: number;
+}
+
+export interface BatchMethodProfile {
+  class_name: string;
+  method_name: string;
+  full_name: string;
+  call_count: number;
+  total_time_ms: number;
+  avg_time_ms: number;
+  self_time_ms: number;
+}
+
+export interface BatchAlertRule {
+  id: string;
+  name: string;
+  target_job: string;
+  enabled: boolean;
+  conditions: {
+    duration_threshold_min?: number;
+    failure_threshold?: number;
+    sla_deadline?: string;
+    cpu_threshold?: number;
+  };
+  channels: {
+    slack_webhook?: string;
+    email?: string[];
+    pagerduty_key?: string;
+    webhook_url?: string;
+  };
+  cooldown_min: number;
+  last_triggered_at?: string;
+  created_at: string;
+}
+
+export interface BatchAlertHistory {
+  alert_id: string;
+  rule_id: string;
+  rule_name: string;
+  job_name: string;
+  execution_id?: string;
+  message: string;
+  severity: 'warning' | 'critical';
+  channels_notified: string[];
+  triggered_at: string;
+  resolved_at?: string;
+}
+
+export interface BatchExecutionDetail extends BatchExecution {
+  cpu_timeline: [number, number][];
+  memory_timeline: [number, number][];
+  io_timeline: [number, number][];
+  jvm_metrics?: {
+    gc_count: number;
+    gc_time_ms: number;
+    heap_used_bytes: number;
+    heap_max_bytes: number;
+    thread_count: number;
+    class_loaded: number;
+  };
+}
+
+export interface BatchXLogPoint {
+  execution_id: string;
+  job_name: string;
+  started_at: string;
+  duration_min: number;
+  status: 'success' | 'failed' | 'slow';
+  io_total: number;
+}
