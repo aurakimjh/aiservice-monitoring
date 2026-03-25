@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: 이 프로젝트를 처음 접하는 초보자 (코딩 경험 불필요)
-> **최종 업데이트**: 2026-03-24 (Phase 1-30 완료)
+> **최종 업데이트**: 2026-03-25 (Phase 1-32 완료 / AGPL-free 인프라 전환 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -798,14 +798,9 @@ echo -n "Prometheus: "
 curl -s -o /dev/null -w "%{http_code}" http://localhost:9090/-/ready
 echo ""
 
-# Tempo
-echo -n "Tempo: "
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3200/ready
-echo ""
-
-# Loki
-echo -n "Loki: "
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/ready
+# Jaeger
+echo -n "Jaeger: "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:16686/api/services
 echo ""
 
 # OTel Collector
@@ -829,7 +824,7 @@ echo "=== 확인 완료 ==="
 |--------|-----|----------|
 | Frontend | http://localhost:3000 | 메인 대시보드 표시 |
 | Prometheus | http://localhost:9090 | Prometheus UI 표시 |
-| MinIO Console | http://localhost:9001 | 로그인 화면 (minioadmin/minioadmin) |
+| Jaeger UI | http://localhost:16686 | 트레이스 목록 화면 표시 |
 | Demo RAG API | http://localhost:8000/docs | Swagger UI 표시 |
 
 ### 8-6. 문제가 발생했을 때

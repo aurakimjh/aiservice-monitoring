@@ -1,7 +1,7 @@
 # AITOP Solution Strategy — AI 서비스 모니터링의 글로벌 표준
 
-> **문서 버전**: v3.0.0
-> **작성일**: 2026-03-24 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
+> **문서 버전**: v3.1.0
+> **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-25 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
 > **작성자**: Aura Kim — Architect & Lead Developer
 > **기밀 등급**: Internal Confidential
 >
@@ -43,7 +43,7 @@
 7. [차세대 혁신 로드맵](#7-차세대-혁신-로드맵)
 8. [리스크 관리](#8-리스크-관리)
 9. [KPI 및 성공 지표](#9-kpi-및-성공-지표)
-10. [부록: 완성된 기능 요약 (Phase 1~30)](#10-부록-완성된-기능-요약-phase-130)
+10. [부록: 완성된 기능 요약 (Phase 1~32)](#10-부록-완성된-기능-요약-phase-132)
 
 ---
 
@@ -320,7 +320,7 @@ AI 모니터링 경쟁 환경 (2026)
 |------|:---------:|:-----------:|:-------------:|:-------------:|:-----------------:|:----------:|
 | **분산 트레이스** | ✅ OTel Native | ✅ 독자 Agent | ✅ OTel 호환 | ✅ OneAgent | ✅ Tempo | ✅ 독자 |
 | **메트릭 수집** | ✅ Prometheus | ✅ DogStatsD | ✅ Dimensional | ✅ 자동 수집 | ✅ Mimir | ✅ 독자 |
-| **로그 분석** | ✅ Loki 기반 | ✅ 자체 | ✅ 자체 | ✅ 자체 | ✅ Loki | ✅ 자체 |
+| **로그 분석** | ✅ 자체 로그 뷰어 (OTel) | ✅ 자체 | ✅ 자체 | ✅ 자체 | ✅ Loki | ✅ 자체 |
 | **서비스 맵** | ✅ D3.js 토폴로지 | ✅ | ✅ | ✅ Smartscape | ✅ 제한적 | ✅ |
 | **인프라 모니터링** | ✅ 12종 Collector | ✅ | ✅ | ✅ | ⚠️ 별도 구성 | ✅ |
 | **LLM 모니터링** | ✅ **네이티브** | ⚠️ Beta | ⚠️ Beta | ⚠️ 제한적 | ❌ | ❌ |
@@ -725,9 +725,9 @@ AITOP 플랫폼 전체 아키텍처
   ┌─ 저장 레이어 (Storage) ──────────────────────────────────────────────┐
   │                                                                      │
   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-  │  │ PostgreSQL   │  │ Prometheus   │  │ S3/MinIO     │              │
-  │  │ (메타데이터,  │  │ (시계열      │  │ (장기 보존,   │              │
-  │  │  설정, RBAC) │  │  메트릭)     │  │  트레이스)    │              │
+  │  │ PostgreSQL   │  │ Prometheus   │  │StorageBackend│              │
+  │  │ (메타데이터,  │  │ (시계열      │  │ (S3/Local,   │              │
+  │  │  설정, RBAC) │  │  메트릭)     │  │  Evidence)   │              │
   │  └──────────────┘  └──────────────┘  └──────────────┘              │
   │                                                                      │
   └──────────────────────────────────────────────────────────────────────┘
@@ -850,7 +850,7 @@ AITOP 보안 레이어
 | **인증** | JWT + OIDC/SAML | — | 표준 프로토콜, SSO 연동 용이 |
 | **데이터베이스** | PostgreSQL 16 | PostgreSQL License | 안정성, JSON 지원, 파티셔닝 |
 | **시계열 DB** | Prometheus + Remote Write | Apache 2.0 | 사실상 표준, PromQL 생태계 |
-| **오브젝트 스토리지** | S3 / MinIO | Apache 2.0 | 장기 보존, 비용 효율 |
+| **오브젝트 스토리지** | StorageBackend (AWS S3 / LocalBackend) | 자체 구현 / 상용 | 장기 보존, MinIO 서버(AGPL) 미사용 |
 | **IaC** | Terraform Provider | MPL 2.0 | 인프라 코드화 표준 |
 | **CI/CD** | GitHub Actions | — | 코드와 동일 위치 관리 |
 
@@ -997,7 +997,7 @@ APAC 시장 진입 우선순위
 
 ## 7. 차세대 혁신 로드맵
 
-Phase 1~30이 완료된 현재, AITOP의 다음 도약을 위한 혁신 로드맵이다. 이 기능들이 구현되면 AITOP은 단순 모니터링 플랫폼을 넘어 **AI 서비스 운영 자동화 플랫폼**으로 진화한다.
+Phase 1~32가 완료된 현재, AITOP의 다음 도약을 위한 혁신 로드맵이다. 이 기능들이 구현되면 AITOP은 단순 모니터링 플랫폼을 넘어 **AI 서비스 운영 자동화 플랫폼**으로 진화한다.
 
 ### 7.1 혁신 로드맵 전체 뷰
 
@@ -1380,12 +1380,12 @@ AITOP 성공 마일스톤
 
 ---
 
-## 10. 부록: 완성된 기능 요약 (Phase 1~30)
+## 10. 부록: 완성된 기능 요약 (Phase 1~32)
 
 ### 10.1 전체 Phase 완료 현황
 
 ```
-AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
+AITOP Phase 1~32 완료 현황  [ALL COMPLETE]
 ═══════════════════════════════════════════════════════════════════
 
   Phase  1~6   OTel 인프라                  ████████████████████  100%
@@ -1402,11 +1402,13 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
   Phase 25     서버 그룹 + SDK 자동 인식    ████████████████████  100%
   Phase 26     미들웨어 + Redis/Cache + MQ  ████████████████████  100%
   Phase 27~28  Multi-Cloud + Business KPI  ████████████████████  100%
-  Phase 29~30  Marketplace + Enterprise    ████████████████████  100%
+  Phase 29~30  Enterprise/Lite + AGPL-free ████████████████████  100%
+  Phase 31     AGPL-free 인프라 안정화     ████████████████████  100%
+  Phase 32     GPU 멀티벤더 지원            ████████████████████  100%
 
-  총 구현 라인 수 (추정): 200,000+ lines
+  총 구현 라인 수 (추정): 220,000+ lines
   프론트엔드 페이지: 35+
-  Agent Collector: 12종
+  Agent Collector: 12종 (GPU: NVIDIA/AMD/Intel/Apple/Cloud)
   REST API 엔드포인트: 100+
 ```
 
@@ -1416,11 +1418,11 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
 
 | Phase | 이름 | 완료 기능 |
 |:-----:|------|----------|
-| 1 | OTel Collector 기반 구축 | OTel Collector Agent/Gateway 이중 구조, OTLP Receiver, Prometheus/Tempo/Loki Exporter |
+| 1 | OTel Collector 기반 구축 | OTel Collector Agent/Gateway 이중 구조, OTLP Receiver, Prometheus/Jaeger Exporter |
 | 2 | SDK 계측 (Python/Node/Go) | 3개 언어 자동 계측, 12개 계측 모듈, W3C TraceContext 전파 |
-| 3 | Prometheus + Grafana 통합 | 시계열 수집, Recording/Alerting Rules, Grafana 5개 대시보드 |
-| 4 | Tempo + 분산 트레이스 | Trace 저장소, TraceQL, Grafana Trace → Logs/Metrics 연결 |
-| 5 | Loki + 로그 수집 | 로그 파이프라인, LogQL, 로그 → 트레이스 연결 |
+| 3 | Prometheus + 자체 UI 통합 | 시계열 수집, Recording/Alerting Rules, Next.js 26개 화면 (Grafana → Phase 30 대체) |
+| 4 | Jaeger + 분산 트레이스 | Trace 저장소, Jaeger Query API (Tempo → Phase 30 대체) |
+| 5 | OTel stdout/file 로그 수집 | 로그 파이프라인, 자체 로그 뷰어 (Loki → Phase 30 대체) |
 | 6 | Tail-based Sampling | 10개 샘플링 정책, 에러/지연/AI 우선 샘플링, 비용 최적화 |
 
 #### Phase 7~9: 프로덕션 배포
@@ -1466,7 +1468,7 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
 | 23 | Fine-tuning + Data Pipeline | 학습 Loss/Accuracy 추적, 체크포인트 관리, Airflow/Prefect 파이프라인 모니터링 |
 | 24 | Java/.NET SDK | ByteBuddy 메소드 프로파일링, CLR Profiler, JDBC/ADO.NET 바인딩 캡처, Java→Python LLM 통합 뷰 |
 
-#### Phase 25~30: 확장 + 완성
+#### Phase 25~32: 확장 + 완성 + AGPL-free
 
 | Phase | 이름 | 완료 기능 |
 |:-----:|------|----------|
@@ -1474,8 +1476,10 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
 | 26 | 미들웨어 + Cache + MQ | Redis/Memcached Cache Collector, Kafka/RabbitMQ MQ Collector, 미들웨어 런타임 모니터링 |
 | 27 | Multi-Cloud | AWS/GCP/Azure 통합 리소스 뷰, 클라우드 비용 + 성능 상관관계, 리전별 비교 |
 | 28 | Business KPI | AI 서비스 메트릭 → 비즈니스 지표 연결, 전환율/매출 상관관계, Executive 대시보드 |
-| 29 | Marketplace | 플러그인/대시보드/프롬프트 Marketplace, 커뮤니티 기여, 리뷰/평점 |
-| 30 | Enterprise 완성 | Enterprise/Lite 배포 모드 완성, 멀티테넌트 격리, 감사 로그, SLA 관리, 최종 통합 테스트 |
+| 29 | Enterprise/Lite 모드 | Enterprise/Lite 배포 모드 완성, 멀티테넌트 격리, 감사 로그, SLA 관리 |
+| 30 | AGPL-free 인프라 전환 | Grafana→자체 Next.js UI, Tempo→Jaeger, Loki→stdout/file, MinIO→StorageBackend |
+| 31 | AGPL-free 안정화 | StorageBackend S3/Local/Dual 완성, docker-compose.commercial.yaml, E2E 재검증 |
+| 32 | GPU 멀티벤더 지원 | NVIDIA/AMD/Intel/Apple/Cloud GPU Collector, nvml/ROCm/XPU/Metal 드라이버 |
 
 ### 10.3 프론트엔드 페이지 전체 목록 (35+ 페이지)
 
@@ -1557,14 +1561,14 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
 ║   서비스를 운영할 수 있도록 하는                                          ║
 ║   "AI 서비스 운영의 표준 플랫폼"입니다.                                   ║
 ║                                                                         ║
-║   Phase 1~30이 완료된 지금,                                              ║
+║   Phase 1~32가 완료된 지금,                                              ║
 ║   우리는 기술적 완성도를 넘어                                             ║
 ║   시장에서의 승리를 향해 나아갑니다.                                       ║
 ║                                                                         ║
 ║   "AI 서비스 운영의 표준이 되다"                                          ║
 ║   — 이것이 AITOP의 약속입니다.                                           ║
 ║                                                                         ║
-║                                          AITOP Team, 2026-03-24         ║
+║                                          AITOP Team, 2026-03-25         ║
 ║                                                                         ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 ```
@@ -1578,3 +1582,4 @@ AITOP Phase 1~30 완료 현황  [ALL COMPLETE]
 > | v1.0.0 | 2026-03-22 | 최초 작성 (완성도 평가, 경쟁 분석, 로드맵) |
 > | v1.1.0 | 2026-03-23 | 핵심 가치 명시, Enterprise/Lite 배포 모드 추가 |
 > | v3.0.0 | 2026-03-24 | 전면 재작성 — Series A 전략 문서 (비전/시장/GTM/혁신 로드맵) |
+> | v3.1.0 | 2026-03-25 | Phase 31~32 반영, AGPL-free 전환 완료, GPU 멀티벤더 지원 |

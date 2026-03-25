@@ -1,7 +1,7 @@
 # Phase 7': E2E 통합 검증 재설계
 
-> **버전**: v1.0.0
-> **날짜**: 2026-03-23
+> **버전**: v1.1.0
+> **날짜**: 2026-03-25 (Phase 30 AGPL-free 인프라 전환 반영: Tempo→Jaeger, Loki→stdout/file, MinIO→StorageBackend)
 > **대상**: AITOP AI Service Monitoring Platform
 
 ---
@@ -15,7 +15,7 @@
 | UI | Grafana 대시보드 | **폐기** — Next.js로 교체 |
 | 수집 경로 | OTel Collector → Prometheus | **확장** — Agent + Collection Server 추가 |
 | 인증 | 없음 | **신규** — JWT RBAC 4역할 |
-| 데이터 영속성 | 없음 | **신규** — PostgreSQL + MinIO |
+| 데이터 영속성 | 없음 | **신규** — PostgreSQL + StorageBackend (S3/Local) |
 | 실시간 갱신 | Polling | **신규** — SSE EventBus |
 
 ### 1.2 새 아키텍처 (Phase 17~18 완료 기준)
@@ -41,11 +41,11 @@
 │  ┌───────────────────┐    ┌─────────────────────────────────┐  │
 │  │  Collection Server │    │  OTel Observability Stack       │  │
 │  │  (Go — Port 8080) │    │  OTel Collector → Prometheus    │  │
-│  │  JWT Auth + RBAC  │◄──►│  Tempo (Traces) + Loki (Logs)  │  │
-│  │  PostgreSQL + MinIO│    │  Tail Sampling (81% 절감)       │  │
+│  │  JWT Auth + RBAC  │◄──►│  Jaeger (Traces) + stdout/file  │  │
+│  │  PostgreSQL+Storage│    │  Tail Sampling (81% 절감)        │  │
 │  └───────────────────┘    └─────────────────────────────────┘  │
 │             │                            │                       │
-│             │ SSE EventBus               │ PromQL / Tempo API    │
+│             │ SSE EventBus               │ PromQL / Jaeger API   │
 │             ▼                            ▼                       │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │          Next.js Frontend (Port 3000)                      │  │
@@ -64,15 +64,15 @@
 
 ```
 검증 체크리스트:
-□ 9개 서비스 기동 확인 (frontend, collection-server, postgres, minio,
-                         otel-collector, prometheus, tempo, loki, test-api-server)
+□ 7개 서비스 기동 확인 (frontend, collection-server, postgres,
+                         otel-collector, prometheus, jaeger, test-api-server)
 □ 각 서비스 healthcheck 통과
 □ Agent 등록 → Fleet에 표시
 □ Heartbeat 5회 수신
-□ Collect 트리거 → MinIO 버킷에 JSON 저장
+□ Collect 트리거 → StorageBackend(로컬/S3)에 JSON 저장
 □ OTel Collector → Prometheus scrape 확인
-□ Tempo trace 수신 확인
-□ Loki 로그 수신 확인
+□ Jaeger trace 수신 확인
+□ stdout/file 로그 exporter 동작 확인
 □ Frontend → Collection Server API 연결
 □ SSE EventBus 이벤트 수신
 ```
@@ -110,7 +110,7 @@ Locust 4개 시나리오:
 검증 레이어:
 Layer 1: Frontend (Next.js) → Collection Server API
 Layer 2: Collection Server → OTel Collector (OTLP)
-Layer 3: OTel Collector → Tempo (Trace Storage)
+Layer 3: OTel Collector → Jaeger (Trace Storage)
 Layer 4: Agent → Collection Server (Heartbeat/Collect)
 Layer 5: Demo RAG Service → OTel Collector (OTLP)
 
@@ -118,7 +118,7 @@ Layer 5: Demo RAG Service → OTel Collector (OTLP)
 □ W3C TraceContext 헤더 전파 (traceparent/tracestate)
 □ Baggage 항목 전달 (user.id, session.id, service.tier)
 □ Metric↔Log 상관관계 (exemplar traceId 매핑)
-□ 동일 traceId로 Tempo 조회 성공
+□ 동일 traceId로 Jaeger 조회 성공
 □ Span 계층 구조 완전성 (parent/child 관계)
 ```
 
@@ -144,7 +144,7 @@ A10 SSRF                     — 외부 URL 요청 차단
 PII 마스킹:
 □ 로그에 API 키/비밀번호 미노출
 □ JWT payload PII 최소화 (sub/role만 포함)
-□ MinIO 저장 데이터 PII 필드 마스킹
+□ StorageBackend 저장 데이터 PII 필드 마스킹
 □ Prometheus 레이블에 개인정보 미포함
 
 mTLS 검증:
@@ -178,14 +178,11 @@ mTLS 검증:
 | Frontend (Next.js) | 3000 | UI 접근 |
 | Collection Server | 8080 | REST API + Fleet |
 | PostgreSQL | 5432 | 에이전트/진단 DB |
-| MinIO S3 | 9000 | Evidence 저장 |
-| MinIO Console | 9001 | 관리 UI |
 | OTel Collector gRPC | 4317 | OTLP 수신 |
 | OTel Collector HTTP | 4318 | OTLP HTTP 수신 |
 | OTel Collector Health | 13133 | 헬스체크 |
 | Prometheus | 9090 | 메트릭 조회 |
-| Tempo | 3200 | Trace 조회 |
-| Loki | 3100 | 로그 조회 |
+| Jaeger UI | 16686 | Trace 조회 (Apache 2.0) |
 | Demo RAG Service | 8000 | 테스트 대상 AI 서비스 |
 
 ---
@@ -221,10 +218,10 @@ make e2e-down
 
 | 검증 항목 | 성공 기준 | 측정 방법 |
 |-----------|----------|----------|
-| 서비스 기동 | 9개 서비스 모두 healthy | docker compose ps |
+| 서비스 기동 | 7개 서비스 모두 healthy | docker compose ps |
 | 헬스체크 | 전체 PASS | healthcheck.sh 종료코드 0 |
 | Trace 연속성 | 5레이어 traceId 동일 | trace-continuity.sh |
-| Tail Sampling 보존율 | 에러 트레이스 > 80% | Tempo 쿼리 |
+| Tail Sampling 보존율 | 에러 트레이스 > 80% | Jaeger 쿼리 |
 | 비용 절감 | 정상 트레이스 샘플링 < 5% | Prometheus 메트릭 |
 | p95 응답시간 | < 2000ms | Locust 리포트 |
 | OWASP 항목 | Critical 0건 | security-audit.sh |

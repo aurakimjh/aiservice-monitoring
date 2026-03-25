@@ -1,9 +1,9 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v2.0.0
+> **문서 버전**: v2.1.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-22 (Phase 16 Agent GA 반영)
+> **최종 업데이트**: 2026-03-25 (Phase 32 완료 반영 — GPU 멀티벤더/Java·.NET SDK/미들웨어 메트릭 완료, AGPL-free 인프라 전환)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -82,7 +82,7 @@ GPU VRAM은 AI 모델이 올라가는 **작업 책상의 크기**입니다.
 6. [병목 구간별 시각화 전략](#6-병목-구간별-시각화-전략)
 7. [장애 예방 Alert 임계치 정의](#7-장애-예방-alert-임계치-정의)
 8. [Context Propagation 설계](#8-context-propagation-설계)
-12. [Java / .NET 전용 메트릭 (Phase 24 예정)](#12-java--net-전용-메트릭-phase-24-예정)
+12. [Java / .NET 전용 메트릭 (Phase 24 완료)](#12-java--net-전용-메트릭-phase-24-완료)
 
 ---
 
@@ -755,7 +755,7 @@ class InstrumentedHTTPClient:
 **외부 API 병목 시각화 전략:**
 
 ```
-[Grafana 대시보드 패널 구성]
+[자체 Next.js 대시보드 패널 구성]
 
 패널 1: 서비스별 외부 API 레이턴시 (P50/P95/P99)
   → histogram_quantile(0.99, external_api.request.duration{service="serper"})
@@ -767,7 +767,7 @@ class InstrumentedHTTPClient:
   → 서비스별 × 시간대별 타임아웃 발생 패턴 → 외부 서비스 SLA 문제 탐지
 
 패널 4: Trace 워터폴 (병목 구간 시각화)
-  → Jaeger/Tempo에서 agent.chain → external_api.serper.request Span 계층 표시
+  → Jaeger에서 agent.chain → external_api.serper.request Span 계층 표시
 ```
 
 ---
@@ -1292,7 +1292,7 @@ $$
 ### 6.1 전체 요청 흐름 워터폴 (Trace 뷰)
 
 ```
-사용자 요청 E2E 트레이스 (Jaeger/Grafana Tempo)
+사용자 요청 E2E 트레이스 (Jaeger)
 
 [0ms]     ├── api.http.request (FastAPI)
 [10ms]    │   ├── guardrail.validate.input (NeMo)          ← 20ms (정상)
@@ -1309,7 +1309,7 @@ $$
 [3010ms]  └── api.http.response
 ```
 
-### 6.2 Grafana 대시보드 구성 권고
+### 6.2 자체 Next.js 대시보드 구성 권고
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1417,7 +1417,7 @@ prop.Inject(ctx, propagation.HeaderCarrier(outgoingHeaders))
 
 ```promql
 # Trace 단절 탐지: root span은 있는데 child span이 없는 트레이스
-# (Jaeger 쿼리 / Tempo에서 직접 확인)
+# (Jaeger UI에서 직접 확인)
 
 # Prometheus에서 간접 탐지:
 # 각 레이어의 요청 수가 일치해야 함
@@ -1469,7 +1469,7 @@ abs(
 | Layer 5: GPU (DCGM) | `infra/kubernetes/dcgm-exporter.yaml` | 120줄 |
 | Alert Rules | `infra/docker/prometheus-rules.yaml` | 152줄 |
 | Recording Rules | `infra/kubernetes/prometheus-servicemonitor.yaml` | 150줄 |
-| Grafana 대시보드 | `dashboards/grafana/*.json` | 5개 |
+| Next.js 대시보드 | `frontend/src/app/` (자체 구현) | 26개 화면 |
 
 ---
 
@@ -1505,7 +1505,7 @@ abs(
 | **수집 대상** | 애플리케이션 런타임 메트릭 | 시스템 설정 및 상태 |
 | **수집 주기** | 15초 (Prometheus scrape) | 5분 (정기) 또는 온디맨드 |
 | **데이터 형태** | 시계열 (time series) | 스냅샷 (Evidence JSON) |
-| **저장소** | Prometheus → Thanos | S3/MinIO + PostgreSQL |
+| **저장소** | Prometheus → Thanos | StorageBackend (S3/Local/Dual) + PostgreSQL |
 | **용도** | 실시간 대시보드, 알림 | 진단 보고서, 교차 분석 |
 | **예시** | `llm.time_to_first_token` P95 = 1.2s | "vLLM max_num_seqs=256 설정" |
 
@@ -1526,7 +1526,7 @@ abs(
 
 ---
 
-## 12. Java / .NET 전용 메트릭 (Phase 24 예정)
+## 12. Java / .NET 전용 메트릭 (Phase 24 완료)
 
 > **상세 설계**: [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md) §7 참조
 > **배경**: Java/Spring Boot 및 .NET/ASP.NET Core는 AI 서비스를 호출하는 엔터프라이즈 게이트웨이로 가장 흔히 사용된다.
@@ -1631,7 +1631,7 @@ abs(
 | **JVM (IT)** | ITEM0300~0309 (신규 10개) | Heap 사용률, GC 패턴, Full GC 주기, Thread Dump, 커넥션 풀 상태, 클래스 로딩, JIT 컴파일률, 메모리 누수 징후, 데드락 감지, 힙 덤프 분석 | S3 |
 | **CLR (IT)** | ITEM0310~0319 (신규 10개) | GC 힙 크기, 세대별 GC 주기, 스레드 풀 포화도, 예외 발생률, 어셈블리 로딩, LOH(Large Object Heap) 단편화, 비동기 대기 시간, TaskScheduler 큐 길이, CLR 버전, 환경 설정 | S3 |
 
-## 13. 미들웨어 메트릭 (Phase 26 예정)
+## 13. 미들웨어 메트릭 (Phase 26 완료)
 
 > **목표**: 언어 런타임별 미들웨어 상태(스레드/이벤트 루프/워커/고루틴, 커넥션 풀, 요청 큐)를 표준 네임스페이스로 수집하여 대시보드 및 알림에 활용한다.
 
@@ -1755,7 +1755,7 @@ abs(
 | `rabbitmq.queue.depth` | > 500 | > 5,000 | PagerDuty |
 | `activemq.queue.depth` | > 500 | > 5,000 | Slack #oncall |
 
-### 13.9 Redis/Cache 메트릭 (Phase 26 예정)
+### 13.9 Redis/Cache 메트릭 (Phase 26 완료)
 
 > **목표**: Redis·Valkey·KeyDB·DragonflyDB·Memcached 캐시 계열 DB의 메모리·성능·복제·영속성 상태를 표준 네임스페이스로 수집한다.
 
