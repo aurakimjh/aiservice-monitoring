@@ -34,6 +34,8 @@
 14. [Runtime Attach 모듈 — 앱 재시작 없이 프로파일링](#14-runtime-attach-모듈--앱-재시작-없이-프로파일링)
 15. [perf/eBPF Collector 모듈 — 커널+유저 통합 시스템 프로파일링](#15-perfebpf-collector-모듈--커널유저-통합-시스템-프로파일링)
 
+> **진단 항목 카탈로그**: 항목별 수집 방식 분류 및 변경 관리 기준은 **[DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md)** 를 참조한다.
+
 ---
 
 ## 1. 설계 개요
@@ -3022,6 +3024,36 @@ diagnosis:
 
 ---
 
+## 12.7 진단 항목 변경 관리 프로세스
+
+> 상세 카탈로그 및 수집 방식 분류 기준은 **[DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md)** 참조.
+
+### 항목 추가 프로세스
+
+1. `DIAGNOSTIC_ITEMS_CATALOG.md`에 신규 항목 등록 (ITEM 번호, 수집 방식 분류 포함)
+2. 내장 vs 스크립트 판단 기준 적용 → 구현 방식 결정
+   - 🔧 내장: `agent/internal/collector/` 하위에 Go 구현 추가, `RequiredPrivileges()` 선언
+   - 📜 스크립트 자동: 스크립트 파일 작성 → Phase 33 플러그인 배포 채널로 등록
+   - 🖐️ 스크립트 수동: 스크립트 작성 + `agent.yaml`에 `collect_mode: manual` 설정
+3. `DIAGNOSTIC_ITEMS_CATALOG.md` 및 본 문서 부록 A 동기화
+
+### 항목 삭제/병합 프로세스
+
+- 스키마 버전 업 (`v1` → `v2`), 기존 버전 2 릴리스 유지 후 제거
+- `진단항목_리스트.MD` "통합및폐기" 섹션에 기록 (예: ITEM0034·0035 → ITEM0008 흡수)
+- Collection Server: 구 스키마/신 스키마 모두 수신 (필드 매핑 레이어 유지)
+
+### 수집 방식 전환 트리거
+
+| 전환 방향 | 트리거 |
+|---------|-------|
+| 🖐️ → 📜 | 진단 자동화 요구, 스케줄 수집 전환 |
+| 📜 → 🔧 | 수집 빈도 요구가 분 → 초 단위로 상승 |
+| 🔧 → 📜 | 진단 로직 복잡화, 벤더 의존성 증가 |
+| 자동/내장 → 🖐️ | 운영 환경 부하 이슈, 관리자 승인 필요 |
+
+---
+
 ## 13. 구현 로드맵
 
 ### Phase F: 에이전트 MVP (6주)
@@ -3509,36 +3541,40 @@ A 구간 (최적화 전) folded stack
 
 ## 부록 A: Collector 전체 매핑표
 
-| Collector | 대상 ITEM | UI 화면 | 수집 주기 | 저장소 | 필요 권한 |
-|-----------|----------|---------|---------|--------|---------|
-| OS | ITEM0036~0040, 0064, 0066 | 호스트 목록/상세 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | read:/proc |
-| WEB | ITEM0006~0009 | 미들웨어 상태 | 6시간 | StorageBackend¹ + PG | read:설정파일 |
-| WAS | ITEM0010~0035 | 미들웨어 상태 | 6시간 | StorageBackend¹ + PG | exec:jcmd, read:설정파일 |
-| DB | ITEM0050~0065 | DB 모니터링 | 6시간 | StorageBackend¹ + PG | net:DB접속, read:설정 |
-| AI-LLM | ITEM0200~0204, 0209~0212, 0221~0223, 0230 | AI 서비스, LLM 성능, 가드레일 | 6시간 | StorageBackend¹ + Prometheus | exec:python3, read:설정 |
-| AI-VectorDB | ITEM0205~0206, 0213~0216, 0224~0226 | RAG 파이프라인, VectorDB | 6시간 | StorageBackend¹ + Prometheus | exec:curl, read:설정 |
-| AI-GPU | ITEM0207~0208, 0217~0220, 0227~0229 | GPU 클러스터, LLM 성능 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | exec:nvidia-smi |
-| OTel | ITEM0207 연동 | 전체 대시보드 보강 | 6시간(스냅샷) | StorageBackend¹ | net:Prometheus접근 |
-| perf/eBPF | folded stack (on-CPU/off-CPU/memory) | /profiling 플레임그래프 뷰 | 온디맨드 (기본 30s) | StorageBackend¹ (gzip) | CAP_BPF+CAP_PERFMON 또는 CAP_SYS_ADMIN |
+> 항목별 수집 방식 분류(🔧/📜/🖐️) 및 상세 목록은 **[DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md)** 참조.
+
+| Collector | 대상 ITEM | UI 화면 | 수집 방식 분류 | 수집 주기 | 저장소 | 필요 권한 |
+|-----------|----------|---------|:----------:|---------|--------|---------|
+| OS | ITEM0012~0016, 0037, 0040~0046, 0063~0070 | 호스트 목록/상세 | 🔧 / 📜 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | read:/proc, exec:sysctl |
+| WEB | ITEM0006~0009, 0050, 0056 | 미들웨어 상태 | 🔧 / 📜 | 6시간 | StorageBackend¹ + PG | read:설정파일, exec:nginx -T |
+| WAS | ITEM0008~0011, 0026, 0030, 0036, 0039, 0049, 0051~0055, 0058 | 미들웨어 상태 | 🔧 / 📜 / 🖐️ | 6시간 | StorageBackend¹ + PG | exec:jcmd, read:설정파일, attach:JVM |
+| DB | ITEM0017~0027, 0059~0062 | DB 모니터링 | 🔧 / 📜 | 6시간 | StorageBackend¹ + PG | net:DB접속, jdbc:읽기전용계정 |
+| Cache | — (Phase 31 신규) | 캐시 모니터링 | 🔧 | 60초 | Prometheus + StorageBackend¹ | net:Redis접속 |
+| MQ | — (Phase 31 신규) | MQ 모니터링 | 🔧 / 📜 | 60초(메트릭), 6시간(설정) | Prometheus + StorageBackend¹ | net:Kafka/RabbitMQ접속 |
+| AI-LLM | ITEM0200~0204, 0209~0212, 0221~0223, 0230 | AI 서비스, LLM 성능, 가드레일 | 🔧 / 📜 | 6시간 | StorageBackend¹ + Prometheus | api:LLM서비스, read:설정 |
+| AI-VectorDB | ITEM0205~0206, 0213~0216, 0224~0226 | RAG 파이프라인, VectorDB | 🔧 / 📜 | 6시간 | StorageBackend¹ + Prometheus | api:VectorDB, read:설정 |
+| AI-GPU | ITEM0207~0208, 0217~0220, 0227~0229 | GPU 클러스터, LLM 성능 | 🔧 / 📜 | 60초(메트릭), 6시간(Evidence) | Prometheus + StorageBackend¹ | exec:nvidia-smi, sysfs:/sys/class/drm |
+| OTel | ITEM0207 연동 | 전체 대시보드 보강 | 🔧 | 6시간(스냅샷) | StorageBackend¹ | net:Prometheus접근 |
+| perf/eBPF | folded stack (on-CPU/off-CPU/memory) | /profiling 플레임그래프 뷰 | 🖐️ / 📜 | 온디맨드 (기본 30s) | StorageBackend¹ (gzip) | CAP_BPF+CAP_PERFMON 또는 CAP_SYS_ADMIN |
 
 > ¹ **StorageBackend**: `storage.type` 설정에 따라 S3Backend(s3) / LocalBackend(local) / DualBackend(both) 중 하나가 선택됨 (§7.6 참조)
 
 ### Evidence Collector 매핑표 (진단 모드 — §12 참조)
 
-| Evidence Collector | 수집 계층 | 커버 ITEM | 수집 방식 | 필요 조건 |
-|-------------------|:--------:|----------|---------|---------|
-| OSEvidence | 1 (Go 네이티브) | ITEM0036~0040, 0063~0070 | /proc, /sys, exec(sysctl) | root 또는 read 권한 |
-| WebEvidence | 1 | ITEM0006~0009, 0056 | 설정 파일 읽기 | read:nginx.conf 등 |
-| WASEvidence | 1+3 | ITEM0010~0035 | exec(jcmd) + 설정 읽기 | JDK tools 접근 |
-| DBEvidence | 2 (Go DB 드라이버) | ITEM0050~0065 | pgx/mysql/godror/mssql | DB 읽기 전용 계정 |
-| EOSEvidence | 1 | ITEM0068 | 버전 탐지 + embed DB | 없음 |
-| SecurityEvidence | 1 | ITEM0064~0067 | 설정/인증서 읽기 | read 권한 |
-| APMEvidence | 1 | ITEM0069~0070 | HTTP API 호출 | APM API Key |
-| AILLMEvidence | 1 | ITEM0200~0204, 0209~0212 | 설정 읽기 + API | read 권한 |
-| AIVectorDBEvidence | 1 | ITEM0205~0206, 0213~0216 | HTTP API | VectorDB 접근 |
-| AIGPUEvidence | 1 | ITEM0207~0208, 0217~0220 | nvidia-smi + 설정 | GPU 접근 |
-| AIGovernanceEvidence | 1 | ITEM0221~0230 | 설정 + 로그 읽기 | read 권한 |
-| CrossAnalysisEvidence | 1 | ITEM0058 + AI 교차 | 위 Collector 통합 | 없음 |
+| Evidence Collector | 수집 계층 | 커버 ITEM | 수집 방식 분류 | 가능한 수집 방식 | 필요 조건 |
+|-------------------|:--------:|----------|:----------:|---------|---------|
+| OSEvidence | 1 (Go 네이티브) | ITEM0012~0016, 0037, 0040~0046, 0063~0070 | 🔧 / 📜 | `proc`, `sysfs`, `command`, `config`, `log` | root 또는 read 권한 |
+| WebEvidence | 1 | ITEM0006~0009, 0050, 0056 | 🔧 / 📜 | `config`, `command`, `api`, `log` | read:nginx.conf 등 |
+| WASEvidence | 1+3 | ITEM0008~0011, 0026, 0030, 0036, 0039, 0049, 0051~0055, 0058 | 🔧 / 📜 / 🖐️ | `jmx`, `command`, `config`, `log`, `attach`, `script` | JDK tools 접근 |
+| DBEvidence | 2 (Go DB 드라이버) | ITEM0017~0027, 0059~0062 | 🔧 / 📜 | `jdbc`, `config`, `log` | DB 읽기 전용 계정 |
+| EOSEvidence | 1 | ITEM0068 | 🔧 | `command`, `config` | 없음 (embed lifecycle DB) |
+| SecurityEvidence | 1 | ITEM0056~0057, 0065, 0067~0068 | 🔧 / 📜 | `config`, `command` | read 권한 |
+| APMEvidence | 1 | ITEM0054 | 🔧 / 📜 | `api`, `config` | APM API Key (`aitop-apm-adapter.sh`) |
+| AILLMEvidence | 1 | ITEM0200~0204, 0209~0212 | 🔧 / 📜 | `config`, `api`, `log` | read 권한, LLM API 접근 |
+| AIVectorDBEvidence | 1 | ITEM0205~0206, 0213~0216 | 🔧 / 📜 | `api`, `config` | VectorDB HTTP 접근 |
+| AIGPUEvidence | 1 | ITEM0207~0208, 0217~0220 | 🔧 / 📜 | `command`, `config`, `sysfs` | GPU 접근 (exec:nvidia-smi) |
+| AIGovernanceEvidence | 1 | ITEM0221~0230 | 📜 / 🖐️ | `config`, `log`, `api`, `script` | read 권한, PII 스캔 주의 |
+| CrossAnalysisEvidence | 1 | ITEM0058 + AI 교차 | 📜 | 위 Collector 통합 재활용 | 없음 |
 
 ## 부록 B: 에러 코드 정의
 
