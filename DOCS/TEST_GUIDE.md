@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: QA 엔지니어, SRE, 개발자, 프로젝트 관리자
-> **최종 업데이트**: 2026-03-24 (Phase 1-30 완료 / 테스트 전략 전면 개편)
+> **최종 업데이트**: 2026-03-25 (Phase 1-32 완료 / AGPL-free 인프라 전환 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -336,7 +336,7 @@ curl -s http://localhost:8080/api/v1/agents \
 
 ### Level 5: Docker 통합 테스트
 
-**목적**: docker-compose.e2e.yaml을 사용하여 전체 시스템(Frontend + Collection Server + PostgreSQL + MinIO + OTel Collector + Prometheus + Tempo + Loki + Demo 서비스)이 올바르게 연동되는지 확인합니다.
+**목적**: docker-compose.e2e.yaml을 사용하여 전체 시스템(Frontend + Collection Server + PostgreSQL + StorageBackend + OTel Collector + Prometheus + Jaeger + Demo 서비스)이 올바르게 연동되는지 확인합니다.
 
 **사전 조건**:
 - Docker Desktop 실행 중
@@ -357,8 +357,7 @@ docker compose -f docker-compose.e2e.yaml ps
 curl -s http://localhost:8080/health     # Collection Server
 curl -s http://localhost:3000/api/health  # Frontend
 curl -s http://localhost:9090/-/ready     # Prometheus
-curl -s http://localhost:3200/ready       # Tempo
-curl -s http://localhost:3100/ready       # Loki
+curl -s http://localhost:16686/api/services  # Jaeger
 
 # 종료
 docker compose -f docker-compose.e2e.yaml down -v
@@ -371,11 +370,9 @@ docker compose -f docker-compose.e2e.yaml down -v
 | Collection Server | 8080 | http://localhost:8080/health |
 | Frontend | 3000 | http://localhost:3000/api/health |
 | PostgreSQL | 5432 | `docker exec aitop-postgres-e2e pg_isready` |
-| MinIO | 9000/9001 | http://localhost:9001 (Console) |
 | OTel Collector | 4317/4318 | http://localhost:13133/ |
 | Prometheus | 9090 | http://localhost:9090/-/ready |
-| Tempo | 3200 | http://localhost:3200/ready |
-| Loki | 3100 | http://localhost:3100/ready |
+| Jaeger | 16686 | http://localhost:16686/api/services |
 | Demo RAG Service | 8000 | http://localhost:8000/health |
 
 **PASS 조건**: 모든 서비스가 `healthy` 또는 `Up` 상태
@@ -808,7 +805,7 @@ Part C (교차검증) 승인자: ____________ 서명: ____
 | ~~3~~ | ~~Playwright visual-regression 기준 스냅샷 생성~~ | ~~Medium~~ | **완료** — 15개 기준 스냅샷 생성 |
 | 4 | **Locust 부하 테스트** (200 users, 10분) | Medium | SKIP — `pip install locust` 후 재실행 |
 | 5 | **보안 감사 완성** (A02~A10) | Medium | 부분 실행 — 스크립트 의존성 보완 필요 |
-| 6 | **트레이스 연속성 완성** (Layer 2~5) | Medium | Layer 1 PASS, 나머지 Tempo 조회 대기 |
+| 6 | **트레이스 연속성 완성** (Layer 2~5) | Medium | Layer 1 PASS, 나머지 Jaeger 조회 대기 |
 | 7 | **Agents 페이지 a11y 수정** (button-name + color-contrast) | High | 미수정 — UI 컴포넌트 수정 필요 |
 | 8 | **E2E spec locator 수정** (03, 04 시나리오) | Medium | 미수정 — 실제 UI 텍스트에 맞게 업데이트 |
 

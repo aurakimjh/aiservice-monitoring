@@ -172,7 +172,7 @@ transaction = {
 | 데이터소스 | 루트 스팬 판별 기준 | 하위 스팬 |
 |-----------|-------------------|-----------|
 | **Demo** | `name = "rag.pipeline"` 생성 | 5개 하위 스팬 자동 생성 |
-| **Tempo** | `span.kind = server` AND `parentSpanId = ""` | TraceQL로 해당 traceId의 전체 스팬 조회 |
+| **Jaeger** | `span.kind = server` AND `parentSpanId = ""` | Jaeger Query API로 해당 traceId의 전체 스팬 조회 |
 | **Prometheus** | histogram에서 역산 (기존 방식) | 없음 (합성 데이터) |
 
 ### 4-3. 상태 분류 기준
@@ -233,7 +233,7 @@ transaction = {
 |------|------|
 | 호버 | 툴팁: 엔드포인트, 응답시간, 시각, 상태 |
 | 클릭 | Transaction List에서 해당 행 하이라이트 + Detail Panel 열림 |
-| 우클릭 | 컨텍스트 메뉴: Jaeger에서 보기, Grafana에서 보기, Trace ID 복사 |
+| 우클릭 | 컨텍스트 메뉴: Jaeger에서 보기, Trace ID 복사 |
 
 ---
 
@@ -419,16 +419,16 @@ generateTransaction() → {
 - 하위 스팬의 `startOffset`은 이전 스팬의 `startOffset + duration`으로 순차 배치
 - 에러 시나리오: 3%는 guardrail BLOCK (하위 스팬 1개만), 2%는 LLM 타임아웃
 
-### 10-2. Tempo 모드 변경
+### 10-2. Jaeger 쿼리 모드
 
 ```
 현재:  { span.kind = server } → 모든 서버 스팬
-변경:  { name = "rag.pipeline" } → RAG 파이프라인 루트만 조회
+변경:  { operation = "rag.pipeline" } → RAG 파이프라인 루트만 조회
        → 트랜잭션 클릭 시: { traceID = "xxx" } 로 전체 스팬 lazy 로딩
 ```
 
 - 초기 로딩: 루트 스팬만 조회 (가벼움)
-- 드릴다운 시: 해당 Trace의 전체 스팬을 Tempo에서 추가 조회 (lazy loading)
+- 드릴다운 시: 해당 Trace의 전체 스팬을 Jaeger에서 추가 조회 (lazy loading)
 - 호출: `GET /api/traces/{traceId}` → 스팬 트리 구성
 
 ---
@@ -498,7 +498,7 @@ dashboards/xlog-heatmap/
 
 ### Phase D: 통합 테스트 (영향도: 저)
 1. Demo 모드 동작 확인
-2. Tempo/Prometheus 연동 확인
+2. Jaeger/Prometheus 연동 확인
 3. 성능 테스트 (1000+ 트랜잭션)
 
 ---

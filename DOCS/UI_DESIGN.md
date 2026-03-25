@@ -1,10 +1,10 @@
 # 통합 모니터링 대시보드 UI 설계서
 
-> **문서 버전**: v2.2.0
-> **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-23 (Session 36 — XLog 트랜잭션 뷰 강화, 히트맵 분리, 시간 범위 컨트롤 공통 컴포넌트, WhaTap 참조 히트맵 추가)
+> **문서 버전**: v2.3.0
+> **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-25 (Phase 30 AGPL-free 반영: Tempo→Jaeger, Loki→자체 로그 뷰어)
 > **관점**: 상용 솔루션 수준 UI/UX — Datadog, New Relic, Dynatrace 참조
 > **대상**: 프론트엔드 개발팀, UX 디자이너, 제품 기획
-> **구현 상태**: Phase 10~14 UI 전체 완성 ✅ | Phase 15~16 Agent 연동 완성 ✅
+> **구현 상태**: Phase 10~14 UI 전체 완성 ✅ | Phase 15~16 Agent 연동 완성 ✅ | Phase 30 AGPL-free 전환 ✅
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -1664,7 +1664,7 @@ Policy
 데이터 소스 3종:
 
 [1] OTel 실시간 데이터 (초 단위)
-    Service → OTel SDK → Collector → Prometheus/Tempo/Loki
+    Service → OTel SDK → Collector → Prometheus/Jaeger/stdout·file
                                         ↓
                                     Backend API → WebSocket → UI 실시간 갱신
 
@@ -1689,7 +1689,7 @@ Policy
 │         │                  │                  │                    │
 │  ┌──────▼──────────────────▼──────────────────▼───────┐          │
 │  │                 Query Engine                         │          │
-│  │  Prometheus (메트릭) + Tempo (트레이스) + Loki (로그) │          │
+│  │  Prometheus (메트릭) + Jaeger (트레이스) + 로그 뷰어   │          │
 │  │  + PostgreSQL (메타/설정) + Evidence Store (진단)     │          │
 │  └─────────────────────────────────────────────────────┘          │
 │                                                                    │
