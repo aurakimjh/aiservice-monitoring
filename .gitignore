@@ -66,5 +66,11 @@ logs/
 frontend/test-results/
 reports/playwright/
 
+# Java / Gradle
+sdk-instrumentation/java/.gradle/
+sdk-instrumentation/java/gradle/
+sdk-instrumentation/java/gradlew
+sdk-instrumentation/java/gradlew.bat
+
 # Claude Code
 .claude/
