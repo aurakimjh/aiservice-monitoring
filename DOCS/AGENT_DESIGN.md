@@ -34,7 +34,8 @@
 14. [Runtime Attach 모듈 — 앱 재시작 없이 프로파일링](#14-runtime-attach-모듈--앱-재시작-없이-프로파일링)
 15. [perf/eBPF Collector 모듈 — 커널+유저 통합 시스템 프로파일링](#15-perfebpf-collector-모듈--커널유저-통합-시스템-프로파일링)
 
-> **진단 항목 카탈로그**: 항목별 수집 방식 분류 및 변경 관리 기준은 **[DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md)** 를 참조한다.
+> **진단 항목 카탈로그**: 항목별 수집 방식 분류(🔧/📜/🖐️), 출처 분류(📊/🔍/📊🔍), 메트릭 ID, 변경 관리 기준은 **[DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md)** 를 참조한다.
+> 카탈로그는 **진단 항목(91건)**과 **상시 모니터링 메트릭(35종)** 모두를 다루며, 이 두 축이 Go 단일 에이전트 안에서 통합된다.
 
 ---
 
