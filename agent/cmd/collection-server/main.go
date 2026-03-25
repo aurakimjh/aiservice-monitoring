@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -843,6 +844,51 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 				"status":    "reload_queued",
 				"agent_id":  agentID,
 				"queued_at": time.Now().UTC().Format(time.RFC3339),
+			})
+		case "diagnose":
+			// POST /api/v1/agents/{id}/diagnose — manual (🖐️) diagnostic trigger (Phase 31-3a).
+			var body struct {
+				Mode        string `json:"mode"`
+				TriggeredBy string `json:"triggered_by"`
+				Role        string `json:"role"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid JSON body", http.StatusBadRequest)
+				return
+			}
+			if body.Role == "" {
+				body.Role = "viewer"
+			}
+			allowedRoles := map[string]bool{"admin": true, "sre": true}
+			if !allowedRoles[body.Role] {
+				writeJSON(w, http.StatusForbidden, map[string]string{
+					"error": "role '" + body.Role + "' is not permitted to trigger diagnostic runs",
+				})
+				return
+			}
+			if body.Mode == "full" && body.Role != "admin" && body.Role != "sre" {
+				writeJSON(w, http.StatusForbidden, map[string]string{
+					"error": "role '" + body.Role + "' is not permitted to trigger full/manual diagnostic items",
+				})
+				return
+			}
+			runID := fmt.Sprintf("manual-%s-%d", agentID, time.Now().UnixMilli())
+			logger.Info("manual diagnostic triggered",
+				"agent_id", agentID,
+				"run_id", runID,
+				"mode", body.Mode,
+				"triggered_by", body.TriggeredBy,
+				"role", body.Role,
+			)
+			bus.Publish(eventbus.Event{
+				Type:      "agent.diagnose.requested",
+				Timestamp: time.Now().UTC(),
+				AgentID:   agentID,
+			})
+			writeJSON(w, http.StatusAccepted, map[string]string{
+				"run_id":   runID,
+				"agent_id": agentID,
+				"status":   "queued",
 			})
 		default:
 			http.Error(w, "unknown sub-path", http.StatusNotFound)
@@ -2019,6 +2065,57 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 		mux.HandleFunc("GET /api/v1/events", wsHub.SSEHandler())
 	}
 
+	// ── Evidence API (Phase 31-2d/31-3a) ─────────────────────────────────────
+	// In-memory store for uploaded evidence bundles (keyed by run_id).
+	evidenceStore := newEvidenceStore()
+
+	// POST /api/v1/evidence/upload — agent uploads a ZIP bundle (Phase 31-2d).
+	mux.HandleFunc("POST /api/v1/evidence/upload", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.Header.Get("X-Agent-ID")
+		if agentID == "" {
+			agentID = "unknown"
+		}
+		// Limit upload size to 32 MiB.
+		r.Body = http.MaxBytesReader(w, r.Body, 32*1024*1024)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "body read error", http.StatusBadRequest)
+			return
+		}
+		runID := fmt.Sprintf("diag-%s-%d", agentID, time.Now().UnixMilli())
+		evidenceStore.store(runID, agentID, data)
+		slog.Info("evidence bundle received",
+			"agent_id", agentID,
+			"run_id", runID,
+			"bytes", len(data),
+		)
+		writeJSON(w, http.StatusAccepted, map[string]string{
+			"run_id": runID,
+			"status": "accepted",
+		})
+	})
+
+	// GET /api/v1/evidence — list all received bundles (Fleet view, Phase 31-2f).
+	mux.HandleFunc("GET /api/v1/evidence", func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.URL.Query().Get("agent_id")
+		writeJSON(w, http.StatusOK, evidenceStore.list(agentID))
+	})
+
+	// GET /api/v1/evidence/{run_id} — get a specific bundle metadata.
+	mux.HandleFunc("GET /api/v1/evidence/", func(w http.ResponseWriter, r *http.Request) {
+		runID := r.URL.Path[len("/api/v1/evidence/"):]
+		if runID == "" {
+			http.Error(w, "missing run_id", http.StatusBadRequest)
+			return
+		}
+		rec, ok := evidenceStore.get(runID)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, http.StatusOK, rec)
+	})
+
 	// ── Health endpoints ─────────────────────────────────────────────────────
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{"status": "ok", "version": version.Full()}
@@ -2110,4 +2207,57 @@ func envOrDefaultInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+// ── Evidence Store (Phase 31-2d/2e/2f) ───────────────────────────────────────
+
+// evidenceRecord holds metadata and raw ZIP bytes for a received evidence bundle.
+type evidenceRecord struct {
+	RunID     string    `json:"run_id"`
+	AgentID   string    `json:"agent_id"`
+	ReceivedAt time.Time `json:"received_at"`
+	Bytes     int       `json:"bytes"`
+}
+
+type evidenceBundleStore struct {
+	mu      sync.RWMutex
+	records []*evidenceRecord
+}
+
+func newEvidenceStore() *evidenceBundleStore {
+	return &evidenceBundleStore{}
+}
+
+func (s *evidenceBundleStore) store(runID, agentID string, data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, &evidenceRecord{
+		RunID:      runID,
+		AgentID:    agentID,
+		ReceivedAt: time.Now().UTC(),
+		Bytes:      len(data),
+	})
+}
+
+func (s *evidenceBundleStore) list(agentID string) []*evidenceRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*evidenceRecord
+	for _, r := range s.records {
+		if agentID == "" || r.AgentID == agentID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (s *evidenceBundleStore) get(runID string) (*evidenceRecord, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, r := range s.records {
+		if r.RunID == runID {
+			return r, true
+		}
+	}
+	return nil, false
 }

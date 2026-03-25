@@ -11,13 +11,15 @@ import (
 
 // Config is the top-level agent configuration loaded from agent.yaml.
 type Config struct {
-	Agent      AgentConfig      `yaml:"agent"`
-	Server     ServerConfig     `yaml:"server"`
-	Schedule   ScheduleConfig   `yaml:"schedule"`
-	Collectors CollectorConfigs `yaml:"collectors"`
+	Agent       AgentConfig       `yaml:"agent"`
+	Server      ServerConfig      `yaml:"server"`
+	Schedule    ScheduleConfig    `yaml:"schedule"`
+	Collectors  CollectorConfigs  `yaml:"collectors"`
 	RemoteShell RemoteShellConfig `yaml:"remote_shell"`
-	Buffer     BufferConfig     `yaml:"buffer"`
-	Logging    LoggingConfig    `yaml:"logging"`
+	Buffer      BufferConfig      `yaml:"buffer"`
+	Logging     LoggingConfig     `yaml:"logging"`
+	// Diagnostic holds Phase 31 evidence collection settings.
+	Diagnostic DiagnosticConfig `yaml:"diagnostic"`
 }
 
 type AgentConfig struct {
@@ -104,6 +106,27 @@ type BufferConfig struct {
 	MaxSizeMB int    `yaml:"max_size_mb"`
 }
 
+// DiagnosticConfig holds Phase 31 evidence collection configuration.
+type DiagnosticConfig struct {
+	// Interval is the cron expression for scheduled diagnostic runs (default: daily at midnight).
+	Interval string `yaml:"interval"`
+	// ScriptBaseDir is the directory containing diagnostic scripts.
+	ScriptBaseDir string `yaml:"script_base_dir"`
+	// AuditLogPath is the path to the audit log file for 🖐️ manual triggers.
+	AuditLogPath string `yaml:"audit_log_path"`
+	// RunMode controls which collectors participate: "auto", "script", "full".
+	RunMode string `yaml:"run_mode"`
+	// Scripts is the 📜 ITEM ID → script file mapping (Phase 31-2c).
+	Scripts []ScriptMapping `yaml:"scripts"`
+}
+
+// ScriptMapping links a diagnostic catalog ITEM ID to an external script.
+type ScriptMapping struct {
+	ItemID     string `yaml:"item_id"`
+	ScriptPath string `yaml:"script_path"`
+	Timeout    string `yaml:"timeout,omitempty"`
+}
+
 type LoggingConfig struct {
 	Level      string `yaml:"level"` // debug, info, warn, error
 	Path       string `yaml:"path"`
@@ -157,5 +180,11 @@ func (c *Config) applyDefaults() {
 	}
 	if c.RemoteShell.MaxDuration == 0 {
 		c.RemoteShell.MaxDuration = 3600
+	}
+	if c.Diagnostic.Interval == "" {
+		c.Diagnostic.Interval = "0 0 * * *" // daily at midnight
+	}
+	if c.Diagnostic.RunMode == "" {
+		c.Diagnostic.RunMode = "auto"
 	}
 }

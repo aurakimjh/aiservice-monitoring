@@ -18,16 +18,18 @@ import (
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/buffer"
 	aicol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/ai"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/evidence"
 	itcol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/it"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/config"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/core"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/diagnose"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/health"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/lite"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/privilege"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/sanitizer"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/scheduler"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/shell"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/statemachine"
-	"github.com/aurakimjh/aiservice-monitoring/agent/internal/lite"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/transport"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/updater"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
@@ -243,6 +245,24 @@ func main() {
 		}
 	}
 
+	// ── diagnose mode: run evidence collection once then exit (Phase 31) ────────
+	if cfg.Agent.Mode == models.ModeDiagnose {
+		logger.Info("running in DIAGNOSE mode — evidence collection run")
+		diagRunner := buildDiagnoseRunner(cfg, agentID, logger)
+		result := diagRunner.Run(ctx)
+		if len(result.Errors) > 0 {
+			for _, e := range result.Errors {
+				logger.Warn("diagnostic error", "error", e)
+			}
+		}
+		logger.Info("diagnostic run complete",
+			"run_id", result.RunID,
+			"zip_bytes", result.ZipBytes,
+			"uploaded", result.Uploaded,
+		)
+		return
+	}
+
 	// ── collect-only / collect-export: run once then exit ─────────────────────
 	if cfg.Agent.Mode == models.ModeCollectOnly || cfg.Agent.Mode == models.ModeCollectExport {
 		logger.Info("running in one-shot mode", "mode", cfg.Agent.Mode)
@@ -319,6 +339,25 @@ func main() {
 	}
 
 	if cfg.Agent.Mode == models.ModeFull {
+		// ── Diagnostic scheduler (Phase 31-2b) ──
+		diagRunner := buildDiagnoseRunner(cfg, agentID, logger)
+		diagJob := func(ctx context.Context) {
+			result := diagRunner.Run(ctx)
+			logger.Info("scheduled diagnostic run complete",
+				"run_id", result.RunID,
+				"zip_bytes", result.ZipBytes,
+				"uploaded", result.Uploaded,
+				"errors", len(result.Errors),
+			)
+		}
+		diagInterval := cfg.Diagnostic.Interval
+		if diagInterval == "" {
+			diagInterval = "0 0 * * *"
+		}
+		if err := sched.Register("diagnose", diagInterval, diagJob); err != nil {
+			logger.Warn("failed to register diagnostic job", "error", err)
+		}
+
 		// Periodic buffer flush
 		flushJob := func(ctx context.Context) {
 			var sendFn func(collectorID string, data []byte) error
@@ -372,6 +411,48 @@ func main() {
 	}
 
 	logger.Info("aitop-agent stopped")
+}
+
+// buildDiagnoseRunner creates a diagnose.Runner from the agent config.
+func buildDiagnoseRunner(cfg *config.Config, agentID string, logger *slog.Logger) *diagnose.Runner {
+	hostname, _ := os.Hostname()
+
+	// Convert config script mappings to diagnose.ScriptMapping.
+	var scriptMappings []diagnose.ScriptMapping
+	for _, m := range cfg.Diagnostic.Scripts {
+		scriptMappings = append(scriptMappings, diagnose.ScriptMapping{
+			ItemID:     m.ItemID,
+			ScriptPath: m.ScriptPath,
+			Timeout:    m.Timeout,
+		})
+	}
+
+	// Map config RunMode string to diagnose.Mode.
+	var runMode diagnose.Mode
+	switch cfg.Diagnostic.RunMode {
+	case "script":
+		runMode = diagnose.ModeScript
+	case "full":
+		runMode = diagnose.ModeFull
+	default:
+		runMode = diagnose.ModeAuto
+	}
+
+	diagCfg := diagnose.Config{
+		AgentID:        agentID,
+		Hostname:       hostname,
+		ProjectID:      "",
+		TenantID:       "",
+		ScriptMappings: scriptMappings,
+		ScriptBaseDir:  cfg.Diagnostic.ScriptBaseDir,
+		UploadURL:      cfg.Server.URL,
+		ProjectToken:   cfg.Server.ProjectToken,
+		Interval:       cfg.Diagnostic.Interval,
+		RunMode:        runMode,
+	}
+
+	reg := evidence.DefaultRegistry
+	return diagnose.New(diagCfg, reg, logger)
 }
 
 // buildPluginStatus builds a snapshot of registered collector statuses.
