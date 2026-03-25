@@ -1,9 +1,9 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v2.1.0
+> **문서 버전**: v2.2.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-25 (Phase 32 완료 반영 — GPU 멀티벤더/Java·.NET SDK/미들웨어 메트릭 완료, AGPL-free 인프라 전환)
+> **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF 프로파일링 메트릭 추가: on-CPU·off-CPU·memory·플레임그래프 메타데이터)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -83,6 +83,7 @@ GPU VRAM은 AI 모델이 올라가는 **작업 책상의 크기**입니다.
 7. [장애 예방 Alert 임계치 정의](#7-장애-예방-alert-임계치-정의)
 8. [Context Propagation 설계](#8-context-propagation-설계)
 12. [Java / .NET 전용 메트릭 (Phase 24 완료)](#12-java--net-전용-메트릭-phase-24-완료)
+13. [perf/eBPF 프로파일링 메트릭 (Phase 35)](#13-perfebpf-프로파일링-메트릭-phase-35)
 
 ---
 
@@ -1822,6 +1823,79 @@ abs(
 | `cache.evictions` rate/5m | > 100 | > 1,000 | Slack #oncall |
 
 ---
+
+---
+
+## 13. perf/eBPF 프로파일링 메트릭 (Phase 35)
+
+> **수집 주체**: Agent perf/eBPF Collector (§15, AGENT_DESIGN.md)
+> **수집 방식**: 온디맨드 트리거 — 상시 수집이 아닌 요청 시 수집 (기본 30초)
+> **저장소**: folded stack 원본 → StorageBackend(S3/Local), 메타 메트릭 → Prometheus
+
+### 13.1 프로파일링 세션 메타 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `profiling.session.total` | Counter | 1 | `agent_id`, `type`, `status` | 누적 프로파일링 세션 수 (`status`: success/failed/cancelled) |
+| `profiling.session.duration` | Histogram | s | `agent_id`, `type` | 프로파일링 수집 실제 소요 시간 |
+| `profiling.stack.samples` | Gauge | 1 | `agent_id`, `type` | 마지막 세션에서 수집된 총 스택 샘플 수 |
+| `profiling.stack.size_bytes` | Gauge | bytes | `agent_id`, `type` | folded stack 압축 전 원본 크기 |
+| `profiling.stack.compressed_bytes` | Gauge | bytes | `agent_id`, `type` | gzip 압축 후 StorageBackend 저장 크기 |
+| `profiling.symbol.unknown_ratio` | Gauge | 1 | `agent_id`, `language` | 심볼 미해석 비율 (0.0~1.0) — 높을수록 JIT 심볼 설정 필요 |
+
+**type 레이블 값**: `cpu`, `offcpu`, `memory`, `mixed`
+
+### 13.2 on-CPU 프로파일링 메트릭
+
+> 어떤 함수가 CPU를 점유하는가 — 99Hz 샘플링 기반
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `profiling.cpu.sample_rate` | Gauge | Hz | `agent_id` | 실제 적용된 샘플링 주파수 |
+| `profiling.cpu.top_frame_ratio` | Gauge | 1 | `agent_id`, `frame` | 상위 10개 함수의 CPU 점유 비율 (0.0~1.0) |
+| `profiling.cpu.kernel_ratio` | Gauge | 1 | `agent_id` | 커널 스택 프레임 비율 (높으면 시스템 콜 병목 의심) |
+| `profiling.cpu.user_ratio` | Gauge | 1 | `agent_id` | 유저 스택 프레임 비율 |
+
+### 13.3 off-CPU 프로파일링 메트릭
+
+> 어떤 함수가 I/O·Lock 대기 중인가 — 컨텍스트 스위치 기반
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `profiling.offcpu.total_wait_us` | Gauge | µs | `agent_id` | 세션 내 전체 off-CPU 대기 시간 합계 |
+| `profiling.offcpu.top_frame_wait_us` | Gauge | µs | `agent_id`, `frame` | 상위 10개 함수의 평균 대기 시간 |
+| `profiling.offcpu.io_wait_ratio` | Gauge | 1 | `agent_id` | I/O 대기 비율 (D 상태 sleep) |
+| `profiling.offcpu.lock_wait_ratio` | Gauge | 1 | `agent_id` | Lock/Mutex 대기 비율 |
+
+### 13.4 memory 프로파일링 메트릭
+
+> 어떤 함수가 heap 할당을 유발하는가 — uprobe/JVMTI 기반
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `profiling.memory.alloc_bytes_total` | Gauge | bytes | `agent_id` | 세션 내 총 heap 할당량 |
+| `profiling.memory.top_frame_alloc_bytes` | Gauge | bytes | `agent_id`, `frame` | 상위 10개 함수의 할당량 |
+| `profiling.memory.alloc_rate` | Gauge | bytes/s | `agent_id` | 초당 평균 메모리 할당 속도 |
+| `profiling.memory.gc_pressure_ratio` | Gauge | 1 | `agent_id`, `language` | GC 관련 함수 스택 비율 (Java/Go) |
+
+### 13.5 플레임그래프 생성 엔진 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `flamegraph.render.duration` | Histogram | ms | `type`, `format` | 플레임그래프 SVG/JSON 생성 소요 시간 |
+| `flamegraph.render.total` | Counter | 1 | `type`, `format`, `cache_hit` | 총 플레임그래프 렌더링 횟수 (캐시 히트 포함) |
+| `flamegraph.diff.sessions` | Counter | 1 | `agent_id` | diff 플레임그래프 생성 횟수 |
+| `flamegraph.cache.size_bytes` | Gauge | bytes | — | 렌더링 결과 캐시 총 크기 (TTL 5분) |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `profiling.symbol.unknown_ratio` | > 30% | > 70% | Slack #oncall (JIT 심볼 설정 안내) |
+| `profiling.offcpu.lock_wait_ratio` | > 30% | > 60% | Slack #oncall (Lock 경합 의심) |
+| `profiling.offcpu.io_wait_ratio` | > 50% | > 80% | Slack #oncall (I/O 병목 의심) |
+| `flamegraph.render.duration` p99 | > 2s | > 5s | Slack #oncall |
+| `profiling.session.total{status="failed"}` rate/5m | > 3 | > 10 | PagerDuty |
 
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
 *관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md)*
