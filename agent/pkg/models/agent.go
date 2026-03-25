@@ -10,6 +10,8 @@ const (
 	ModeCollectOnly   AgentMode = "collect-only"
 	ModeCollectExport AgentMode = "collect-export"
 	ModeLite          AgentMode = "lite"
+	// ModeDiagnose runs evidence collection once then exits (Phase 31).
+	ModeDiagnose AgentMode = "diagnose"
 )
 
 // AgentStatus represents the lifecycle status of the agent.
@@ -55,6 +57,16 @@ type PrivilegeReport struct {
 	Checks      []PrivilegeCheck `json:"checks"`
 }
 
+// DiagnosticStatus summarises the last diagnostic run for Fleet display (Phase 31-2f).
+type DiagnosticStatus struct {
+	LastRunID   string    `json:"last_run_id,omitempty"`
+	LastRunAt   time.Time `json:"last_run_at,omitempty"`
+	ItemCount   int       `json:"item_count,omitempty"`
+	ErrorCount  int       `json:"error_count,omitempty"`
+	Uploaded    bool      `json:"uploaded,omitempty"`
+	NextRunAt   time.Time `json:"next_run_at,omitempty"`
+}
+
 // Heartbeat is sent periodically from agent to collection server.
 type Heartbeat struct {
 	AgentID           string         `json:"agent_id"`
@@ -70,6 +82,7 @@ type Heartbeat struct {
 	PrivilegeReport   *PrivilegeReport `json:"privilege_report,omitempty"`
 	AIDetected        bool             `json:"ai_detected,omitempty"`
 	SDKLangs          []string         `json:"sdk_langs,omitempty"`
+	Diagnostic        *DiagnosticStatus `json:"diagnostic,omitempty"`
 }
 
 // HeartbeatResponse is the server's reply to a heartbeat.
