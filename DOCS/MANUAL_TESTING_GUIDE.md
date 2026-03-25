@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: 이 프로젝트를 처음 접하는 초보자 (코딩 경험 불필요)
-> **최종 업데이트**: 2026-03-25 (Phase 1-32 완료 / AGPL-free 인프라 전환 반영)
+> **최종 업데이트**: 2026-03-26 (Phase 1-38 완료 / 배치·eBPF·Attach·GPU·플러그인 신규 기능 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -25,6 +25,7 @@
 7. [Step 6: Collection Server 실행 테스트](#7-step-6-collection-server-실행-테스트)
 8. [Step 7: Docker 통합 테스트](#8-step-7-docker-통합-테스트)
 9. [Step 8: 결과 기록](#9-step-8-결과-기록)
+10. [Step 9: Phase 31-38 신규 기능 테스트](#10-step-9-phase-31-38-신규-기능-테스트)
 
 ---
 
@@ -244,7 +245,7 @@ go build ./...
 
 ### 이 단계의 목적
 
-Go 코드의 개별 기능이 올바르게 동작하는지 확인합니다. 현재 21개의 테스트 파일이 있으며, 각각 특정 모듈의 기능을 검증합니다.
+Go 코드의 개별 기능이 올바르게 동작하는지 확인합니다. 현재 30개의 테스트 파일이 있으며, 각각 특정 모듈의 기능을 검증합니다.
 
 ### 4-1. 명령어 실행
 
@@ -1007,6 +1008,320 @@ test/{유형}_{차수}_{날짜}/logs/
 
 새 테스트 라운드를 시작할 때는 `test/templates/`의 템플릿을 복사하세요.
 자세한 폴더 구조는 [TEST_GUIDE.md 섹션 9](./TEST_GUIDE.md#9-test-디렉토리-구조-안내)를 참조하세요.
+
+---
+
+## 10. Step 9: Phase 31-38 신규 기능 테스트
+
+> **추가**: 2026-03-26 — Phase 31~38에서 추가된 신규 기능의 수동 테스트 절차
+
+---
+
+### 9-1. 진단 모드 테스트 (Phase 31: Evidence 수집)
+
+**목적**: `--mode=diagnose` 실행 시 Evidence 데이터 수집 및 감사 로그 생성을 확인합니다.
+
+**사전 조건**: Level 1 (Go 빌드 성공)
+
+**테스트 절차**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+
+# 1. diagnose 모드로 Agent 실행
+go run ./cmd/agent --mode=diagnose
+
+# 2. 출력에서 Evidence 수집 항목 확인
+# 기대: "evidence: collecting..." 또는 유사 수집 로그
+
+# 3. 수집된 Evidence 파일 확인 (기본 저장 경로)
+ls -la /tmp/aitop-evidence/  # Linux/Mac
+ls -la /c/Users/$USER/AppData/Local/Temp/aitop-evidence/  # Windows Git Bash
+```
+
+**체크리스트**:
+
+```
+[ ] go run ./cmd/agent --mode=diagnose 실행 성공 (exit 0)
+[ ] Evidence 수집 로그 출력 확인
+[ ] 감사 로그(audit.log) 파일 생성 확인
+[ ] Evidence JSON 파일에 OS/프로세스/네트워크 정보 포함 확인
+```
+
+**단위 테스트 확인**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+go test ./internal/collector/evidence/... -v  # equivalence 테스트
+go test ./internal/script/... -v              # 스크립트 실행기 테스트
+```
+
+**PASS 조건**: diagnose 모드 실행 후 Evidence JSON 생성, 감사 로그 파일 존재
+
+---
+
+### 9-2. Runtime Attach 테스트 (Phase 34)
+
+**목적**: 실행 중인 Java/Python 프로세스에 동적으로 Attach하여 프로파일 데이터를 수집하는지 확인합니다.
+
+**사전 조건**: Java 또는 Python 프로세스가 실행 중이어야 함
+
+**테스트 절차**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+
+# Java 프로세스 PID 확인
+jps -l  # 또는 ps aux | grep java
+
+# Runtime Attach 실행 (PID 교체)
+go run ./cmd/agent --mode=attach --pid=<PID> --runtime=java
+
+# Python 프로세스 Attach
+go run ./cmd/agent --mode=attach --pid=<PID> --runtime=python
+```
+
+**Collection Server API에서 프로파일 확인**:
+
+```bash
+# 서버 실행 (별도 터미널)
+cd /c/workspace/aiservice-monitoring/agent
+go run ./cmd/collection-server
+
+# 프로파일 목록 조회
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  | python -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
+
+curl -s http://localhost:8080/api/v1/profiling \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**브라우저에서 확인**:
+
+1. http://localhost:3000/profiling 접속
+2. Attach로 수집된 프로파일 목록 표시 확인
+3. 프로파일 상세 클릭 → 플레임그래프 렌더링 확인
+
+**체크리스트**:
+
+```
+[ ] go test ./internal/attach/... -v PASS
+[ ] Java 프로세스 Attach 실행 성공
+[ ] Python 프로세스 Attach 실행 성공
+[ ] API /api/v1/profiling 에 프로파일 데이터 존재
+[ ] /profiling 페이지에 데이터 표시
+[ ] /profiling/{profileId} 플레임그래프 렌더링
+```
+
+**PASS 조건**: 단위 테스트 PASS + 수집된 프로파일이 API/UI에서 확인됨
+
+---
+
+### 9-3. GPU 멀티벤더 테스트 (Phase 32)
+
+**목적**: NVIDIA/AMD/Intel/Apple/Cloud GPU 메트릭 수집 및 대시보드 표시 확인합니다.
+
+**사전 조건**: 단위 테스트는 mock으로 실행 가능, 실제 GPU 메트릭은 GPU 탑재 환경 필요
+
+**단위 테스트**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+go test ./internal/collector/ai/gpu/... -v
+```
+
+**브라우저에서 확인**:
+
+1. http://localhost:3000/ai/gpu 접속
+2. GPU 카드 렌더링 확인 (데모 데이터)
+3. 벤더별 GPU 항목 (NVIDIA/AMD/Intel/Cloud) 표시 확인
+
+**체크리스트**:
+
+```
+[ ] go test ./internal/collector/ai/gpu/... -v PASS
+[ ] /ai/gpu 페이지 렌더링 성공 (빈 화면 아님)
+[ ] GPU 메트릭 카드 (utilizaton, memory, temp) 표시
+[ ] 벤더별 섹션 구분 표시
+```
+
+**PASS 조건**: 단위 테스트 PASS + /ai/gpu 페이지 정상 렌더링
+
+---
+
+### 9-4. 플러그인 배포 테스트 (Phase 33)
+
+**목적**: 중앙 플러그인 배포 시스템의 설치/업데이트/롤백 흐름을 검증합니다.
+
+**브라우저에서 확인**:
+
+1. http://localhost:3000/marketplace 접속
+2. 플러그인 목록 표시 확인
+3. 플러그인 설치 버튼 클릭 → 설치 시뮬레이션 확인
+
+**체크리스트**:
+
+```
+[ ] /marketplace 페이지 렌더링 성공
+[ ] 플러그인 목록 카드 표시 (이름, 버전, 설명)
+[ ] 설치/업데이트 버튼 동작 확인
+```
+
+> **주의**: Phase 33 단위 테스트 (`internal/plugin`)는 아직 작성되지 않았습니다. 다음 테스트 차수에서 보강 예정.
+
+---
+
+### 9-5. 배치 모니터링 테스트 (Phase 36-38)
+
+**목적**: 배치 프로세스 자동 감지부터 대시보드 표시까지의 전체 흐름을 검증합니다.
+
+**브라우저 페이지 체크 (Phase 38 대시보드)**:
+
+| # | URL | 확인 사항 | 결과 |
+|---|-----|----------|------|
+| 1 | http://localhost:3000/batch | 배치 대시보드 메인 | [ ] |
+| 2 | http://localhost:3000/batch/{name} | 배치 작업 상세 | [ ] |
+| 3 | http://localhost:3000/batch/executions/{id} | 실행 이력 상세 | [ ] |
+| 4 | http://localhost:3000/batch/alerts | 배치 알림 규칙 | [ ] |
+| 5 | http://localhost:3000/batch/xlog | XLog 조회 | [ ] |
+
+**배치 프로세스 자동 감지 수동 테스트 (Phase 36)**:
+
+```bash
+# Spring Batch 또는 Python Celery 등 배치 프로세스 실행 후
+# Collection Server에서 배치 프로세스 감지 확인
+
+TOKEN=<발급된_JWT_토큰>
+
+# 배치 작업 목록 조회
+curl -s http://localhost:8080/api/v1/batch \
+  -H "Authorization: Bearer $TOKEN"
+
+# 배치 실행 이력 조회
+curl -s http://localhost:8080/api/v1/batch/executions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**배치 런타임 프로파일링 수동 테스트 (Phase 37)**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+
+# 실행 중 배치 프로세스의 PID 확인
+ps aux | grep -E 'spring|celery|batch'
+
+# 배치 프로세스에 Attach하여 런타임 프로파일 수집
+go run ./cmd/agent --mode=attach --pid=<BATCH_PID> --runtime=java
+```
+
+**체크리스트**:
+
+```
+[ ] /batch 페이지 렌더링 성공 (빈 화면 아님)
+[ ] /batch/{name} 배치 상세 렌더링
+[ ] /batch/executions/{id} 실행 이력 렌더링
+[ ] /batch/alerts 알림 규칙 목록 렌더링
+[ ] /batch/xlog XLog 조회 렌더링
+[ ] API /api/v1/batch → 배치 작업 목록 응답 확인
+[ ] 배치 프로세스 자동 감지 확인 (실행 환경에서)
+[ ] 배치 런타임 프로파일 수집 확인 (실행 환경에서)
+```
+
+**PASS 조건**: 5개 페이지 정상 렌더링 + API 응답 200
+
+---
+
+### 9-6. perf/eBPF 플레임그래프 테스트 (Phase 35)
+
+**목적**: perf 또는 eBPF 기반 시스템 프로파일링 및 플레임그래프 생성을 확인합니다.
+
+> **주의**: perf/eBPF는 **Linux 전용**입니다. Windows에서는 빌드는 가능하지만 실행은 Linux 환경이 필요합니다.
+
+**Linux 환경에서 테스트**:
+
+```bash
+# Linux에서 perf 권한 확인
+sudo sysctl -w kernel.perf_event_paranoid=0
+
+# On-CPU 프로파일링 (30초)
+cd /c/workspace/aiservice-monitoring/agent
+go run ./cmd/agent --mode=profile --type=oncpu --duration=30s
+
+# Off-CPU 프로파일링
+go run ./cmd/agent --mode=profile --type=offcpu --duration=30s
+
+# 플레임그래프 SVG 생성 확인
+ls -la /tmp/aitop-profiles/*.svg
+```
+
+**브라우저에서 확인**:
+
+```
+[ ] /profiling 페이지에 perf 프로파일 목록 표시
+[ ] 프로파일 상세 클릭 → 플레임그래프 SVG 렌더링
+[ ] On-CPU / Off-CPU / Memory 탭 전환 동작
+[ ] 심볼 리졸버 결과 (Java/Python/Go 함수명 표시)
+```
+
+**체크리스트**:
+
+```
+[ ] go build ./internal/collector/perfebpf/... PASS (Windows에서도 빌드 확인)
+[ ] Linux 환경에서 On-CPU 프로파일링 실행 성공 (선택)
+[ ] Linux 환경에서 Off-CPU 프로파일링 실행 성공 (선택)
+[ ] /profiling 페이지에서 플레임그래프 SVG 렌더링 확인 (선택)
+```
+
+**PASS 조건**: Go 빌드 성공 (필수) + Linux 실행 확인 (선택)
+
+---
+
+### 9-7. Step 9 종합 체크리스트
+
+```
+=============================================================
+  Phase 31-38 신규 기능 테스트 결과
+  테스트 일자:    ____년 __월 __일
+  테스트 담당자:  ____________
+=============================================================
+
+9-1. 진단 모드 (Phase 31)
+  [ ] PASS  [ ] FAIL  [ ] SKIP
+  비고: ________________________________________
+
+9-2. Runtime Attach (Phase 34)
+  [ ] PASS  [ ] FAIL  [ ] SKIP
+  단위 테스트: [ ] PASS  [ ] FAIL
+  Java Attach: [ ] 성공  [ ] 실패  [ ] SKIP (JVM 없음)
+  Python Attach: [ ] 성공  [ ] 실패  [ ] SKIP (Python 없음)
+
+9-3. GPU 멀티벤더 (Phase 32)
+  [ ] PASS  [ ] FAIL  [ ] SKIP
+  단위 테스트: [ ] PASS  [ ] FAIL
+  /ai/gpu 페이지: [ ] 정상  [ ] 오류
+
+9-4. 플러그인 배포 (Phase 33)
+  [ ] PASS  [ ] FAIL  [ ] SKIP
+  /marketplace 페이지: [ ] 정상  [ ] 오류
+
+9-5. 배치 모니터링 (Phase 36-38)
+  /batch:           [ ] 정상  [ ] 오류
+  /batch/{name}:    [ ] 정상  [ ] 오류
+  /batch/executions/{id}: [ ] 정상  [ ] 오류
+  /batch/alerts:    [ ] 정상  [ ] 오류
+  /batch/xlog:      [ ] 정상  [ ] 오류
+  전체: [ ] PASS  [ ] FAIL
+
+9-6. perf/eBPF (Phase 35)
+  [ ] PASS (Linux)  [ ] 빌드만 확인 (Windows)  [ ] SKIP
+  비고: ________________________________________
+
+─────────────────────────────────────────────────────────────
+전체 결과: [ ] PASS  [ ] CONDITIONAL PASS  [ ] FAIL
+=============================================================
+```
 
 ---
 

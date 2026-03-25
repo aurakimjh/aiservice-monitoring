@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: QA 엔지니어, SRE, 개발자, 프로젝트 관리자
-> **최종 업데이트**: 2026-03-25 (Phase 1-32 완료 / AGPL-free 인프라 전환 반영)
+> **최종 업데이트**: 2026-03-26 (Phase 1-38 완료 / 배치·eBPF·Attach·GPU·플러그인 신규 기능 반영)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -173,9 +173,16 @@ npx next build
 **핵심 명령어**:
 
 ```bash
-# Go 유닛 테스트 (21개 테스트 파일)
+# Go 유닛 테스트 (30개 테스트 파일)
 cd /c/workspace/aiservice-monitoring/agent
 go test ./... -v
+
+# 신규 패키지 개별 테스트 (Phase 31-38)
+go test ./internal/attach/... -v          # Phase 34: Runtime Attach
+go test ./internal/collector/evidence/... -v  # Phase 31: Evidence 수집
+go test ./internal/script/... -v          # Phase 31: 스크립트 실행
+go test ./internal/collector/ai/gpu/... -v    # Phase 32: GPU 멀티벤더
+go test ./internal/lite/... -v            # PDF/Lite 리포트
 
 # Frontend 유닛 테스트 (Vitest, 5개 테스트 파일)
 cd /c/workspace/aiservice-monitoring/frontend
@@ -639,9 +646,55 @@ AITOP 프로젝트의 테스트 커버리지를 분석해 주세요:
 
 | 영역 | 테스트 파일 수 | 위치 |
 |------|---------------|------|
-| Go 유닛 테스트 | 21개 | `agent/**/*_test.go` |
+| Go 유닛 테스트 | 30개 | `agent/**/*_test.go` |
 | Frontend Vitest | 5개 | `frontend/src/**/__tests__/*.test.{ts,tsx}` |
 | Playwright E2E | 7개 | `frontend/e2e/*.spec.ts` |
+
+**Go 테스트 패키지 현황 (Phase 38 기준, 30개 파일)**:
+
+| # | 패키지 | 테스트 파일 | 분류 |
+|---|--------|-----------|------|
+| 1 | `cmd/collection-server` | `main_test.go` | 서버 |
+| 2 | `internal/attach` | `attach_test.go` | Phase 34: Runtime Attach |
+| 3 | `internal/collector/ai/gpu` | `gpu_collector_test.go` | Phase 32: GPU 멀티벤더 |
+| 4 | `internal/collector/ai/llm` | `llm_collector_test.go` | AI Collector |
+| 5 | `internal/collector/ai/otel` | `otel_collector_test.go` | AI Collector |
+| 6 | `internal/collector/ai/vectordb` | `vectordb_collector_test.go` | AI Collector |
+| 7 | `internal/collector/cache` | `cache_collector_test.go` | IT Collector |
+| 8 | `internal/collector/db` | `db_collector_test.go` | IT Collector |
+| 9 | `internal/collector/evidence` | `equivalence_test.go` | Phase 31: Evidence |
+| 10 | `internal/collector/middleware` | `middleware_collector_test.go` | IT Collector |
+| 11 | `internal/collector/mq` | `mq_collector_test.go` | IT Collector |
+| 12 | `internal/collector/os` | `os_collector_test.go` | IT Collector |
+| 13 | `internal/collector/was` | `was_collector_test.go` | IT Collector |
+| 14 | `internal/collector/web` | `web_collector_test.go` | IT Collector |
+| 15 | `internal/health` | `health_test.go` | Core |
+| 16 | `internal/lite` | `pdf_test.go` | Lite 리포트 |
+| 17 | `internal/output` | `ndjson_test.go` | Core |
+| 18 | `internal/script` | `executor_test.go` | Phase 31: 스크립트 실행 |
+| 19 | `internal/shell` | `shell_test.go` | Core |
+| 20 | `internal/statemachine` | `state_machine_test.go` | Core |
+| 21 | `internal/transport` | `heartbeat_test.go` | Transport |
+| 22 | `internal/transport` | `prometheus_test.go` | Transport |
+| 23 | `internal/updater` | `updater_test.go` | Core |
+| 24 | `pkg/storage` | `dual_backend_test.go` | Storage |
+| 25 | `pkg/storage` | `factory_test.go` | Storage |
+| 26 | `pkg/storage` | `keys_test.go` | Storage |
+| 27 | `pkg/storage` | `local_backend_test.go` | Storage |
+| 28 | `pkg/storage` | `s3_backend_test.go` | Storage |
+| 29 | `test` | `api_contract_test.go` | 계약 테스트 |
+| 30 | `test` | `integration_e2e_test.go` | E2E 통합 |
+
+**테스트 미비 패키지 (Phase 38 기준 추가 식별)**:
+
+| 패키지 | 우선순위 | 비고 |
+|--------|---------|------|
+| `internal/collector/batch` | **High** | Phase 36: 배치 프로세스 감지 — 테스트 없음 |
+| `internal/collector/batch/profiler` | **High** | Phase 37: 배치 런타임 프로파일링 — 테스트 없음 |
+| `internal/collector/perfebpf` | **High** | Phase 35: perf/eBPF 프로파일링 — 테스트 없음 |
+| `internal/collector/profiling` | Medium | 범용 프로파일링 Collector — 테스트 없음 |
+| `internal/plugin` | Medium | Phase 33: 플러그인 배포 — 테스트 없음 |
+| `internal/diagnose` | Medium | Phase 31: 진단 모드 — 테스트 없음 |
 
 **PASS 조건**: AI가 식별한 누락 영역 목록 + 보강 우선순위 수립
 
@@ -915,6 +968,105 @@ npx playwright show-report ../reports/playwright
 
 ---
 
+### 6-4. Phase 31-38 신규 기능 테스트 로드맵
+
+> **추가**: 2026-03-26 — Phase 31~38 신규 기능 테스트 계획
+
+#### 6-4-1. Phase 31: Evidence 수집 프레임워크
+
+**목표**: diagnose 모드, 스크립트 실행, 감사 로그 동작 검증
+
+| 단계 | 테스트 항목 | 상태 | 명령어 |
+|------|-----------|:----:|--------|
+| 31-1 | `--mode=diagnose` 실행 → Evidence JSON 수집 확인 | **미실행** | `go run ./cmd/agent --mode=diagnose` |
+| 31-2 | 감사 로그 파일 생성 확인 | **미실행** | 로그 경로 존재 여부 확인 |
+| 31-3 | `internal/collector/evidence` 단위 테스트 | **완료** | `go test ./internal/collector/evidence/...` |
+| 31-4 | `internal/script` 실행기 단위 테스트 | **완료** | `go test ./internal/script/...` |
+
+#### 6-4-2. Phase 32: GPU 멀티벤더
+
+**목표**: NVIDIA/AMD/Intel/Apple/Cloud GPU 감지 및 메트릭 수집 검증
+
+| 단계 | 테스트 항목 | 상태 | 명령어 |
+|------|-----------|:----:|--------|
+| 32-1 | `internal/collector/ai/gpu` 단위 테스트 | **완료** | `go test ./internal/collector/ai/gpu/...` |
+| 32-2 | 벤더별 감지 로직 분기 확인 (mock) | **미실행** | 테스트 파일 내 vendor mock 확인 |
+| 32-3 | `/ai/gpu` 대시보드 페이지 렌더링 | **미실행** | 브라우저에서 확인 |
+
+#### 6-4-3. Phase 33: 중앙 플러그인 배포 시스템
+
+**목표**: 플러그인 설치/업데이트/롤백 흐름 검증
+
+| 단계 | 테스트 항목 | 상태 | 명령어 |
+|------|-----------|:----:|--------|
+| 33-1 | `internal/plugin` 단위 테스트 | **미실행** | `go test ./internal/plugin/...` (테스트 파일 없음) |
+| 33-2 | `/marketplace` 페이지 플러그인 목록 렌더링 | **미실행** | 브라우저에서 확인 |
+| 33-3 | 플러그인 Manifest 파싱 검증 | **미실행** | manifest.go 단위 테스트 작성 필요 |
+
+#### 6-4-4. Phase 34: Runtime Attach
+
+**목표**: Java/Python/.NET/Node.js/Go 프로세스 동적 Attach 및 프로파일 수집 검증
+
+| 단계 | 테스트 항목 | 상태 | 명령어 |
+|------|-----------|:----:|--------|
+| 34-1 | `internal/attach` 단위 테스트 | **완료** | `go test ./internal/attach/...` |
+| 34-2 | Java 프로세스 Attach 수동 테스트 | **미실행** | 실행 중 JVM에 Attach → `/profiling` 확인 |
+| 34-3 | Python 프로세스 Attach 수동 테스트 | **미실행** | `py-spy` 기반 Attach → 플레임그래프 확인 |
+| 34-4 | `/profiling/{profileId}` 상세 페이지 확인 | **미실행** | 브라우저에서 프로파일 데이터 확인 |
+
+#### 6-4-5. Phase 35: perf/eBPF 시스템 프로파일링
+
+**목표**: On-CPU/Off-CPU/Memory 프로파일링 + 플레임그래프 생성 검증
+
+| 단계 | 테스트 항목 | 상태 | 비고 |
+|------|-----------|:----:|------|
+| 35-1 | `internal/collector/perfebpf` 빌드 확인 | **미실행** | Linux 전용 (CGO 필요) |
+| 35-2 | folded stack 파싱 단위 테스트 | **미실행** | 테스트 파일 없음 — 작성 필요 |
+| 35-3 | 심볼 리졸버 (Java/Python/Go/Node/.NET) 테스트 | **미실행** | `symbol/` 패키지 단위 테스트 |
+| 35-4 | 플레임그래프 SVG 렌더링 확인 | **미실행** | `/profiling/{id}` 플레임그래프 뷰 |
+
+#### 6-4-6. Phase 36-38: 배치 모니터링 + 프로파일링 + 대시보드
+
+**목표**: 배치 프로세스 자동 감지 → 런타임 프로파일링 → 대시보드 표시 E2E 흐름 검증
+
+| 단계 | 테스트 항목 | 상태 | 명령어/경로 |
+|------|-----------|:----:|------------|
+| 36-1 | `internal/collector/batch` 빌드 확인 | **미실행** | `go build ./internal/collector/batch/...` |
+| 36-2 | 배치 프로세스 자동 감지 수동 테스트 | **미실행** | Spring Batch/Airflow 프로세스 실행 후 감지 확인 |
+| 37-1 | `internal/collector/batch/profiler` 빌드 확인 | **미실행** | `go build ./internal/collector/batch/profiler/...` |
+| 37-2 | 배치 런타임 프로파일러 (Java/Python/Go/.NET) 테스트 | **미실행** | 실행 중 배치 프로세스에 Attach → 프로파일 확인 |
+| 38-1 | `/batch` 대시보드 페이지 렌더링 | **미실행** | 브라우저 http://localhost:3000/batch |
+| 38-2 | `/batch/alerts` 알림 규칙 페이지 렌더링 | **미실행** | 브라우저 http://localhost:3000/batch/alerts |
+| 38-3 | `/batch/{name}` 배치 상세 페이지 렌더링 | **미실행** | 브라우저 http://localhost:3000/batch/{name} |
+| 38-4 | `/batch/executions/{id}` 실행 이력 상세 렌더링 | **미실행** | 브라우저 http://localhost:3000/batch/executions/{id} |
+| 38-5 | `/batch/xlog` XLog 페이지 렌더링 | **미실행** | 브라우저 http://localhost:3000/batch/xlog |
+
+**Phase 31-38 전체 테스트 실행 명령어**:
+
+```bash
+cd /c/workspace/aiservice-monitoring/agent
+
+# 신규 패키지 빌드 확인
+go build ./internal/attach/...
+go build ./internal/collector/batch/...
+go build ./internal/collector/perfebpf/...
+go build ./internal/collector/profiling/...
+go build ./internal/plugin/...
+go build ./internal/diagnose/...
+
+# 완료된 단위 테스트 실행
+go test ./internal/attach/... -v
+go test ./internal/collector/evidence/... -v
+go test ./internal/script/... -v
+go test ./internal/collector/ai/gpu/... -v
+go test ./internal/lite/... -v
+
+# 전체 테스트 (30개 파일)
+go test ./... -v
+```
+
+---
+
 ## 7. 테스트 보고서 템플릿
 
 ### 7-1. 종합 보고서
@@ -934,7 +1086,7 @@ Level 1 — 빌드 검증:         [ ] PASS  [ ] FAIL
   Frontend build:            [ ] 성공  [ ] 실패 → 원인: ________
 
 Level 2 — 단위 테스트:       [ ] PASS  [ ] FAIL
-  Go test:                   __개 PASS / __개 FAIL
+  Go test (30파일):          __개 PASS / __개 FAIL
   Frontend vitest:           __개 PASS / __개 FAIL
 
 Level 3 — UI 접근성:         [ ] PASS  [ ] FAIL
@@ -1166,6 +1318,42 @@ test/{테스트유형}_{차수}_{YYYY-MM-DD}/
 - `agent/test/` — Go 통합/계약 테스트 소스 코드 (변경하지 마세요)
 - `reports/` — 도구 자동 생성 리포트 (Playwright HTML, Coverage HTML)
 - `test/` — 사람이 읽는 구조화된 테스트 문서
+
+---
+
+## 10. 테스트 현황 요약 (Phase 38 기준)
+
+> **최종 업데이트**: 2026-03-26
+
+### 10-1. Go 테스트 패키지 현황
+
+| 구분 | 수량 | 비고 |
+|------|------|------|
+| 테스트 파일 있는 패키지 | 30개 | `agent/**/*_test.go` |
+| 테스트 파일 없는 주요 패키지 | 6개+ | batch, perfebpf, plugin, diagnose, profiling 등 |
+| 1차 테스트 결과 (2026-03-24) | 160개 케이스 PASS | `test/단위테스트_1차_2026-03-24/` |
+
+### 10-2. Phase별 테스트 커버리지 상태
+
+| Phase | 기능 | 단위 테스트 | 수동 테스트 | 비고 |
+|-------|------|:----------:|:----------:|------|
+| 31 | Evidence 수집 / diagnose 모드 | 부분 | 미실행 | evidence, script 파일 있음 |
+| 32 | GPU 멀티벤더 | 완료 | 미실행 | gpu_collector_test.go |
+| 33 | 플러그인 배포 | 없음 | 미실행 | 테스트 파일 작성 필요 |
+| 34 | Runtime Attach | 완료 | 미실행 | attach_test.go |
+| 35 | perf/eBPF 프로파일링 | 없음 | 미실행 | Linux 전용, 별도 환경 필요 |
+| 36 | 배치 프로세스 감지 | 없음 | 미실행 | 테스트 파일 작성 필요 |
+| 37 | 배치 런타임 프로파일링 | 없음 | 미실행 | 테스트 파일 작성 필요 |
+| 38 | 배치 대시보드 | 없음 (UI) | 미실행 | 5개 페이지 브라우저 확인 필요 |
+
+### 10-3. 최종 빌드 상태
+
+| 항목 | 상태 | 기준 커밋 |
+|------|------|---------|
+| Go 빌드 (`go build ./...`) | **PASS** | `master` (Phase 38) |
+| Go 단위 테스트 (`go test ./...`) | **PASS** (30파일) | `master` |
+| Frontend 빌드 (`npx next build`) | **PASS** | `master` (Phase 38) |
+| Frontend Vitest | **PASS** (72케이스) | `master` |
 
 ---
 
