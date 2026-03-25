@@ -2082,6 +2082,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// ── Batch Process Monitoring API (Phase 36) ──────────────────────────────
 	registerBatchRoutes(mux)
 
+	// ── Batch Runtime Profiling API (Phase 37) ───────────────────────────────
+	registerBatchProfilingRoutes(mux)
+
 	// ── perf/eBPF Flamegraph API (Phase 35) ──────────────────────────────────
 	registerFlamegraphRoutes(mux, store)
 

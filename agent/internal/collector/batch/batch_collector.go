@@ -9,16 +9,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/batch/profiler"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
 )
+
+// ProfilingConfig controls runtime profiling for batch processes (Phase 37).
+type ProfilingConfig struct {
+	Enabled          bool `yaml:"enabled"`
+	EnableSQL        bool `yaml:"enable_sql"`
+	EnableMethod     bool `yaml:"enable_method"`
+	EnableStack      bool `yaml:"enable_stack"`
+	EnableFlamegraph bool `yaml:"enable_flamegraph"`
+	DurationSec      int  `yaml:"duration_sec"` // profiling sample duration, default 30
+	TopN             int  `yaml:"top_n"`         // top-N results, default 10
+}
 
 // Collector implements models.Collector for batch process auto-detection
 // and monitoring.
 type Collector struct {
-	lifecycle *LifecycleManager
-	procCol   *ProcessCollector
-	cfg       DetectorConfig
-	logger    *slog.Logger
+	lifecycle    *LifecycleManager
+	procCol      *ProcessCollector
+	cfg          DetectorConfig
+	profilingCfg ProfilingConfig
+	logger       *slog.Logger
 }
 
 // New returns a new Batch Collector.
@@ -52,10 +65,14 @@ func (c *Collector) RequiredPrivileges() []models.Privilege {
 }
 
 func (c *Collector) OutputSchemas() []string {
-	return []string{
+	schemas := []string{
 		"batch.execution.v1",
 		"batch.metrics.v1",
 	}
+	if c.profilingCfg.Enabled {
+		schemas = append(schemas, "batch.profile.v1")
+	}
+	return schemas
 }
 
 // AutoDetect checks whether any batch processes are running or manual
@@ -191,6 +208,11 @@ func (c *Collector) Collect(ctx context.Context, cfg models.CollectConfig) (*mod
 		})
 	}
 
+	// Step 5b: Profile running batch processes (Phase 37)
+	if c.profilingCfg.Enabled {
+		c.collectProfilingData(ctx, running, result)
+	}
+
 	// Completed batch execution records (last 100)
 	completed := c.lifecycle.GetCompleted(100)
 	if len(completed) > 0 {
@@ -244,6 +266,81 @@ func (c *Collector) Collect(ctx context.Context, cfg models.CollectConfig) (*mod
 
 	result.Duration = time.Since(start)
 	return result, nil
+}
+
+// collectProfilingData runs profiling on running batch processes and appends
+// the results to the CollectResult as "batch.profile.v1" items.
+func (c *Collector) collectProfilingData(ctx context.Context, running []*BatchExecution, result *models.CollectResult) {
+	if len(running) == 0 {
+		return
+	}
+
+	cfg := profiler.BatchProfileConfig{
+		EnableSQL:        c.profilingCfg.EnableSQL,
+		EnableMethod:     c.profilingCfg.EnableMethod,
+		EnableStack:      c.profilingCfg.EnableStack,
+		EnableFlamegraph: c.profilingCfg.EnableFlamegraph,
+		Duration:         c.profilingCfg.DurationSec,
+		TopN:             c.profilingCfg.TopN,
+	}
+
+	// Only profile processes that support application-level profiling
+	for _, exec := range running {
+		switch exec.Language {
+		case "java", "python", "go", "dotnet":
+			// Supported for profiling
+		default:
+			continue
+		}
+
+		c.logger.Info("profiling batch process",
+			"execution_id", exec.ExecutionID,
+			"pid", exec.PID,
+			"language", exec.Language,
+		)
+
+		target := &profiler.BatchTarget{
+			ExecutionID: exec.ExecutionID,
+			PID:         exec.PID,
+			Language:    exec.Language,
+			Command:     exec.Command,
+		}
+		profiles := profiler.ProfileBatch(ctx, target, cfg)
+		if len(profiles) == 0 {
+			continue
+		}
+
+		profileData := make([]map[string]interface{}, 0, len(profiles))
+		for _, p := range profiles {
+			entry := map[string]interface{}{
+				"execution_id": p.ExecutionID,
+				"pid":          p.PID,
+				"language":     p.Language,
+				"profile_type": p.ProfileType,
+				"duration_ms":  p.DurationMs,
+				"captured_at":  p.CapturedAt.Format(time.RFC3339),
+			}
+			if p.Data != nil {
+				entry["data"] = p.Data
+			}
+			if p.Error != "" {
+				entry["error"] = p.Error
+			}
+			profileData = append(profileData, entry)
+		}
+
+		result.Items = append(result.Items, models.CollectedItem{
+			SchemaName:    "batch.profile.v1",
+			SchemaVersion: "1.0.0",
+			MetricType:    "profile",
+			Category:      "it",
+			Data: map[string]interface{}{
+				"execution_id":  exec.ExecutionID,
+				"profile_count": len(profiles),
+				"profiles":      profileData,
+			},
+		})
+	}
 }
 
 // processExists checks if a PID is still running.
