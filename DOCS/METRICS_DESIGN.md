@@ -3,12 +3,13 @@
 > **문서 버전**: v2.2.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF 프로파일링 메트릭 추가: on-CPU·off-CPU·memory·플레임그래프 메타데이터)
+> **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF 프로파일링 메트릭 추가: on-CPU·off-CPU·memory·플레임그래프 메타데이터 / DIAGNOSTIC_ITEMS_CATALOG 참조 링크 추가)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
 > - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Collector, Fleet, CLI)
+> - [DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md) — 진단 항목 91건 + 상시 메트릭 35종 카탈로그 (메트릭 ID 역방향 참조)
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
 > - [LOCAL_SETUP.md](./LOCAL_SETUP.md) — 로컬 개발 환경 구성
 > - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석
