@@ -1,7 +1,7 @@
 # Phase 7': E2E 통합 검증 재설계
 
-> **버전**: v1.1.0
-> **날짜**: 2026-03-25 (Phase 30 AGPL-free 인프라 전환 반영: Tempo→Jaeger, Loki→stdout/file, MinIO→StorageBackend)
+> **버전**: v1.2.0
+> **날짜**: 2026-03-26 (Phase 38 배치 대시보드 + Phase 31-38 신규 시나리오 추가)
 > **대상**: AITOP AI Service Monitoring Platform
 
 ---
@@ -229,6 +229,120 @@ make e2e-down
 
 ---
 
+## 5-1. Phase 31-38 신규 E2E 시나리오
+
+> **추가**: 2026-03-26 — Phase 31~38 신규 기능 E2E 검증
+
+### 7'-5: 진단 모드 E2E (Phase 31)
+
+**목표**: `--mode=diagnose` 실행 → Evidence 수집 → Collection Server 전송 → API 조회 전체 흐름 검증
+
+```
+검증 체크리스트:
+□ Agent를 --mode=diagnose로 실행
+□ Evidence JSON이 로컬 스토리지에 저장됨
+□ Collection Server에 Evidence 업로드 (POST /api/v1/evidence 또는 동등 엔드포인트)
+□ GET /api/v1/diagnostics 에서 Evidence 기반 진단 보고서 조회
+□ /diagnostics 페이지에서 보고서 렌더링
+□ 감사 로그(audit.log)에 진단 작업 기록
+```
+
+**실행 명령어**:
+
+```bash
+# Agent diagnose 모드
+cd /c/workspace/aiservice-monitoring/agent
+go run ./cmd/agent --mode=diagnose \
+  --server=http://localhost:8080 \
+  --token=$TOKEN
+
+# Collection Server에서 결과 확인
+curl -s http://localhost:8080/api/v1/diagnostics \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 7'-6: Attach 프로파일링 E2E (Phase 34)
+
+**목표**: 실행 중 프로세스에 Attach → 프로파일 수집 → API 저장 → UI 플레임그래프 표시 전체 흐름 검증
+
+```
+검증 체크리스트:
+□ 대상 프로세스(Java/Python/Go) 실행 중
+□ Agent --mode=attach --pid=<PID> 실행
+□ 프로파일 데이터 수집 (folded stack 형식)
+□ POST /api/v1/profiling 에 프로파일 업로드
+□ GET /api/v1/profiling 에서 프로파일 목록 조회 (방금 수집한 항목 포함)
+□ /profiling 페이지에서 목록 표시
+□ /profiling/{profileId} 에서 플레임그래프 SVG 렌더링
+```
+
+**실행 명령어**:
+
+```bash
+# 대상 프로세스 PID 확인
+PID=$(pgrep -f "java -jar" | head -1)
+
+# Attach 프로파일링
+cd /c/workspace/aiservice-monitoring/agent
+go run ./cmd/agent --mode=attach \
+  --pid=$PID \
+  --runtime=java \
+  --server=http://localhost:8080 \
+  --token=$TOKEN
+
+# 프로파일 목록 확인
+curl -s http://localhost:8080/api/v1/profiling \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+### 7'-7: 배치 모니터링 E2E (Phase 36-38)
+
+**목표**: 배치 프로세스 자동 감지 → 런타임 프로파일링 → 대시보드 실시간 표시 전체 흐름 검증
+
+```
+검증 체크리스트:
+□ Spring Batch 또는 Airflow 배치 작업 실행
+□ Agent 배치 감지기(detector)가 프로세스 자동 식별
+□ 배치 메트릭 수집 (start time, step count, exit status)
+□ Collection Server API에 배치 데이터 전송
+□ GET /api/v1/batch 에서 배치 작업 목록 조회
+□ /batch 대시보드 페이지 — 실행 중 배치 카드 표시
+□ /batch/{name} 상세 페이지 — 스텝별 진행 상태
+□ /batch/executions/{id} — 실행 이력 상세
+□ /batch/alerts — 설정된 알림 규칙 목록
+□ /batch/xlog — XLog 조회
+□ 배치 런타임 Attach 후 프로파일 → /profiling 에 표시
+```
+
+**실행 명령어**:
+
+```bash
+# Docker E2E 스택 실행 후
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  | python -c "import sys,json; print(json.load(sys.stdin).get('token',''))")
+
+# 배치 작업 목록 확인
+curl -s http://localhost:8080/api/v1/batch \
+  -H "Authorization: Bearer $TOKEN"
+
+# 배치 실행 이력 확인
+curl -s http://localhost:8080/api/v1/batch/executions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**성공 기준**:
+
+| 검증 항목 | 성공 기준 |
+|---------|---------|
+| 배치 감지 | 실행 중 배치 프로세스가 API에서 조회됨 |
+| 대시보드 | /batch 5개 페이지 오류 없이 렌더링 |
+| 알림 규칙 | /batch/alerts 에서 규칙 목록 표시 |
+| 프로파일링 | Attach 후 /profiling 에 배치 프로파일 등록 |
+
+---
+
 ## 6. 연관 파일
 
 | 파일 | 용도 |
@@ -240,6 +354,16 @@ make e2e-down
 | `locust/locustfile.py` | 부하 테스트 시나리오 |
 | `locust/locust.conf` | Locust 설정 |
 | `infra/docker/docker-compose.test.yaml` | Phase 17 기반 (참고) |
+
+---
+
+## 7. Phase 31-38 E2E 성공 기준
+
+| 시나리오 | 성공 기준 | 측정 방법 |
+|---------|---------|---------|
+| 7'-5: 진단 모드 | Evidence JSON 생성 + API 조회 성공 | curl + 파일 확인 |
+| 7'-6: Attach 프로파일링 | 플레임그래프 SVG 렌더링 | /profiling/{id} 브라우저 확인 |
+| 7'-7: 배치 모니터링 | 5개 배치 페이지 렌더링 + API 200 | 브라우저 + curl |
 
 ---
 
