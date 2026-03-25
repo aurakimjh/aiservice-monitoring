@@ -46,6 +46,24 @@ collectors:
     enabled: "false"
     prometheus_url: "http://localhost:9090"
 
+  profiling:
+    perf_ebpf:
+      enabled: "auto"                 # auto-detect Linux + perf + capabilities
+      sampling_frequency: 99          # Hz (default 99, avoid power-of-2 for accuracy)
+      duration: 30                    # seconds per profiling run
+      target: "all"                   # "all" or "pid:12345"
+      profile_types:
+        - cpu
+        - offcpu
+        - memory
+      stack_depth: 127
+      symbol_resolvers:
+        java: "perf-map-agent"
+        python: "py-spy"
+        nodejs: "perf-basic-prof"
+        go: "dwarf"
+        dotnet: "perf-map"
+
 remote_shell:
   enabled: true
   allowed_roles:

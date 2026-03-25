@@ -1330,3 +1330,39 @@ export interface MarketplaceItem {
   createdAt: number;
   featured: boolean;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// System Profiling Types (Phase 35 — perf/eBPF)
+// ═══════════════════════════════════════════════════════════════
+
+export type SystemProfileType = 'cpu' | 'offcpu' | 'memory';
+
+export interface SystemProfile {
+  profile_id: string;
+  agent_id: string;
+  hostname: string;
+  profile_type: SystemProfileType;
+  target: string; // 'all' or 'pid:12345'
+  sampling_frequency: number;
+  duration_sec: number;
+  total_samples: number;
+  stack_depth: number;
+  size_bytes: number;
+  captured_at: string;
+  symbol_stats: {
+    resolved: number;
+    unknown: number;
+    jit: number;
+  };
+}
+
+export interface SystemFlamegraphData {
+  profileId: string;
+  profileType: 'cpu' | 'offcpu' | 'memory' | 'mixed';
+  agentId: string;
+  hostname: string;
+  totalSamples: number;
+  durationSec: number;
+  capturedAt: string;
+  root: FlameGraphNode;
+}

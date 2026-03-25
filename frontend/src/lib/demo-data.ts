@@ -1973,3 +1973,216 @@ export function getMarketplaceItems(): import('@/types/monitoring').MarketplaceI
     { id: 'mp-08', name: 'Training Monitor Notebook', description: 'Interactive notebook for tracking fine-tuning jobs with loss curves', type: 'notebook', author: 'ML Team', downloads: 290, rating: 4.5, tags: ['training', 'fine-tuning', 'notebook'], createdAt: now - 86400000 * 3, featured: false },
   ];
 }
+
+// ── System Profiling (Phase 35 — perf/eBPF) ─────────────────────────────
+
+export function getSystemProfilingProfiles(): import('@/types/monitoring').SystemProfile[] {
+  const now = Date.now();
+  return [
+    { profile_id: 'sys-prof-001', agent_id: 'agent-01', hostname: 'prod-api-01', profile_type: 'cpu', target: 'all', sampling_frequency: 99, duration_sec: 30, total_samples: 29700, stack_depth: 127, size_bytes: 384000, captured_at: new Date(now - 7200000).toISOString(), symbol_stats: { resolved: 4250, unknown: 180, jit: 0 } },
+    { profile_id: 'sys-prof-002', agent_id: 'agent-01', hostname: 'prod-api-01', profile_type: 'offcpu', target: 'all', sampling_frequency: 0, duration_sec: 30, total_samples: 15800, stack_depth: 127, size_bytes: 256000, captured_at: new Date(now - 7200000).toISOString(), symbol_stats: { resolved: 2100, unknown: 320, jit: 0 } },
+    { profile_id: 'sys-prof-003', agent_id: 'agent-02', hostname: 'prod-gpu-01', profile_type: 'cpu', target: 'pid:12345', sampling_frequency: 99, duration_sec: 60, total_samples: 59400, stack_depth: 127, size_bytes: 720000, captured_at: new Date(now - 3600000).toISOString(), symbol_stats: { resolved: 8900, unknown: 420, jit: 1200 } },
+    { profile_id: 'sys-prof-004', agent_id: 'agent-03', hostname: 'prod-gpu-02', profile_type: 'memory', target: 'pid:54321', sampling_frequency: 0, duration_sec: 30, total_samples: 8200, stack_depth: 64, size_bytes: 128000, captured_at: new Date(now - 1800000).toISOString(), symbol_stats: { resolved: 1500, unknown: 90, jit: 350 } },
+    { profile_id: 'sys-prof-005', agent_id: 'agent-01', hostname: 'prod-api-01', profile_type: 'cpu', target: 'all', sampling_frequency: 99, duration_sec: 30, total_samples: 31200, stack_depth: 127, size_bytes: 398000, captured_at: new Date(now - 900000).toISOString(), symbol_stats: { resolved: 4400, unknown: 150, jit: 0 } },
+    { profile_id: 'sys-prof-006', agent_id: 'agent-02', hostname: 'prod-gpu-01', profile_type: 'offcpu', target: 'all', sampling_frequency: 0, duration_sec: 60, total_samples: 42000, stack_depth: 127, size_bytes: 512000, captured_at: new Date(now - 600000).toISOString(), symbol_stats: { resolved: 5200, unknown: 800, jit: 600 } },
+  ];
+}
+
+export function getSystemFlamegraphData(profileId: string, type: string = 'cpu'): import('@/types/monitoring').SystemFlamegraphData {
+  const now = Date.now();
+  const buildTree = (pt: string): import('@/types/monitoring').FlameGraphNode => {
+    if (pt === 'offcpu') {
+      return {
+        name: 'root', fullName: 'root', value: 102300, selfValue: 0, children: [
+          { name: 'java', fullName: 'java', value: 69300, selfValue: 0, children: [
+            { name: 'java_start', fullName: 'java;java_start', value: 69300, selfValue: 0, children: [
+              { name: 'main', fullName: 'java;java_start;main', value: 69300, selfValue: 0, children: [
+                { name: 'HttpServer.handle', fullName: 'java;...;HttpServer.handle', value: 60500, selfValue: 0, children: [
+                  { name: 'OrderService.createOrder', fullName: 'java;...;OrderService.createOrder', value: 42000, selfValue: 0, children: [
+                    { name: 'DB.query', fullName: 'java;...;DB.query', value: 42000, selfValue: 0, children: [
+                      { name: 'io_schedule', fullName: 'java;...;io_schedule', value: 42000, selfValue: 42000, children: [] },
+                    ] },
+                  ] },
+                  { name: 'UserService.authenticate', fullName: 'java;...;UserService.authenticate', value: 18500, selfValue: 0, children: [
+                    { name: 'Redis.get', fullName: 'java;...;Redis.get', value: 18500, selfValue: 0, children: [
+                      { name: 'io_schedule', fullName: 'java;...;io_schedule', value: 18500, selfValue: 18500, children: [] },
+                    ] },
+                  ] },
+                ] },
+                { name: 'GCThread.run', fullName: 'java;...;GCThread.run', value: 8800, selfValue: 0, children: [
+                  { name: 'futex_wait', fullName: 'java;...;futex_wait', value: 8800, selfValue: 8800, children: [] },
+                ] },
+              ] },
+            ] },
+          ] },
+          { name: 'python', fullName: 'python', value: 12400, selfValue: 0, children: [
+            { name: 'app.main', fullName: 'python;...;app.main', value: 12400, selfValue: 0, children: [
+              { name: 'handler.process', fullName: 'python;...;handler.process', value: 12400, selfValue: 0, children: [
+                { name: 'db.query', fullName: 'python;...;db.query', value: 12400, selfValue: 0, children: [
+                  { name: 'io_schedule', fullName: 'python;...;io_schedule', value: 12400, selfValue: 12400, children: [] },
+                ] },
+              ] },
+            ] },
+          ] },
+          { name: 'go', fullName: 'go', value: 9800, selfValue: 0, children: [
+            { name: 'net/http.(*Server).Serve', fullName: 'go;...;net/http.(*Server).Serve', value: 9800, selfValue: 0, children: [
+              { name: 'database/sql.(*DB).QueryContext', fullName: 'go;...;database/sql.(*DB).QueryContext', value: 9800, selfValue: 0, children: [
+                { name: 'io_schedule', fullName: 'go;...;io_schedule', value: 9800, selfValue: 9800, children: [] },
+              ] },
+            ] },
+          ] },
+          { name: 'node', fullName: 'node', value: 7600, selfValue: 0, children: [
+            { name: 'requestHandler', fullName: 'node;...;requestHandler', value: 7600, selfValue: 0, children: [
+              { name: 'pool.query', fullName: 'node;...;pool.query', value: 7600, selfValue: 0, children: [
+                { name: 'io_schedule', fullName: 'node;...;io_schedule', value: 7600, selfValue: 7600, children: [] },
+              ] },
+            ] },
+          ] },
+          { name: 'kthread', fullName: 'kthread', value: 3200, selfValue: 0, children: [
+            { name: 'io_schedule', fullName: 'kthread;...;io_schedule', value: 3200, selfValue: 3200, children: [] },
+          ] },
+        ],
+      };
+    }
+    if (pt === 'memory') {
+      return {
+        name: 'root', fullName: 'root', value: 33554432, selfValue: 0, children: [
+          { name: 'java', fullName: 'java', value: 3670016, selfValue: 0, children: [
+            { name: 'HttpServer.handle', fullName: 'java;...;HttpServer.handle', value: 3670016, selfValue: 0, children: [
+              { name: 'OrderService.createOrder', fullName: 'java;...;OrderService.createOrder', value: 2621440, selfValue: 0, children: [
+                { name: 'ByteBuffer.allocate', fullName: 'java;...;ByteBuffer.allocate', value: 2097152, selfValue: 2097152, children: [] },
+                { name: 'Unsafe.allocateMemory', fullName: 'java;...;Unsafe.allocateMemory', value: 524288, selfValue: 524288, children: [] },
+              ] },
+              { name: 'ResponseBuilder.toJSON', fullName: 'java;...;ResponseBuilder.toJSON', value: 1048576, selfValue: 1048576, children: [] },
+            ] },
+          ] },
+          { name: 'python', fullName: 'python', value: 12582912, selfValue: 0, children: [
+            { name: 'handler.process', fullName: 'python;...;handler.process', value: 12582912, selfValue: 0, children: [
+              { name: 'pandas.DataFrame.from_records', fullName: 'python;...;pandas.DataFrame.from_records', value: 8388608, selfValue: 8388608, children: [] },
+              { name: 'numpy.array', fullName: 'python;...;numpy.array', value: 4194304, selfValue: 4194304, children: [] },
+            ] },
+          ] },
+          { name: 'go', fullName: 'go', value: 393216, selfValue: 0, children: [
+            { name: 'net/http.(*conn).serve', fullName: 'go;...;net/http.(*conn).serve', value: 393216, selfValue: 0, children: [
+              { name: 'encoding/json.Marshal', fullName: 'go;...;encoding/json.Marshal', value: 262144, selfValue: 262144, children: [] },
+              { name: 'bytes.(*Buffer).grow', fullName: 'go;...;bytes.(*Buffer).grow', value: 131072, selfValue: 131072, children: [] },
+            ] },
+          ] },
+          { name: 'node', fullName: 'node', value: 1048576, selfValue: 0, children: [
+            { name: 'Buffer.alloc', fullName: 'node;...;Buffer.alloc', value: 1048576, selfValue: 1048576, children: [] },
+          ] },
+          { name: 'kthread', fullName: 'kthread', value: 16777216, selfValue: 0, children: [
+            { name: 'alloc_pages', fullName: 'kthread;alloc_pages', value: 16777216, selfValue: 16777216, children: [] },
+          ] },
+        ],
+      };
+    }
+    // default: cpu
+    return {
+      name: 'root', fullName: 'root', value: 534, selfValue: 0, children: [
+        { name: 'java', fullName: 'java', value: 218, selfValue: 0, children: [
+          { name: 'HttpServer.handle', fullName: 'java;...;HttpServer.handle', value: 196, selfValue: 0, children: [
+            { name: 'UserService.authenticate', fullName: 'java;...;UserService.authenticate', value: 73, selfValue: 0, children: [
+              { name: 'BCrypt.hashpw', fullName: 'java;...;BCrypt.hashpw', value: 65, selfValue: 65, children: [] },
+              { name: 'Redis.get', fullName: 'java;...;Redis.get', value: 8, selfValue: 8, children: [] },
+            ] },
+            { name: 'OrderService.createOrder', fullName: 'java;...;OrderService.createOrder', value: 85, selfValue: 0, children: [
+              { name: 'DB.query', fullName: 'java;...;DB.query', value: 70, selfValue: 0, children: [
+                { name: 'SocketInputStream.read', fullName: 'java;...;SocketInputStream.read', value: 42, selfValue: 42, children: [] },
+                { name: 'ResultSetParser.parse', fullName: 'java;...;ResultSetParser.parse', value: 28, selfValue: 28, children: [] },
+              ] },
+              { name: 'Validator.validate', fullName: 'java;...;Validator.validate', value: 15, selfValue: 15, children: [] },
+            ] },
+            { name: 'ResponseBuilder.toJSON', fullName: 'java;...;ResponseBuilder.toJSON', value: 38, selfValue: 0, children: [
+              { name: 'Jackson.serialize', fullName: 'java;...;Jackson.serialize', value: 38, selfValue: 38, children: [] },
+            ] },
+          ] },
+          { name: 'GCThread.run', fullName: 'java;GCThread.run', value: 22, selfValue: 0, children: [
+            { name: 'PSPromotionManager.drain', fullName: 'java;...;PSPromotionManager.drain', value: 22, selfValue: 22, children: [] },
+          ] },
+        ] },
+        { name: 'python', fullName: 'python', value: 85, selfValue: 0, children: [
+          { name: 'httpserver.serve', fullName: 'python;...;httpserver.serve', value: 73, selfValue: 0, children: [
+            { name: 'handler.process', fullName: 'python;...;handler.process', value: 73, selfValue: 0, children: [
+              { name: 'transformer.predict', fullName: 'python;...;transformer.predict', value: 55, selfValue: 55, children: [] },
+              { name: 'db.query', fullName: 'python;...;db.query', value: 18, selfValue: 18, children: [] },
+            ] },
+          ] },
+          { name: 'gc.collect', fullName: 'python;...;gc.collect', value: 12, selfValue: 12, children: [] },
+        ] },
+        { name: 'go', fullName: 'go', value: 93, selfValue: 0, children: [
+          { name: 'net/http.(*Server).Serve', fullName: 'go;...;net/http.(*Server).Serve', value: 67, selfValue: 0, children: [
+            { name: 'main.handleAPI', fullName: 'go;...;main.handleAPI', value: 67, selfValue: 0, children: [
+              { name: 'encoding/json.Unmarshal', fullName: 'go;...;encoding/json.Unmarshal', value: 35, selfValue: 35, children: [] },
+              { name: 'database/sql.(*DB).QueryContext', fullName: 'go;...;database/sql.(*DB).QueryContext', value: 20, selfValue: 20, children: [] },
+              { name: 'crypto/hmac.Equal', fullName: 'go;...;crypto/hmac.Equal', value: 12, selfValue: 12, children: [] },
+            ] },
+          ] },
+          { name: 'runtime.gcBgMarkWorker', fullName: 'go;runtime.gcBgMarkWorker', value: 18, selfValue: 18, children: [] },
+          { name: 'runtime.mcall', fullName: 'go;runtime.mcall', value: 8, selfValue: 8, children: [] },
+        ] },
+        { name: 'node', fullName: 'node', value: 50, selfValue: 0, children: [
+          { name: 'requestHandler', fullName: 'node;...;requestHandler', value: 40, selfValue: 0, children: [
+            { name: 'JSON.parse', fullName: 'node;...;JSON.parse', value: 25, selfValue: 25, children: [] },
+            { name: 'pool.query', fullName: 'node;...;pool.query', value: 15, selfValue: 15, children: [] },
+          ] },
+          { name: 'epoll_wait', fullName: 'node;...;epoll_wait', value: 10, selfValue: 10, children: [] },
+        ] },
+        { name: 'swapper', fullName: 'swapper', value: 45, selfValue: 0, children: [
+          { name: 'do_idle', fullName: 'swapper;...;do_idle', value: 45, selfValue: 0, children: [
+            { name: 'intel_idle', fullName: 'swapper;...;intel_idle', value: 45, selfValue: 45, children: [] },
+          ] },
+        ] },
+        { name: 'kthread', fullName: 'kthread', value: 43, selfValue: 0, children: [
+          { name: 'worker_thread', fullName: 'kthread;worker_thread', value: 43, selfValue: 0, children: [
+            { name: 'io_schedule', fullName: 'kthread;...;io_schedule', value: 3, selfValue: 3, children: [] },
+            { name: 'flush_to_ldisc', fullName: 'kthread;...;flush_to_ldisc', value: 40, selfValue: 40, children: [] },
+          ] },
+        ] },
+      ],
+    };
+  };
+
+  return {
+    profileId,
+    profileType: type as 'cpu' | 'offcpu' | 'memory' | 'mixed',
+    agentId: 'agent-01',
+    hostname: 'prod-api-01',
+    totalSamples: type === 'memory' ? 33554432 : type === 'offcpu' ? 102300 : 534,
+    durationSec: 30,
+    capturedAt: new Date(now - 3600000).toISOString(),
+    root: buildTree(type),
+  };
+}
+
+export function getSystemFlamegraphDiffData(): import('@/types/monitoring').FlameGraphDiff {
+  return {
+    base_profile_id: 'sys-prof-001',
+    target_profile_id: 'sys-prof-005',
+    root: {
+      name: 'root', fullName: 'root', baseValue: 534, targetValue: 580, delta: 46, children: [
+        { name: 'java', fullName: 'java', baseValue: 218, targetValue: 252, delta: 34, children: [
+          { name: 'HttpServer.handle', fullName: 'java;...;HttpServer.handle', baseValue: 196, targetValue: 235, delta: 39, children: [
+            { name: 'UserService.authenticate', fullName: 'java;...;UserService.authenticate', baseValue: 73, targetValue: 60, delta: -13, children: [] },
+            { name: 'OrderService.createOrder', fullName: 'java;...;OrderService.createOrder', baseValue: 85, targetValue: 120, delta: 35, children: [
+              { name: 'CacheManager.invalidate', fullName: 'java;...;CacheManager.invalidate', baseValue: 0, targetValue: 18, delta: 18, children: [] },
+            ] },
+            { name: 'ResponseBuilder.toJSON', fullName: 'java;...;ResponseBuilder.toJSON', baseValue: 38, targetValue: 55, delta: 17, children: [] },
+          ] },
+          { name: 'GCThread.run', fullName: 'java;GCThread.run', baseValue: 22, targetValue: 17, delta: -5, children: [] },
+        ] },
+        { name: 'python', fullName: 'python', baseValue: 85, targetValue: 92, delta: 7, children: [
+          { name: 'transformer.predict', fullName: 'python;...;transformer.predict', baseValue: 55, targetValue: 62, delta: 7, children: [] },
+          { name: 'db.query', fullName: 'python;...;db.query', baseValue: 18, targetValue: 22, delta: 4, children: [] },
+        ] },
+        { name: 'go', fullName: 'go', baseValue: 93, targetValue: 88, delta: -5, children: [
+          { name: 'encoding/json.Unmarshal', fullName: 'go;...;encoding/json.Unmarshal', baseValue: 35, targetValue: 28, delta: -7, children: [] },
+          { name: 'database/sql.(*DB).QueryContext', fullName: 'go;...;database/sql.(*DB).QueryContext', baseValue: 20, targetValue: 25, delta: 5, children: [] },
+        ] },
+        { name: 'swapper', fullName: 'swapper', baseValue: 45, targetValue: 38, delta: -7, children: [] },
+        { name: 'kthread', fullName: 'kthread', baseValue: 43, targetValue: 48, delta: 5, children: [] },
+        { name: 'node', fullName: 'node', baseValue: 50, targetValue: 62, delta: 12, children: [] },
+      ],
+    },
+  };
+}

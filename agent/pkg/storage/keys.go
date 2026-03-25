@@ -32,3 +32,10 @@ func ProfileKey(agentID, serviceName, profileID string, startedAt time.Time) str
 	date := startedAt.Format("2006-01-02")
 	return path.Join("profiles", agentID, date, serviceName, profileID+".pb.gz")
 }
+
+// PerfProfileKey generates a storage key for a perf/eBPF folded stack.
+// Format: perf-profiles/{agent_id}/{date}/{profile_type}/{profile_id}.folded.gz
+func PerfProfileKey(agentID, profileType, profileID string, capturedAt time.Time) string {
+	date := capturedAt.Format("2006-01-02")
+	return path.Join("perf-profiles", agentID, date, profileType, profileID+".folded.gz")
+}

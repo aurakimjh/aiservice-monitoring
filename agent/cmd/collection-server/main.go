@@ -2069,6 +2069,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	attachReg := newAttachRegistry()
 	registerAttachRoutes(mux, attachReg)
 
+	// ── perf/eBPF Flamegraph API (Phase 35) ──────────────────────────────────
+	registerFlamegraphRoutes(mux, store)
+
 	// ── Evidence API (Phase 31-2d/31-3a) ─────────────────────────────────────
 	// In-memory store for uploaded evidence bundles (keyed by run_id).
 	evidenceStore := newEvidenceStore()
