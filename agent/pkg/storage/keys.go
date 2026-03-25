@@ -39,3 +39,9 @@ func PerfProfileKey(agentID, profileType, profileID string, capturedAt time.Time
 	date := capturedAt.Format("2006-01-02")
 	return path.Join("perf-profiles", agentID, date, profileType, profileID+".folded.gz")
 }
+
+// PluginKey generates a storage key for a plugin archive.
+// Format: plugins/{plugin_name}/{version}/{plugin_name}-{version}.zip
+func PluginKey(pluginName, version string) string {
+	return path.Join("plugins", pluginName, version, pluginName+"-"+version+".zip")
+}

@@ -1366,3 +1366,64 @@ export interface SystemFlamegraphData {
   capturedAt: string;
   root: FlameGraphNode;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Central Plugin Deployment Types (Phase 33)
+// ═══════════════════════════════════════════════════════════════
+
+export interface PluginRegistryItem {
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  categories: string[];
+  platforms: string[];
+  uploaded_at: string;
+  size_bytes: number;
+  checksum: string;
+  deploy_count: number;
+  disabled: boolean;
+  agent_summary: {
+    total: number;
+    installed: number;
+    failed: number;
+    pending: number;
+  };
+}
+
+export interface PluginDeployHistory {
+  deploy_id: string;
+  plugin_name: string;
+  version: string;
+  strategy: 'immediate' | 'staged' | 'scheduled';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'rolled_back';
+  started_at: string;
+  completed_at?: string;
+  total_agents: number;
+  success_count: number;
+  fail_count: number;
+}
+
+export interface PluginAgentStatus {
+  agent_id: string;
+  hostname: string;
+  version: string;
+  status: 'installed' | 'failed' | 'pending' | 'rollback';
+  installed_at?: string;
+  error?: string;
+}
+
+export type DeployStrategy = 'immediate' | 'staged' | 'scheduled';
+
+export interface DeployRequest {
+  target: {
+    type: 'group' | 'tag' | 'agents';
+    value: string | string[];
+  };
+  strategy: DeployStrategy;
+  staged_config?: {
+    canary_count: number;
+    stages: number[];
+  };
+  scheduled_at?: string;
+}

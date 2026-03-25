@@ -2065,6 +2065,16 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 		mux.HandleFunc("GET /api/v1/events", wsHub.SSEHandler())
 	}
 
+	// ── Central Plugin Deployment API (Phase 33) ────────────────────────────
+	pluginReg := newPluginRegistry()
+	registerPluginRoutes(mux, pluginReg, f)
+	// Background tickers for scheduled/staged deploys — stopped when the
+	// server's context is cancelled (process exit via signal).
+	pluginStopCh := make(chan struct{})
+	pluginReg.startScheduledDeployTicker(pluginStopCh)
+	pluginReg.startStagedDeployTicker(pluginStopCh)
+	// pluginStopCh is closed on server shutdown (see main).
+
 	// ── Runtime Attach API (Phase 34) ─────────────────────────────────────────
 	attachReg := newAttachRegistry()
 	registerAttachRoutes(mux, attachReg)
