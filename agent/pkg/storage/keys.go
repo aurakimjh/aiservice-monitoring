@@ -45,3 +45,10 @@ func PerfProfileKey(agentID, profileType, profileID string, capturedAt time.Time
 func PluginKey(pluginName, version string) string {
 	return path.Join("plugins", pluginName, version, pluginName+"-"+version+".zip")
 }
+
+// BatchExecutionKey generates a storage key for a batch execution record.
+// Format: batch/{agent_id}/{date}/{job_name}/{execution_id}.json.gz
+func BatchExecutionKey(agentID, jobName, executionID string, startedAt time.Time) string {
+	date := startedAt.Format("2006-01-02")
+	return path.Join("batch", agentID, date, jobName, executionID+".json.gz")
+}

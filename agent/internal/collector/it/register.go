@@ -2,6 +2,7 @@
 package it
 
 import (
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/batch"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/db"
 	oscol "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/os"
 	perfebpf "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/perfebpf"
@@ -19,4 +20,5 @@ func RegisterAll(reg *core.Registry) {
 	reg.Register(db.New())
 	reg.Register(profiling.New())
 	reg.Register(perfebpf.New())
+	reg.Register(batch.New())
 }

@@ -46,6 +46,21 @@ collectors:
     enabled: "false"
     prometheus_url: "http://localhost:9090"
 
+  batch:
+    enabled: "auto"
+    poll_interval: 5s
+    batch_processes: []
+    # - name: "daily-order-batch"
+    #   pattern: "OrderBatchJob"
+    #   language: "java"
+    spring_batch:
+      enabled: "auto"
+      # db_url: "postgresql://localhost:5432/app?sslmode=disable"
+    airflow:
+      enabled: "auto"
+      # base_url: "http://localhost:8080"
+      # token: ""
+
   profiling:
     perf_ebpf:
       enabled: "auto"                 # auto-detect Linux + perf + capabilities

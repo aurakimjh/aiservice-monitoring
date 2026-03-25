@@ -2079,6 +2079,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	attachReg := newAttachRegistry()
 	registerAttachRoutes(mux, attachReg)
 
+	// ── Batch Process Monitoring API (Phase 36) ──────────────────────────────
+	registerBatchRoutes(mux)
+
 	// ── perf/eBPF Flamegraph API (Phase 35) ──────────────────────────────────
 	registerFlamegraphRoutes(mux, store)
 
