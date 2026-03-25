@@ -2065,6 +2065,10 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 		mux.HandleFunc("GET /api/v1/events", wsHub.SSEHandler())
 	}
 
+	// ── Runtime Attach API (Phase 34) ─────────────────────────────────────────
+	attachReg := newAttachRegistry()
+	registerAttachRoutes(mux, attachReg)
+
 	// ── Evidence API (Phase 31-2d/31-3a) ─────────────────────────────────────
 	// In-memory store for uploaded evidence bundles (keyed by run_id).
 	evidenceStore := newEvidenceStore()
