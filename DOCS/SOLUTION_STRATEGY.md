@@ -1,6 +1,6 @@
 # AITOP Solution Strategy — AI 서비스 모니터링의 글로벌 표준
 
-> **문서 버전**: v3.1.0
+> **문서 버전**: v3.3.0
 > **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-26 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
 > **작성자**: Aura Kim — Architect & Lead Developer
 > **기밀 등급**: Internal Confidential
@@ -437,6 +437,33 @@ AI 모니터링 경쟁 환경 (2026)
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
+### 3.6 경쟁사 대비 AITOP 기능 갭 분석 (2026-03-26)
+
+> 경쟁사(Datadog · Dynatrace · New Relic) 기능셋과 AITOP 현황을 대조한 결과,
+> 출시 전 반드시 보완해야 할 **Critical** 항목 6개와 출시 후 추가할 **Important** 항목 6개를 도출했다.
+
+#### 출시 전 반영 필수 (Critical) — Phase 40 대상
+
+| # | 기능 | 경쟁사 현황 | AITOP 현황 | 비고 |
+|---|------|-----------|-----------|------|
+| 40-1 | **RUM (Real User Monitoring)** | Datadog/Dynatrace/New Relic 모두 핵심 기능 | ❌ 미구현 | 브라우저/모바일 사용자 경험 측정 (Core Web Vitals, Session Replay) |
+| 40-2 | **SRE Golden Signals 대시보드** | 모든 범용 APM 기본 제공 | ❌ 미구현 | Latency/Traffic/Errors/Saturation 4개 골든 시그널 통합 뷰 |
+| 40-3 | **Python 3.13 Free-Threaded (No-GIL) 모니터링** | Datadog 베타 | ❌ 미구현 | GIL 비활성화 시 멀티스레드 실제 병렬성·경합 메트릭 |
+| 40-4 | **.NET AOT/Native AOT 모니터링** | Dynatrace 제한 지원 | ❌ 미구현 | 네이티브 컴파일 앱의 제한된 프로파일링 대응 (reflection 불가 대체) |
+| 40-5 | **Go 1.24 Scheduler Latency 메트릭** | 미지원 (차별화 기회) | ❌ 미구현 | `runtime/metrics`의 `/sched/latencies:seconds` 히스토그램 수집 |
+| 40-6 | **Database Monitoring (쿼리 수준)** | Datadog DBM, Dynatrace DB 분석 핵심 기능 | ❌ 미구현 | 개별 쿼리 실행 계획, 대기 이벤트, 락 분석 (PostgreSQL/MySQL) |
+
+#### 출시 후 반영 (Important)
+
+| # | 기능 | 경쟁사 현황 | 설명 |
+|---|------|-----------|------|
+| I-1 | **Synthetic Monitoring 고도화** | Datadog Synthetics, Dynatrace Synthetic | 전 세계 엔드포인트 가용성 프로브 (다중 PoP) |
+| I-2 | **Network Performance Monitoring** | Datadog NPM, Dynatrace Network | TCP 재전송, DNS 지연, 패킷 손실 eBPF 기반 수집 |
+| I-3 | **Security Observability** | Datadog CSM, Dynatrace ASPM | 런타임 위협 감지, CVE 취약점 스캐닝, SBOM 연동 |
+| I-4 | **DORA Metrics** | Datadog DORA, Dynatrace DORA | 배포 빈도, 변경 실패율, 평균 복구 시간, 변경 리드 타임 |
+| I-5 | **Rust 런타임 모니터링** | 미지원 (AITOP 차별화 기회) | Tokio 스케줄러 메트릭, async task 추적, `tokio-metrics` 연동 |
+| I-6 | **Error Tracking (전용)** | Sentry 수준 에러 그루핑 | 스택 트레이스 중복 제거, 이슈 라이프사이클, 릴리즈별 회귀 탐지 |
+
 ---
 
 ## 4. 제품 전략
@@ -789,6 +816,57 @@ AITOP Agent (단일 Go 바이너리, ~15MB)
   │                                                                 │
   └─────────────────────────────────────────────────────────────────┘
 ```
+
+### 5.3-B 언어별 성능 영향 지표 — 현황 및 보완 목표
+
+> 현재 AITOP은 JVM/CLR/Node.js/Python/Go 런타임을 수집하지만 아래 심화 지표가 누락되어 있다.
+> Phase 40에서 우선순위 순으로 구현한다.
+
+#### Python
+
+| 지표 | 현황 | 보완 (Phase 40) | 버전 |
+|------|:----:|:---------------:|------|
+| GIL 경합률 (waiters/acquire) | ❌ | `sys.monitoring` + `gilstate.check_enabled` | 3.12 이하 |
+| Free-Threaded 스레드 활용률 | ❌ | `_Py_GetThreadStateUnchecked` 기반 메트릭 | 3.13+ |
+| asyncio Task 큐 깊이 | ❌ | `asyncio.get_event_loop().runners` 폴링 | 3.10+ |
+| GC Generation별 수집 시간 | ⚠️ 부분 | `gc.get_stats()` 완전 노출 | 모든 버전 |
+
+#### .NET
+
+| 지표 | 현황 | 보완 (Phase 40) | 버전 |
+|------|:----:|:---------------:|------|
+| ThreadPool Starvation 감지 | ❌ | `ThreadPool.GetMinThreads` + 대기 큐 깊이 임계치 | .NET 6+ |
+| GC Suspension Time (STW) | ⚠️ 부분 | `System.GC.GetGCMemoryInfo().PauseDurations` | .NET 5+ |
+| AOT 제한사항 감지 | ❌ | `RuntimeFeature.IsDynamicCodeSupported` 플래그 | .NET 7+ AOT |
+| Exception Rate (1분 버킷) | ❌ | EventPipe `Microsoft-Windows-DotNETRuntime` Provider | .NET 5+ |
+
+#### Go
+
+| 지표 | 현황 | 보완 (Phase 40) | 버전 |
+|------|:----:|:---------------:|------|
+| Scheduler Latency Distribution | ❌ | `runtime/metrics` `/sched/latencies:seconds` 히스토그램 | Go 1.16+ |
+| GC STW Pause Time | ⚠️ 부분 | `/gc/pauses:seconds` (stop-the-world 분리) | Go 1.21+ |
+| Goroutine Scheduling Wait Time | ❌ | `/sched/goroutines:goroutines` + GOMAXPROCS 포화율 | Go 1.16+ |
+| Memory Allocator Fragmentation | ❌ | `/memory/classes/heap/released:bytes` 비율 | Go 1.18+ |
+
+#### Node.js
+
+| 지표 | 현황 | 보완 (Phase 40) | 버전 |
+|------|:----:|:---------------:|------|
+| Heap Fragmentation | ❌ | `v8.getHeapSpaceStatistics()` 공간별 fragmentation | Node 10+ |
+| Microtask Queue Depth | ❌ | `process.nextTick` + Promise 큐 추정 (V8 Inspector) | Node 16+ |
+| Worker Thread 사용률 | ❌ | `worker_threads` 활성 Worker 수 + 메시지 큐 | Node 12+ |
+| libuv Handle / Request 수 | ⚠️ 부분 | `process._getActiveHandles().length` | 모든 버전 |
+
+#### Java
+
+| 지표 | 현황 | 보완 (Phase 40) | 버전 |
+|------|:----:|:---------------:|------|
+| GC별 Pause Time 비교 (G1/ZGC/Shenandoah) | ⚠️ 부분 | JFR `jdk.GCPhasePause` + GC명 태그 | JDK 11+ |
+| Metaspace 사용량 + Class Unloading | ❌ | `MemoryPoolMXBean` Metaspace + jcmd `VM.metaspace` | JDK 8+ |
+| JIT 컴파일 시간 (C1/C2) | ❌ | JFR `jdk.Compilation` + `jdk.CompilerConfiguration` | JDK 11+ |
+| Safepoint 대기 시간 | ❌ | JFR `jdk.SafepointBegin` / `jdk.SafepointEnd` | JDK 11+ |
+| Virtual Thread (Phase 39) | ✅ 완료 | — | JDK 21+ |
 
 ### 5.4 성능 벤치마크 목표
 
@@ -1674,3 +1752,4 @@ AITOP 방식:
 > | v3.0.0 | 2026-03-24 | 전면 재작성 — Series A 전략 문서 (비전/시장/GTM/혁신 로드맵) |
 > | v3.1.0 | 2026-03-25 | Phase 31~33 반영 — AGPL-free 전환, GPU 멀티벤더, Plugin Manager, 원클릭 프로파일링 전략 |
 > | v3.2.0 | 2026-03-26 | Phase 34~38 완료 반영 — Runtime Attach, perf/eBPF 프로파일링, 배치 모니터링 / Phase 7' E2E 완료 |
+> | v3.3.0 | 2026-03-26 | Phase 39 완료 반영 — JDK 21 Virtual Thread 모니터링 / §3.6 기능 갭 분석 신규 / §5.3-B 언어별 성능 지표 갭 보완 |
