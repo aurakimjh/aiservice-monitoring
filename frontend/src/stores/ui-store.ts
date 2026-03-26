@@ -3,6 +3,8 @@ import type { TimeRange } from '@/types/monitoring';
 import { TIME_RANGES } from '@/types/monitoring';
 import type { Locale } from '@/lib/i18n';
 
+export type DataSourceMode = 'demo' | 'live' | 'auto';
+
 interface UIState {
   sidebarExpanded: boolean;
   theme: 'dark' | 'light';
@@ -11,6 +13,8 @@ interface UIState {
   autoRefresh: boolean;
   refreshInterval: number;
   commandPaletteOpen: boolean;
+  dataSourceMode: DataSourceMode;
+  demoBannerDismissed: boolean;
 
   toggleSidebar: () => void;
   setSidebarExpanded: (expanded: boolean) => void;
@@ -20,6 +24,8 @@ interface UIState {
   setAutoRefresh: (enabled: boolean) => void;
   setRefreshInterval: (ms: number) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setDataSourceMode: (mode: DataSourceMode) => void;
+  dismissDemoBanner: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -30,6 +36,8 @@ export const useUIStore = create<UIState>((set) => ({
   autoRefresh: true,
   refreshInterval: 5000,
   commandPaletteOpen: false,
+  dataSourceMode: 'auto',
+  demoBannerDismissed: false,
 
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
   setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
@@ -39,4 +47,6 @@ export const useUIStore = create<UIState>((set) => ({
   setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
   setRefreshInterval: (refreshInterval) => set({ refreshInterval }),
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  setDataSourceMode: (dataSourceMode) => set({ dataSourceMode, demoBannerDismissed: false }),
+  dismissDemoBanner: () => set({ demoBannerDismissed: true }),
 }));

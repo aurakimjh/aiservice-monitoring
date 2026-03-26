@@ -9,3 +9,4 @@ export { Breadcrumb, type BreadcrumbItem } from './breadcrumb';
 export { Tabs } from './tabs';
 export { VirtualList } from './virtual-list';
 export { SkipLink } from './skip-link';
+export { DataSourceBadge } from './data-source-badge';

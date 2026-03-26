@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { AuthGuard } from '@/components/auth';
-import { Sidebar, TopBar, StatusBar, CommandPalette } from '@/components/layout';
+import { Sidebar, TopBar, StatusBar, CommandPalette, DemoModeBanner } from '@/components/layout';
 import { SkipLink } from '@/components/ui/skip-link';
 import { reportWebVitals } from '@/lib/web-vitals';
 
@@ -33,6 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         // Authenticated — full shell with sidebar, topbar, statusbar
         <div className="h-full flex flex-col">
           <TopBar />
+          <DemoModeBanner />
           <Sidebar />
 
           <main
