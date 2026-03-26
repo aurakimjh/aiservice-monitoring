@@ -205,9 +205,9 @@ exporters:
       enabled: true
     add_metric_suffixes: true
 
-  # Grafana Tempo — 트레이스 저장
-  otlp/tempo:
-    endpoint: "tempo:4317"
+  # Jaeger — 트레이스 저장 (Apache-2.0, AGPL-free)
+  otlp/jaeger:
+    endpoint: "jaeger-collector:4317"
     tls:
       insecure: true
     retry_on_failure:
@@ -254,7 +254,7 @@ service:
     traces:
       receivers:  [otlp]
       processors: [memory_limiter, tail_sampling, attributes/redact, batch]
-      exporters:  [otlp/tempo]
+      exporters:  [otlp/jaeger]
 
     # 메트릭 파이프라인 (GPU + vLLM + 일반)
     metrics:

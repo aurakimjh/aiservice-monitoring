@@ -36,9 +36,9 @@
    kubectl port-forward svc/{{ .Release.Name }}-kube-prometheus-stack-prometheus 9090:9090 -n {{ .Release.Namespace }}
    URL: http://localhost:9090
 
-5. Tempo 접속 (TraceQL):
-   kubectl port-forward svc/{{ .Release.Name }}-tempo 3200:3200 -n {{ .Release.Namespace }}
-   URL: http://localhost:3200
+5. Jaeger UI 접속:
+   kubectl port-forward svc/{{ .Release.Name }}-jaeger-query 16686:16686 -n {{ .Release.Namespace }}
+   URL: http://localhost:16686
 
 6. OTel Collector 엔드포인트:
    - gRPC: {{ .Release.Name }}-otel-agent:4317

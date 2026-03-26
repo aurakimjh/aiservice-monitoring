@@ -95,11 +95,10 @@ prometheus:
       size: 1Gi
 
 # -----------------------------------------------------------------------------
-# Tempo — 최소 보존
+# Jaeger — 개발 환경 (메모리 스토리지)
 # -----------------------------------------------------------------------------
-tempo:
-  tempo:
-    retention: 72h  # 3일
+jaeger:
+  allInOne:
     resources:
       requests:
         cpu: 100m
@@ -107,28 +106,9 @@ tempo:
       limits:
         cpu: 500m
         memory: 512Mi
-
-  persistence:
-    size: 5Gi
-
-# -----------------------------------------------------------------------------
-# Loki — 최소 보존
-# -----------------------------------------------------------------------------
-loki:
-  loki:
-    limits_config:
-      retention_period: 72h  # 3일
-
-  singleBinary:
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
-    persistence:
-      size: 5Gi
+    extraEnv:
+      - name: MEMORY_MAX_TRACES
+        value: "5000"
 
 # -----------------------------------------------------------------------------
 # AITOP Collection Server — 개발 단일 레플리카

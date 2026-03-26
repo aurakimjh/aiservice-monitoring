@@ -50,14 +50,8 @@ dependencies:
     repository: "https://prometheus-community.github.io/helm-charts"
     condition: prometheus.enabled
 
-  # Tempo — 분산 추적 백엔드
-  - name: tempo
-    version: "1.7.1"
-    repository: "https://grafana.github.io/helm-charts"
-    condition: tempo.enabled
-
-  # Loki — 로그 집계
-  - name: loki
-    version: "5.41.6"
-    repository: "https://grafana.github.io/helm-charts"
-    condition: loki.enabled
+  # Jaeger — 분산 추적 백엔드 (Apache-2.0, Phase 30 AGPL-free 결정)
+  - name: jaeger
+    version: "3.1.1"
+    repository: "https://jaegertracing.github.io/helm-charts"
+    condition: jaeger.enabled

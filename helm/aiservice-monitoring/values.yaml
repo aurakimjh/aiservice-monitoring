@@ -306,13 +306,17 @@ prometheus:
         label: grafana_datasource
 
 # -----------------------------------------------------------------------------
-# Tempo — 분산 추적 백엔드
+# Jaeger — 분산 추적 백엔드 (Apache-2.0, Phase 30 AGPL-free 결정)
+# Tempo(AGPL-3.0)에서 교체됨
 # -----------------------------------------------------------------------------
-tempo:
+jaeger:
   enabled: true
 
-  tempo:
-    retention: 168h  # 7일
+  provisionDataStore:
+    cassandra: false
+
+  allInOne:
+    enabled: true
     resources:
       requests:
         cpu: 200m
@@ -320,68 +324,28 @@ tempo:
       limits:
         cpu: 1000m
         memory: 2Gi
+    extraEnv:
+      - name: COLLECTOR_OTLP_ENABLED
+        value: "true"
+      - name: SPAN_STORAGE_TYPE
+        value: "memory"
+      - name: MEMORY_MAX_TRACES
+        value: "50000"
 
-  persistence:
-    enabled: true
-    size: 20Gi
+  storage:
+    type: memory  # dev: memory, prod: elasticsearch 또는 cassandra
 
-  config:
-    auth_enabled: false
-    server:
-      http_listen_port: 3200
-    distributor:
-      receivers:
-        otlp:
-          protocols:
-            grpc:
-              endpoint: "0.0.0.0:4317"
-            http:
-              endpoint: "0.0.0.0:4318"
-    storage:
-      trace:
-        backend: local
-        local:
-          path: /var/tempo/traces
-    metrics_generator:
-      enabled: true
-      storage:
-        path: /var/tempo/generator
-      registry:
-        external_labels:
-          source: tempo
-      processor:
-        service_graphs:
-          enabled: true
-        span_metrics:
-          enabled: true
-
-# -----------------------------------------------------------------------------
-# Loki — 로그 집계
-# -----------------------------------------------------------------------------
-loki:
-  enabled: true
-
-  loki:
-    auth_enabled: false
-    commonConfig:
-      replication_factor: 1
-    storage:
-      type: filesystem
-    limits_config:
-      retention_period: 168h  # 7일
-
-  singleBinary:
-    replicas: 1
+  collector:
     resources:
       requests:
         cpu: 100m
         memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 1Gi
-    persistence:
-      enabled: true
-      size: 10Gi
+
+  query:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
 
 # -----------------------------------------------------------------------------
 # 커스텀 리소스 (이 차트의 templates/ 폴더에서 렌더링)
