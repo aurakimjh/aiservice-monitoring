@@ -1,7 +1,7 @@
 # AITOP 진단 항목 카탈로그 (Diagnostic Items Catalog)
 
 > **Phase 31 설계 점검 문서** — 진단/수집 항목 전체 분류 및 수집 방식 관리 기준
-> 최종 업데이트: 2026-03-25 (Session 46 — 상시 모니터링 메트릭 35종 추가, 출처 컬럼·메트릭ID 컬럼 신설, Cache ITEM0400~0410/MQ ITEM0420~0425 번호 부여, AI Serving ITEM0231~0235 추가)
+> 최종 업데이트: 2026-03-26 (Phase 38 완료 — 배치 프로세스 진단 항목 반영 / Phase 7' E2E 검증 완료)
 > 참고 디렉토리: `C:/aitop/02. Working/20260312_v.0.0.5/` (IT 55건), `Sample_AI_진단항목/` (AI 31건)
 > 관련 문서: [AGENT_DESIGN.md](./AGENT_DESIGN.md) §3 Collector 체계, §12 진단 모드 | [METRICS_DESIGN.md](./METRICS_DESIGN.md) §13 미들웨어·Cache·MQ 메트릭
 

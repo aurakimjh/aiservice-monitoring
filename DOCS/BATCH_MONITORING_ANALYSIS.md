@@ -1,9 +1,9 @@
 # Scouter 배치 모니터링 분석 + AITOP 배치 모니터링 설계
 
-> **문서 버전**: v1.0.0
-> **작성일**: 2026-03-25
+> **문서 버전**: v1.1.0
+> **작성일**: 2026-03-25 | **최종 업데이트**: 2026-03-26 (Phase 36~38 구현 완료 반영)
 > **작성자**: Aura Kim — Architect & Lead Developer
-> **관점**: Scouter 오픈소스 분석 → AITOP 설계 반영
+> **관점**: Scouter 오픈소스 분석 → AITOP 설계 반영 (Phase 36~38 ✅ 구현 완료)
 >
 > **관련 문서**:
 > - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Runtime Attach / perf·eBPF 포함)

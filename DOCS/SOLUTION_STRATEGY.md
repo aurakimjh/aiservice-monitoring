@@ -1,7 +1,7 @@
 # AITOP Solution Strategy — AI 서비스 모니터링의 글로벌 표준
 
 > **문서 버전**: v3.1.0
-> **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-25 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
+> **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-26 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
 > **작성자**: Aura Kim — Architect & Lead Developer
 > **기밀 등급**: Internal Confidential
 >
@@ -1672,5 +1672,5 @@ AITOP 방식:
 > | v1.0.0 | 2026-03-22 | 최초 작성 (완성도 평가, 경쟁 분석, 로드맵) |
 > | v1.1.0 | 2026-03-23 | 핵심 가치 명시, Enterprise/Lite 배포 모드 추가 |
 > | v3.0.0 | 2026-03-24 | 전면 재작성 — Series A 전략 문서 (비전/시장/GTM/혁신 로드맵) |
-> | v3.1.0 | 2026-03-25 | Phase 33 반영 — 원클릭 프로파일링 전략, Attach 모드 vs Full Install 모드 비교, UI 모드 선택 화면 |
-> | v3.1.0 | 2026-03-25 | Phase 31~32 반영, AGPL-free 전환 완료, GPU 멀티벤더 지원 |
+> | v3.1.0 | 2026-03-25 | Phase 31~33 반영 — AGPL-free 전환, GPU 멀티벤더, Plugin Manager, 원클릭 프로파일링 전략 |
+> | v3.2.0 | 2026-03-26 | Phase 34~38 완료 반영 — Runtime Attach, perf/eBPF 프로파일링, 배치 모니터링 / Phase 7' E2E 완료 |

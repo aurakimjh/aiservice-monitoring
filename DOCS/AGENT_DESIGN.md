@@ -1,8 +1,8 @@
 # AITOP Agent 상세 설계서
 
 > **문서 버전**: v1.7.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF Collector 모듈: on-CPU·off-CPU·memory 프로파일링, folded stack 수집, JIT 심볼 해석)
-> **구현 상태**: Phase 15 (Agent MVP) ✅ 완료 | Phase 16 (Agent GA) ✅ 완료 | Phase 24~33 ✅ 완료 | Phase 35 (perf/eBPF Collector + 플레임그래프) 📋 설계 완료
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-26 (Phase 38 반영 — 배치 프로세스 감지·런타임 프로파일링·배치 대시보드 뷰 완성 / Phase 7' E2E 검증 완료)
+> **구현 상태**: Phase 15~16 (Agent MVP/GA) ✅ 완료 | Phase 24~33 ✅ 완료 | Phase 34 (Runtime Attach) ✅ 완료 | Phase 35 (perf/eBPF + FlameGraph) ✅ 완료 | Phase 36~38 (배치 모니터링) ✅ 완료
 > **관련 문서**:
 > - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처

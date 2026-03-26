@@ -3,7 +3,7 @@
 > **문서 버전**: v3.5.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-25 (Phase 32 완료 — GPU 멀티벤더 지원 / Phase 30 AGPL-free 인프라 전환 / Phase 29 Enterprise·Lite 모드 / Phase 27 StorageBackend / Phase 26 미들웨어·Redis / Phase 25 서버 그룹·중앙 설정 / Phase 24 Java·.NET SDK)
+> **최종 업데이트**: 2026-03-26 (Phase 38 완료 — 배치 모니터링(감지·프로파일링·대시보드) / Phase 35 perf/eBPF 프로파일링 / Phase 34 Runtime Attach / Phase 33 Plugin Manager / Phase 32 GPU 멀티벤더)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드

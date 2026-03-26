@@ -3,7 +3,7 @@
 > **문서 버전**: v2.2.0
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-25 (Phase 35 반영 — perf/eBPF 프로파일링 메트릭 추가: on-CPU·off-CPU·memory·플레임그래프 메타데이터 / DIAGNOSTIC_ITEMS_CATALOG 참조 링크 추가)
+> **최종 업데이트**: 2026-03-26 (Phase 38 반영 — 배치 프로세스 메트릭 추가: 실행 이력·SQL·메소드·GC / Phase 7' E2E 검증 완료)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처

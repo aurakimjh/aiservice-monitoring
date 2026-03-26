@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-25 (Phase 32 반영 — AGPL-free 인프라 전환 안내 추가, Lite 모드 스토리지 설정 정리)
+> **최종 업데이트**: 2026-03-26 (Phase 38 완료 반영 — Phase 1~38 전체 완료, Phase 7' E2E 검증 완료)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
