@@ -1,0 +1,136 @@
+{{- if .Values.collectionServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-collection-server
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collection-server
+spec:
+  replicas: {{ .Values.collectionServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aiservice-monitoring.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: collection-server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "aiservice-monitoring.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: collection-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "aiservice-monitoring.fullname" . }}-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: collection-server
+          image: "{{ .Values.collectionServer.image.repository }}:{{ .Values.collectionServer.image.tag }}"
+          imagePullPolicy: {{ .Values.collectionServer.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          env:
+            - name: AITOP_LISTEN_ADDR
+              value: ":8080"
+            - name: AITOP_GRPC_ADDR
+              value: ":50051"
+            - name: AITOP_STORAGE_TYPE
+              value: {{ .Values.collectionServer.storage.type | quote }}
+            {{- if eq .Values.collectionServer.storage.type "local" }}
+            - name: AITOP_STORAGE_PATH
+              value: {{ .Values.collectionServer.storage.localPath | quote }}
+            {{- end }}
+            {{- if or (eq .Values.collectionServer.storage.type "s3") (eq .Values.collectionServer.storage.type "dual") }}
+            - name: AITOP_S3_ENDPOINT
+              value: {{ .Values.collectionServer.storage.s3.endpoint | quote }}
+            - name: AITOP_S3_BUCKET
+              value: {{ .Values.collectionServer.storage.s3.bucket | quote }}
+            - name: AITOP_S3_REGION
+              value: {{ .Values.collectionServer.storage.s3.region | quote }}
+            - name: AITOP_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aiservice-monitoring.fullname" . }}-s3-credentials
+                  key: access-key
+            - name: AITOP_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aiservice-monitoring.fullname" . }}-s3-credentials
+                  key: secret-key
+            {{- end }}
+            {{- if .Values.collectionServer.database.enabled }}
+            - name: AITOP_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aiservice-monitoring.fullname" . }}-db-credentials
+                  key: database-url
+            {{- end }}
+            - name: AITOP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aiservice-monitoring.fullname" . }}-jwt-secret
+                  key: secret
+            {{- with .Values.collectionServer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.collectionServer.resources | nindent 12 }}
+          {{- if eq .Values.collectionServer.storage.type "local" }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.collectionServer.storage.localPath }}
+          {{- end }}
+      {{- if eq .Values.collectionServer.storage.type "local" }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "aiservice-monitoring.fullname" . }}-collection-server-data
+      {{- end }}
+      {{- with .Values.collectionServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.collectionServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.collectionServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

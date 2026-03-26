@@ -1,0 +1,105 @@
+# nfpm.yaml — AITOP Agent DEB/RPM 패키지 설정
+#
+# 빌드 방법:
+#   # DEB 패키지
+#   nfpm pkg --packager deb --target dist/
+#
+#   # RPM 패키지
+#   nfpm pkg --packager rpm --target dist/
+#
+# 설치:
+#   sudo dpkg -i dist/aitop-agent_1.0.0_amd64.deb
+#   sudo rpm -i dist/aitop-agent-1.0.0.x86_64.rpm
+#
+# 사전 요구사항:
+#   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name: aitop-agent
+arch: amd64
+platform: linux
+version: "1.0.0"
+release: "1"
+epoch: "0"
+section: monitoring
+priority: optional
+maintainer: "Aura Kim <aura.kimjh@gmail.com>"
+description: |
+  AITOP Agent — AI Service Monitoring Agent.
+  시스템 메트릭, GPU, 미들웨어, 런타임 모니터링 및 진단 수집.
+vendor: "AITOP"
+homepage: "https://github.com/aurakimjh/aiservice-monitoring"
+license: "Apache-2.0"
+
+# 바이너리 및 설정 파일 매핑
+contents:
+  # 메인 바이너리
+  - src: ./dist/aitop-agent
+    dst: /usr/local/bin/aitop-agent
+    file_info:
+      mode: 0755
+
+  # Collection Server 바이너리
+  - src: ./dist/collection-server
+    dst: /usr/local/bin/aitop-collection-server
+    file_info:
+      mode: 0755
+
+  # 기본 설정 파일
+  - src: ./configs/agent.yaml
+    dst: /etc/aitop/agent.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # systemd 유닛 파일 — Agent
+  - src: ./packaging/aitop-agent.service
+    dst: /etc/systemd/system/aitop-agent.service
+    file_info:
+      mode: 0644
+
+  # systemd 유닛 파일 — Collection Server
+  - src: ./packaging/aitop-collection-server.service
+    dst: /etc/systemd/system/aitop-collection-server.service
+    file_info:
+      mode: 0644
+
+  # 로그 디렉토리
+  - dst: /var/log/aitop
+    type: dir
+    file_info:
+      mode: 0755
+
+  # 데이터 디렉토리
+  - dst: /var/lib/aitop
+    type: dir
+    file_info:
+      mode: 0755
+
+  # 플러그인 디렉토리
+  - dst: /var/lib/aitop/plugins
+    type: dir
+    file_info:
+      mode: 0755
+
+# 스크립트
+scripts:
+  preinstall: ./packaging/preinstall.sh
+  postinstall: ./packaging/postinstall.sh
+  preremove: ./packaging/preremove.sh
+
+# RPM 전용 설정
+rpm:
+  group: Monitoring
+  compression: gzip
+
+# DEB 전용 설정
+deb:
+  compression: gzip
+  fields:
+    Bugs: "https://github.com/aurakimjh/aiservice-monitoring/issues"
+
+# 의존성
+depends:
+  - ca-certificates
+recommends:
+  - curl

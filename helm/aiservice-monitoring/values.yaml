@@ -406,5 +406,122 @@ rbac:
     - monitoring
     - ai-inference
 
+# -----------------------------------------------------------------------------
+# AITOP Collection Server
+# -----------------------------------------------------------------------------
+collectionServer:
+  enabled: true
+
+  image:
+    repository: aitop/collection-server
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    httpPort: 8080
+    grpcPort: 50051
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 75
+
+  # JWT Secret for auth (override in production!)
+  jwtSecret: "aitop-dev-secret-change-me"
+  existingSecrets: false
+
+  # Storage backend
+  storage:
+    type: local  # local | s3 | dual
+    localPath: /data/aitop
+    localSize: 10Gi
+    s3:
+      endpoint: ""
+      bucket: "aitop-evidence"
+      region: "ap-northeast-2"
+      accessKey: ""
+      secretKey: ""
+
+  # PostgreSQL connection
+  database:
+    enabled: false
+    url: "postgres://aitop:aitop@postgresql:5432/aitop?sslmode=disable"
+
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -----------------------------------------------------------------------------
+# AITOP Frontend (Next.js)
+# -----------------------------------------------------------------------------
+frontend:
+  enabled: true
+
+  image:
+    repository: aitop/frontend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  # API URL for the frontend to reach collection server
+  apiUrl: "http://aitop-collection-server:8080/api/v1"
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Ingress (Frontend + API unified entry)
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: aitop.local
+  tls: []
+
+# -----------------------------------------------------------------------------
+# Network Policy
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: false
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
 nameOverride: ""
 fullnameOverride: ""

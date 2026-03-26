@@ -2075,6 +2075,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// ── perf/eBPF Flamegraph API (Phase 35) ──────────────────────────────────
 	registerFlamegraphRoutes(mux, store)
 
+	// ── Phase 40: 출시 전 Critical 기능 API ──────────────────────────────────
+	registerPhase40Routes(mux)
+
 	// ── Evidence API (Phase 31-2d/31-3a) ─────────────────────────────────────
 	// In-memory store for uploaded evidence bundles (keyed by run_id).
 	evidenceStore := newEvidenceStore()

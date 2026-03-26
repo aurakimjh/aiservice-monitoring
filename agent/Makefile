@@ -10,7 +10,9 @@ LDFLAGS := -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.Versio
            -X github.com/aurakimjh/aiservice-monitoring/agent/pkg/version.GoVersion=$(GO_VERSION)
 
 .PHONY: build build-linux build-windows build-collection-server test clean run lint package \
-        verify-pipeline verify-ui verify-all docker-test-up docker-test-down
+        verify-pipeline verify-ui verify-all docker-test-up docker-test-down \
+        k8s-setup k8s-build k8s-deploy k8s-dry-run k8s-status k8s-teardown k8s-all \
+        pkg-deb pkg-rpm pkg-all
 
 ## build: Build for current platform
 build:
@@ -204,6 +206,70 @@ e2e-all: e2e-health e2e-trace e2e-security e2e-load
 	@echo " 7'-3 Trace 연속성: scripts/e2e/trace-continuity.sh"
 	@echo " 7'-4 보안 감사:   scripts/e2e/security-audit.sh"
 	@echo "═══════════════════════════════════════════════"
+
+## ═══════════════════════════════════════════════════════════════════
+## Phase 8': Kubernetes 통합 배포 타겟
+## ═══════════════════════════════════════════════════════════════════
+
+## k8s-setup: kind 클러스터 생성 + Ingress 컨트롤러 설치
+k8s-setup:
+	bash ../scripts/k8s-deploy.sh setup
+
+## k8s-build: Docker 이미지 빌드 + kind에 로드
+k8s-build:
+	bash ../scripts/k8s-deploy.sh build
+
+## k8s-deploy: Helm 배포 (dev 환경)
+k8s-deploy:
+	bash ../scripts/k8s-deploy.sh deploy
+
+## k8s-deploy-prod: Helm 배포 (prod 환경)
+k8s-deploy-prod:
+	bash ../scripts/k8s-deploy.sh deploy-prod
+
+## k8s-dry-run: Helm 템플릿 검증 (설치 없이)
+k8s-dry-run:
+	bash ../scripts/k8s-deploy.sh dry-run
+
+## k8s-status: K8s 클러스터 상태 확인
+k8s-status:
+	bash ../scripts/k8s-deploy.sh status
+
+## k8s-logs: 서비스 로그 확인 (기본: collection-server)
+k8s-logs:
+	bash ../scripts/k8s-deploy.sh logs $(COMPONENT)
+
+## k8s-teardown: kind 클러스터 삭제
+k8s-teardown:
+	bash ../scripts/k8s-deploy.sh teardown
+
+## k8s-all: 클러스터 생성 + 빌드 + 배포 (전체)
+k8s-all:
+	bash ../scripts/k8s-deploy.sh all
+
+## ═══════════════════════════════════════════════════════════════════
+## Phase 8'-5: DEB/RPM 패키지 빌드
+## ═══════════════════════════════════════════════════════════════════
+
+## pkg-prepare: 패키지 빌드용 바이너리 준비
+pkg-prepare: build-linux build-collection-server
+	@mkdir -p dist
+	cp bin/$(APP_NAME)-linux-amd64 dist/aitop-agent
+	cp bin/collection-server dist/collection-server
+	chmod +x dist/aitop-agent dist/collection-server
+
+## pkg-deb: DEB 패키지 빌드
+pkg-deb: pkg-prepare
+	nfpm pkg --packager deb --target dist/
+
+## pkg-rpm: RPM 패키지 빌드
+pkg-rpm: pkg-prepare
+	nfpm pkg --packager rpm --target dist/
+
+## pkg-all: DEB + RPM 패키지 모두 빌드
+pkg-all: pkg-deb pkg-rpm
+	@echo "Packages built:"
+	@ls -la dist/*.deb dist/*.rpm 2>/dev/null || true
 
 ## help: Show this help
 help:

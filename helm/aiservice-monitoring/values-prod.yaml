@@ -237,6 +237,91 @@ loki:
       size: 50Gi
 
 # -----------------------------------------------------------------------------
+# AITOP Collection Server — HA 구성
+# -----------------------------------------------------------------------------
+collectionServer:
+  replicaCount: 3
+  image:
+    tag: "1.0.0"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 65
+    targetMemoryUtilizationPercentage: 70
+  jwtSecret: ""  # existingSecret으로 대체
+  existingSecrets: true
+  storage:
+    type: s3
+    s3:
+      endpoint: "s3.ap-northeast-2.amazonaws.com"
+      bucket: "aitop-evidence-prod"
+      region: "ap-northeast-2"
+  database:
+    enabled: true
+    url: ""  # existingSecret으로 대체
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: collection-server
+            topologyKey: kubernetes.io/hostname
+
+# -----------------------------------------------------------------------------
+# AITOP Frontend — HA 구성
+# -----------------------------------------------------------------------------
+frontend:
+  replicaCount: 3
+  image:
+    tag: "1.0.0"
+  apiUrl: "http://aitop-collection-server:8080/api/v1"
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+# -----------------------------------------------------------------------------
+# Ingress — 프로덕션 (TLS + cert-manager)
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: aitop.internal
+  tls:
+    - secretName: aitop-tls
+      hosts:
+        - aitop.internal
+
+# -----------------------------------------------------------------------------
+# Network Policy — 프로덕션 활성화
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+
+# -----------------------------------------------------------------------------
 # 커스텀 리소스
 # -----------------------------------------------------------------------------
 serviceMonitor:

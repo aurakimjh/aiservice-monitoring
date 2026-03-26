@@ -131,6 +131,51 @@ loki:
       size: 5Gi
 
 # -----------------------------------------------------------------------------
+# AITOP Collection Server — 개발 단일 레플리카
+# -----------------------------------------------------------------------------
+collectionServer:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  storage:
+    type: local
+    localPath: /data/aitop
+    localSize: 5Gi
+  database:
+    enabled: false
+
+# -----------------------------------------------------------------------------
+# AITOP Frontend — 개발 단일 레플리카
+# -----------------------------------------------------------------------------
+frontend:
+  replicaCount: 1
+  apiUrl: "http://aitop-collection-server:8080/api/v1"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -----------------------------------------------------------------------------
+# Ingress — 개발 환경 활성화 (TLS 없음)
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+  hosts:
+    - host: aitop.local
+  tls: []
+
+# -----------------------------------------------------------------------------
 # 커스텀 리소스
 # -----------------------------------------------------------------------------
 serviceMonitor:

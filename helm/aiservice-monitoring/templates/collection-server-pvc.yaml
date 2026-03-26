@@ -1,0 +1,19 @@
+{{- if and .Values.collectionServer.enabled (eq .Values.collectionServer.storage.type "local") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-collection-server-data
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collection-server
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.global.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.collectionServer.storage.localSize }}
+{{- end }}

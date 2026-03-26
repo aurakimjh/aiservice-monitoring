@@ -1,0 +1,24 @@
+{{- if .Values.collectionServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-collection-server
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collection-server
+spec:
+  type: {{ .Values.collectionServer.service.type }}
+  ports:
+    - port: {{ .Values.collectionServer.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.collectionServer.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "aiservice-monitoring.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: collection-server
+{{- end }}

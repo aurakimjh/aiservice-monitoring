@@ -1,0 +1,29 @@
+[Unit]
+Description=AITOP Agent — AI Service Monitoring Agent
+Documentation=https://github.com/aurakimjh/aiservice-monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aitop
+Group=aitop
+ExecStart=/usr/local/bin/aitop-agent --config /etc/aitop/agent.yaml --mode=full
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/aitop /var/lib/aitop
+PrivateTmp=true
+
+# Environment
+Environment=AITOP_LOG_DIR=/var/log/aitop
+Environment=AITOP_DATA_DIR=/var/lib/aitop
+
+[Install]
+WantedBy=multi-user.target

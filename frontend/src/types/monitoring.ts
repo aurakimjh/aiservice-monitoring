@@ -1591,3 +1591,199 @@ export interface BatchXLogPoint {
   status: 'success' | 'failed' | 'slow';
   io_total: number;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 40: 출시 전 Critical 기능 보완
+// ═══════════════════════════════════════════════════════════════
+
+// 40-1: RUM (Real User Monitoring)
+export interface RUMSession {
+  id: string;
+  user_id: string;
+  page_url: string;
+  device: 'desktop' | 'mobile' | 'tablet';
+  browser: string;
+  country: string;
+  lcp_ms: number;
+  fid_ms: number;
+  cls: number;
+  inp_ms: number;
+  ttfb_ms: number;
+  fcp_ms: number;
+  session_duration_ms: number;
+  page_views: number;
+  error_count: number;
+  started_at: string;
+}
+
+export interface RUMPageMetrics {
+  page_url: string;
+  avg_lcp_ms: number;
+  avg_fid_ms: number;
+  avg_cls: number;
+  avg_inp_ms: number;
+  sample_count: number;
+  good_pct: number;
+  needs_improvement_pct: number;
+  poor_pct: number;
+}
+
+export interface RUMGeoMetrics {
+  region: string;
+  latency_ms: number;
+  sessions: number;
+  error_rate: number;
+}
+
+// 40-2: SRE Golden Signals
+export interface GoldenSignalService {
+  service_name: string;
+  latency_p50_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  traffic_rpm: number;
+  error_rate_pct: number;
+  saturation_cpu_pct: number;
+  saturation_mem_pct: number;
+  slo_target: number;
+  slo_current: number;
+  error_budget_remaining_pct: number;
+  burn_rate: number;
+  status: Status;
+}
+
+export interface GoldenSignalTimeSeries {
+  timestamp: string;
+  latency_p95: number;
+  traffic_rpm: number;
+  error_rate: number;
+  saturation: number;
+}
+
+// 40-3: Python 3.13 Free-Threaded Monitoring
+export interface PythonRuntimeMetrics {
+  agent_id: string;
+  hostname: string;
+  python_version: string;
+  is_free_threaded: boolean;
+  gil_contention_pct: number;
+  free_thread_utilization_pct: number;
+  active_threads: number;
+  asyncio_tasks_pending: number;
+  asyncio_tasks_running: number;
+  gc_gen0_collections: number;
+  gc_gen1_collections: number;
+  gc_gen2_collections: number;
+  gc_gen0_time_ms: number;
+  gc_gen1_time_ms: number;
+  gc_gen2_time_ms: number;
+  gc_total_pause_ms: number;
+  memory_rss_mb: number;
+  collected_at: string;
+}
+
+// 40-4: .NET AOT Monitoring
+export interface DotNetAOTMetrics {
+  agent_id: string;
+  hostname: string;
+  dotnet_version: string;
+  is_native_aot: boolean;
+  threadpool_threads: number;
+  threadpool_queue_length: number;
+  threadpool_completed: number;
+  threadpool_starvation_count: number;
+  gc_pause_time_ms: number;
+  gc_suspension_time_ms: number;
+  gc_heap_size_mb: number;
+  gc_gen0_count: number;
+  gc_gen1_count: number;
+  gc_gen2_count: number;
+  gc_fragmentation_pct: number;
+  aot_reflection_warnings: number;
+  aot_trimming_warnings: number;
+  jit_compiled_methods: number;
+  memory_working_set_mb: number;
+  collected_at: string;
+}
+
+// 40-5: Go 1.24 Scheduler Latency
+export interface GoSchedulerMetrics {
+  agent_id: string;
+  hostname: string;
+  go_version: string;
+  sched_latency_p50_us: number;
+  sched_latency_p95_us: number;
+  sched_latency_p99_us: number;
+  gc_stw_pause_us: number;
+  gc_stw_frequency: number;
+  goroutines_total: number;
+  goroutines_runnable: number;
+  goroutines_waiting: number;
+  gomaxprocs: number;
+  cgo_calls: number;
+  heap_alloc_mb: number;
+  heap_sys_mb: number;
+  stack_inuse_mb: number;
+  collected_at: string;
+}
+
+export interface GoSchedHistogramBucket {
+  le_us: number;
+  count: number;
+}
+
+// 40-6: Database Monitoring
+export interface DBInstance {
+  id: string;
+  engine: 'postgresql' | 'mysql';
+  hostname: string;
+  port: number;
+  version: string;
+  status: Status;
+  connections_active: number;
+  connections_max: number;
+  qps: number;
+  avg_query_time_ms: number;
+  cache_hit_ratio: number;
+  replication_lag_ms: number;
+  disk_usage_pct: number;
+  collected_at: string;
+}
+
+export interface DBSlowQuery {
+  id: string;
+  db_instance_id: string;
+  query_text: string;
+  query_hash: string;
+  calls: number;
+  avg_time_ms: number;
+  max_time_ms: number;
+  total_time_ms: number;
+  rows_examined: number;
+  rows_returned: number;
+  wait_event_type: string;
+  wait_event: string;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface DBLock {
+  id: string;
+  db_instance_id: string;
+  lock_type: string;
+  blocking_pid: number;
+  blocked_pid: number;
+  blocking_query: string;
+  blocked_query: string;
+  duration_ms: number;
+  table_name: string;
+  detected_at: string;
+}
+
+export interface DBWaitEvent {
+  event_type: string;
+  event_name: string;
+  count: number;
+  total_time_ms: number;
+  avg_time_ms: number;
+}

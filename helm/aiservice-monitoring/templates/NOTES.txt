@@ -1,45 +1,55 @@
 ================================================================
-  AI Service Monitoring - {{ .Chart.Name }} v{{ .Chart.Version }}
+  AITOP — AI Service Monitoring v{{ .Chart.Version }}
 ================================================================
 
 설치가 완료되었습니다.
 
-1. Grafana 접속:
+{{- if .Values.frontend.enabled }}
+1. AITOP Frontend 접속:
+   {{- if .Values.ingress.enabled }}
+   URL: http://{{ (index .Values.ingress.hosts 0).host }}
+   {{- else }}
+   kubectl port-forward svc/{{ include "aiservice-monitoring.fullname" . }}-frontend 3000:{{ .Values.frontend.service.port }} -n {{ .Release.Namespace }}
+   URL: http://localhost:3000
+   {{- end }}
+{{- end }}
+
+{{- if .Values.collectionServer.enabled }}
+2. Collection Server API:
+   {{- if .Values.ingress.enabled }}
+   URL: http://{{ (index .Values.ingress.hosts 0).host }}/api
+   {{- else }}
+   kubectl port-forward svc/{{ include "aiservice-monitoring.fullname" . }}-collection-server 8080:{{ .Values.collectionServer.service.httpPort }} -n {{ .Release.Namespace }}
+   URL: http://localhost:8080
+   {{- end }}
+{{- end }}
+
+3. Grafana 접속:
    {{- if .Values.prometheus.grafana.ingress.enabled }}
    URL: https://{{ (index .Values.prometheus.grafana.ingress.hosts 0) }}
    {{- else }}
-   kubectl port-forward svc/{{ .Release.Name }}-grafana 3000:80 -n {{ .Release.Namespace }}
-   URL: http://localhost:3000
+   kubectl port-forward svc/{{ .Release.Name }}-grafana 3001:80 -n {{ .Release.Namespace }}
+   URL: http://localhost:3001
    {{- end }}
 
-2. Prometheus 접속:
+4. Prometheus 접속:
    kubectl port-forward svc/{{ .Release.Name }}-kube-prometheus-stack-prometheus 9090:9090 -n {{ .Release.Namespace }}
    URL: http://localhost:9090
 
-3. Tempo 접속 (TraceQL):
+5. Tempo 접속 (TraceQL):
    kubectl port-forward svc/{{ .Release.Name }}-tempo 3200:3200 -n {{ .Release.Namespace }}
    URL: http://localhost:3200
 
-4. OTel Collector 엔드포인트:
+6. OTel Collector 엔드포인트:
    - gRPC: {{ .Release.Name }}-otel-agent:4317
    - HTTP: {{ .Release.Name }}-otel-agent:4318
 
-5. 대시보드:
-   Grafana > AI Service 폴더에 5개 대시보드가 자동 프로비저닝됩니다:
-   - AI Service Overview (Executive KPI)
-   - LLM Performance (TTFT/TPS)
-   - GPU Correlation (VRAM vs Queue)
-   - Guardrail Analysis (차단율/레이턴시)
-   - Agent & External API (Tool 성공률/P99)
+7. 대시보드:
+   Grafana > AI Service 폴더에 5개 대시보드가 자동 프로비저닝됩니다.
 
-6. 대시보드 JSON 배포:
-   Helm .Files.Get으로 대시보드를 로드하려면 chart 패키징 전
-   dashboards/grafana/*.json 파일을 helm/aiservice-monitoring/dashboards/ 에 복사하세요:
-
-   cp dashboards/grafana/*.json helm/aiservice-monitoring/dashboards/
-
-7. Alert 확인:
+8. Alert 확인:
    kubectl get prometheusrules -n {{ .Release.Namespace }}
-   9개 Alert Rule + 6개 Recording Rule이 로드됩니다.
 
+================================================================
+  배포 상태 확인: kubectl get pods -n {{ .Release.Namespace }}
 ================================================================

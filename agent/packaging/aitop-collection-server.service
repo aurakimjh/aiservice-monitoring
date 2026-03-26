@@ -1,0 +1,29 @@
+[Unit]
+Description=AITOP Collection Server — AI Service Monitoring Backend
+Documentation=https://github.com/aurakimjh/aiservice-monitoring
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aitop
+Group=aitop
+ExecStart=/usr/local/bin/aitop-collection-server -listen :8080
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/aitop /var/lib/aitop
+PrivateTmp=true
+
+# Environment
+Environment=AITOP_STORAGE_TYPE=local
+Environment=AITOP_STORAGE_PATH=/var/lib/aitop/data
+Environment=AITOP_LOG_DIR=/var/log/aitop
+
+[Install]
+WantedBy=multi-user.target

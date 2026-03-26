@@ -29,6 +29,10 @@ import {
   TrendingUp,
   Store,
   Timer,
+  Monitor,
+  Activity,
+  Database,
+  Blocks,
 } from 'lucide-react';
 import { Tooltip } from '@/components/ui';
 
@@ -59,6 +63,10 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Workflow, i18nKey: 'nav.pipelines', href: '/pipelines' },
   { icon: TrendingUp, i18nKey: 'nav.business', href: '/business' },
   { icon: Store, i18nKey: 'nav.marketplace', href: '/marketplace' },
+  { icon: Monitor, i18nKey: 'nav.rum', href: '/rum', dividerBefore: true },
+  { icon: Activity, i18nKey: 'nav.goldenSignals', href: '/golden-signals' },
+  { icon: Blocks, i18nKey: 'nav.runtime', href: '/runtime' },
+  { icon: Database, i18nKey: 'nav.database', href: '/database' },
   { icon: MessageSquareText, i18nKey: 'nav.copilot', href: '/copilot', dividerBefore: true },
   { icon: Settings, i18nKey: 'nav.settings', href: '/settings' },
 ];

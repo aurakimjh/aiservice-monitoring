@@ -1,0 +1,30 @@
+{{- if and .Values.collectionServer.enabled .Values.collectionServer.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "aiservice-monitoring.fullname" . }}-collection-server
+  namespace: {{ include "aiservice-monitoring.namespace" . }}
+  labels:
+    {{- include "aiservice-monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collection-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "aiservice-monitoring.fullname" . }}-collection-server
+  minReplicas: {{ .Values.collectionServer.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.collectionServer.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.collectionServer.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.collectionServer.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}
