@@ -495,6 +495,12 @@ func main() {
 		"POST /api/v1/auth/refresh",
 		"/api/v1/auth/refresh",
 		"POST /api/v1/profiles",
+		"/api/v1/heartbeat",
+		"/api/v1/collect/",
+		"/api/v1/evidence/",
+		"/health",
+		"/api/v1/proxy/",
+		"/api/v1/realdata/",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
@@ -2077,6 +2083,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 
 	// ── Phase 40: 출시 전 Critical 기능 API ──────────────────────────────────
 	registerPhase40Routes(mux)
+
+	// ── Phase 41-3: 실데이터 프록시 API (Prometheus + Jaeger + Agent 집계) ──
+	registerProxyRoutes(mux, f)
 
 	// ── Evidence API (Phase 31-2d/31-3a) ─────────────────────────────────────
 	// In-memory store for uploaded evidence bundles (keyed by run_id).
