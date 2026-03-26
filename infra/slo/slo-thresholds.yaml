@@ -1,0 +1,212 @@
+# slo-thresholds.yaml — AITOP SLO 임계치 중앙 설정
+#
+# 이 파일은 프로덕션 운영 데이터를 기반으로 ±20% 범위 내에서 조정합니다.
+# 변경 시 git commit + Prometheus reload 필요.
+#
+# 튜닝 기준:
+#   baseline = 프로덕션 1~2주 운영 P95 값
+#   warning  = baseline × 1.5 (또는 +20%)
+#   critical = baseline × 2.0 (또는 SLA 한계)
+#
+# 마지막 튜닝: 2026-03-26 (Phase 9' 초기 설정)
+
+version: "1.0"
+tuned_at: "2026-03-26T00:00:00Z"
+tuning_window: "2w"  # 데이터 수집 기간
+
+# ── LLM 추론 성능 ──────────────────────────────────────────────────────────
+llm:
+  ttft:
+    description: "Time to First Token"
+    unit: ms
+    sli: histogram_quantile(0.95, rate(aiservice_llm_time_to_first_token_bucket[5m]))
+    baseline: 1800
+    warning: 2500
+    critical: 3000
+    sla_target: 3000
+    burn_rate_window: 1h
+
+  tps:
+    description: "Tokens Per Second throughput"
+    unit: "tok/s"
+    sli: histogram_quantile(0.50, rate(aiservice_llm_tokens_per_second_bucket[5m]))
+    baseline: 32
+    warning: 20
+    critical: 15
+    sla_target: 15
+    direction: lower_is_worse
+
+  queue_wait:
+    description: "LLM Request Queue Wait Time"
+    unit: ms
+    sli: histogram_quantile(0.95, rate(aiservice_llm_queue_wait_time_bucket[5m]))
+    baseline: 2000
+    warning: 4000
+    critical: 5000
+
+  error_rate:
+    description: "LLM Inference Error Rate"
+    unit: "%"
+    sli: rate(aiservice_llm_error_total[5m]) / rate(aiservice_llm_request_total[5m]) * 100
+    baseline: 0.1
+    warning: 0.5
+    critical: 1.0
+    sla_target: 0.5
+
+# ── GPU 리소스 ──────────────────────────────────────────────────────────────
+gpu:
+  vram_utilization:
+    description: "GPU VRAM Utilization"
+    unit: "%"
+    baseline: 72
+    warning: 85
+    critical: 90
+
+  temperature:
+    description: "GPU Temperature"
+    unit: "°C"
+    baseline: 65
+    warning: 80
+    critical: 85
+
+  power_utilization:
+    description: "GPU Power Utilization"
+    unit: "%"
+    baseline: 60
+    warning: 85
+    critical: 95
+
+# ── 가드레일 ────────────────────────────────────────────────────────────────
+guardrail:
+  block_rate:
+    description: "Guardrail Block Rate"
+    unit: "%"
+    baseline: 3.2
+    warning: 8
+    critical: 10
+
+  latency_p99:
+    description: "Guardrail Validation Latency P99"
+    unit: ms
+    baseline: 450
+    warning: 1000
+    critical: 1500
+
+# ── 외부 API ────────────────────────────────────────────────────────────────
+external_api:
+  timeout_rate:
+    description: "External API Timeout Rate"
+    unit: "%"
+    baseline: 1.2
+    warning: 3
+    critical: 5
+
+  latency_p99:
+    description: "External API Latency P99"
+    unit: ms
+    baseline: 800
+    warning: 2000
+    critical: 3000
+
+# ── 벡터 DB ─────────────────────────────────────────────────────────────────
+vectordb:
+  search_latency_p99:
+    description: "Vector DB Search Latency P99"
+    unit: ms
+    baseline: 250
+    warning: 500
+    critical: 800
+
+  cache_hit_rate:
+    description: "Semantic Cache Hit Rate"
+    unit: "%"
+    baseline: 68
+    warning: 50
+    critical: 40
+    direction: lower_is_worse
+
+# ── 인프라 (Collection Server) ──────────────────────────────────────────────
+infra:
+  api_latency_p95:
+    description: "Collection Server API Latency P95"
+    unit: ms
+    baseline: 25
+    warning: 80
+    critical: 150
+
+  error_rate:
+    description: "Collection Server Error Rate"
+    unit: "%"
+    baseline: 0.05
+    warning: 0.5
+    critical: 1.0
+
+  cpu_utilization:
+    description: "Node CPU Utilization"
+    unit: "%"
+    baseline: 45
+    warning: 75
+    critical: 90
+
+  memory_utilization:
+    description: "Node Memory Utilization"
+    unit: "%"
+    baseline: 52
+    warning: 80
+    critical: 90
+
+# ── SLO 정의 (서비스별) ─────────────────────────────────────────────────────
+slo_definitions:
+  - name: "LLM Inference Availability"
+    service: "vllm-inference"
+    sli: "1 - (rate(aiservice_llm_error_total[30m]) / rate(aiservice_llm_request_total[30m]))"
+    target: 99.9
+    window: 30d
+    burn_rate_thresholds:
+      page: 14.4      # 2% budget consumed in 1h
+      ticket: 6.0     # 5% budget consumed in 6h
+
+  - name: "RAG Pipeline Latency"
+    service: "rag-pipeline"
+    sli: "histogram_quantile(0.95, rate(aiservice_rag_e2e_latency_bucket[5m])) < 3000"
+    target: 99.5
+    window: 30d
+    burn_rate_thresholds:
+      page: 14.4
+      ticket: 6.0
+
+  - name: "API Gateway Availability"
+    service: "api-gateway"
+    sli: "1 - (rate(http_server_errors_total[30m]) / rate(http_server_requests_total[30m]))"
+    target: 99.95
+    window: 30d
+    burn_rate_thresholds:
+      page: 14.4
+      ticket: 3.0
+
+  - name: "GPU Cluster Uptime"
+    service: "gpu-cluster"
+    sli: "avg(up{job='dcgm-exporter'})"
+    target: 99.9
+    window: 30d
+    burn_rate_thresholds:
+      page: 14.4
+      ticket: 6.0
+
+  - name: "Guardrail Response Time"
+    service: "guardrail"
+    sli: "histogram_quantile(0.99, rate(aiservice_guardrail_validation_duration_bucket[5m])) < 1500"
+    target: 99.0
+    window: 7d
+    burn_rate_thresholds:
+      page: 14.4
+      ticket: 6.0
+
+  - name: "Vector DB Search Latency"
+    service: "vectordb"
+    sli: "histogram_quantile(0.99, rate(aiservice_vectordb_search_duration_bucket[5m])) < 800"
+    target: 99.0
+    window: 7d
+    burn_rate_thresholds:
+      page: 14.4
+      ticket: 6.0

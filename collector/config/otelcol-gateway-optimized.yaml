@@ -1,0 +1,195 @@
+# otelcol-gateway-optimized.yaml — Phase 9' 최적화된 Tail Sampling 설정
+#
+# 기존 otelcol-gateway.yaml 대비 변경:
+#   1. 비용 기반 보존 정책 추가 (S3 저장 비용 최적화)
+#   2. 3계층 샘플링: Always(에러/SLO위반) → Conditional(고빈도 경로) → Probabilistic(나머지)
+#   3. SLO 위반 트레이스 100% 보존
+#   4. 정상 트래픽 단계적 축소 (5% → 2% → 1%)
+#
+# 비용 목표:
+#   - 일 100만 트레이스 기준 S3 비용 $15/month 이하
+#   - 에러/SLO 위반 트레이스 100% 보존
+#   - 정상 트래픽 3% 보존 (이전 5%에서 축소)
+#
+# 적용 방법:
+#   helm upgrade aitop ... --set-file otelGateway.config=collector/config/otelcol-gateway-optimized.yaml
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  batch:
+    send_batch_size: 2000
+    send_batch_max_size: 3000
+    timeout: 10s
+
+  # ── 3계층 Tail Sampling ──────────────────────────────────────────────
+  tail_sampling:
+    decision_wait: 12s
+    num_traces: 80000
+    expected_new_traces_per_sec: 2000
+    policies:
+      # ── Layer 1: Always Preserve (100%) ──
+      # 에러 트레이스 — 모든 에러 100% 보존
+      - name: policy-error
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+
+      # SLO 위반 — TTFT > 3s (SLA 한계)
+      - name: policy-slo-ttft-violation
+        type: latency
+        latency:
+          threshold_ms: 3000
+
+      # SLO 위반 — E2E 레이턴시 > 5s
+      - name: policy-slo-e2e-violation
+        type: latency
+        latency:
+          threshold_ms: 5000
+
+      # 가드레일 차단 트레이스 — 보안 감사용 100% 보존
+      - name: policy-guardrail-block
+        type: string_attribute
+        string_attribute:
+          key: guardrail.action
+          values:
+            - blocked
+            - flagged
+
+      # ── Layer 2: Conditional Preserve ──
+      # 고가치 사용자 (엔터프라이즈) — 50% 보존
+      - name: policy-enterprise-user
+        type: and
+        and:
+          and_sub_policy:
+            - name: enterprise-check
+              type: string_attribute
+              string_attribute:
+                key: user.tier
+                values:
+                  - enterprise
+                  - premium
+            - name: enterprise-sample
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 50
+
+      # GPU 압력 상태 — 30% 보존
+      - name: policy-gpu-pressure
+        type: and
+        and:
+          and_sub_policy:
+            - name: gpu-check
+              type: string_attribute
+              string_attribute:
+                key: gpu.pressure
+                values:
+                  - high
+                  - critical
+            - name: gpu-sample
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 30
+
+      # RAG 파이프라인 — 10% 보존 (대량 호출)
+      - name: policy-rag-pipeline
+        type: and
+        and:
+          and_sub_policy:
+            - name: rag-check
+              type: string_attribute
+              string_attribute:
+                key: ai.pipeline.type
+                values:
+                  - rag
+            - name: rag-sample
+              type: probabilistic
+              probabilistic:
+                sampling_percentage: 10
+
+      # ── Layer 3: Probabilistic Baseline ──
+      # 정상 트래픽 — 3% 보존 (비용 최적화)
+      - name: policy-baseline
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 3
+
+  # ── 속성 기반 비용 태깅 ──────────────────────────────────────────────
+  attributes:
+    actions:
+      - key: sampling.policy
+        action: upsert
+        value: "optimized-v1"
+      - key: sampling.cost_tier
+        action: upsert
+        from_attribute: ""
+        value: "standard"
+
+exporters:
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+    compression: gzip
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 10000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 600s
+
+  prometheusremotewrite:
+    endpoint: "http://prometheus:9090/api/v1/write"
+    tls:
+      insecure: true
+
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+service:
+  extensions: [health_check, zpages]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, attributes, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [loki]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: "0.0.0.0:8888"

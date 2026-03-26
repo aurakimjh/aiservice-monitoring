@@ -149,6 +149,97 @@ spec:
             description: |
               DB: {{`{{ $labels.db }}`}}, Index: {{`{{ $labels.index }}`}}
 
+    # ── SLO Burn Rate 알람 (Phase 9') ──────────────────────────────
+    - name: slo.burn_rate
+      interval: 30s
+      rules:
+        - alert: SLO_LLM_Availability_BurnRate_High
+          expr: |
+            (
+              1 - (rate(aiservice_llm_error_total[1h]) / rate(aiservice_llm_request_total[1h]))
+            ) < (1 - ((1 - 0.999) * 14.4))
+          for: 2m
+          labels:
+            severity: critical
+            layer: slo
+            slo: llm-availability
+          annotations:
+            summary: "LLM Availability SLO burn rate 초과 — 1시간 내 에러 버짓 2% 이상 소진"
+            description: |
+              현재 burn rate가 14.4× 초과. 30일 에러 버짓이 ~2시간 내 소진 예상.
+              즉시 조사 필요.
+            runbook: "https://wiki.internal/runbooks/slo-llm-availability"
+
+        - alert: SLO_RAG_Latency_BurnRate_High
+          expr: |
+            (
+              sum(rate(aiservice_rag_e2e_latency_bucket{le="3000"}[1h]))
+              / sum(rate(aiservice_rag_e2e_latency_count[1h]))
+            ) < (1 - ((1 - 0.995) * 14.4))
+          for: 2m
+          labels:
+            severity: critical
+            layer: slo
+            slo: rag-latency
+          annotations:
+            summary: "RAG Pipeline Latency SLO burn rate 초과"
+            description: "RAG P95 레이턴시 3초 초과 비율이 SLO 목표 위반 속도로 증가 중"
+
+        - alert: SLO_API_Gateway_BurnRate_High
+          expr: |
+            (
+              1 - (rate(http_server_errors_total[1h]) / rate(http_server_requests_total[1h]))
+            ) < (1 - ((1 - 0.9995) * 14.4))
+          for: 2m
+          labels:
+            severity: critical
+            layer: slo
+            slo: api-gateway
+          annotations:
+            summary: "API Gateway Availability SLO burn rate 초과"
+            description: "API 게이트웨이 에러율이 SLO 99.95% 위반 속도로 증가 중"
+
+        - alert: SLO_GPU_Uptime_BurnRate_High
+          expr: |
+            avg(up{job="dcgm-exporter"}) < (1 - ((1 - 0.999) * 14.4))
+          for: 5m
+          labels:
+            severity: critical
+            layer: slo
+            slo: gpu-uptime
+          annotations:
+            summary: "GPU Cluster Uptime SLO burn rate 초과"
+            description: "GPU 노드 가용성이 SLO 99.9% 위반 속도로 하락 중"
+
+        # ── Ticket-level burn rate (느린 소진) ──
+        - alert: SLO_LLM_Availability_BurnRate_Slow
+          expr: |
+            (
+              1 - (rate(aiservice_llm_error_total[6h]) / rate(aiservice_llm_request_total[6h]))
+            ) < (1 - ((1 - 0.999) * 6))
+          for: 15m
+          labels:
+            severity: warning
+            layer: slo
+            slo: llm-availability
+          annotations:
+            summary: "LLM Availability SLO — 느린 burn rate 감지 (6h 윈도우)"
+            description: "6시간 윈도우에서 에러 버짓 5% 이상 소진. 티켓 생성 권장."
+
+        - alert: SLO_API_Gateway_BurnRate_Slow
+          expr: |
+            (
+              1 - (rate(http_server_errors_total[6h]) / rate(http_server_requests_total[6h]))
+            ) < (1 - ((1 - 0.9995) * 3))
+          for: 15m
+          labels:
+            severity: warning
+            layer: slo
+            slo: api-gateway
+          annotations:
+            summary: "API Gateway SLO — 느린 burn rate 감지 (6h 윈도우)"
+            description: "API 게이트웨이 에러 버짓이 서서히 소진 중. 원인 조사 필요."
+
 ---
 # ── Recording Rules ────────────────────────────────────────────────
 apiVersion: monitoring.coreos.com/v1
@@ -194,4 +285,52 @@ spec:
             rate(aiservice_vectordb_cache_hit_total[5m]) /
             (rate(aiservice_vectordb_cache_hit_total[5m]) +
              rate(aiservice_vectordb_cache_miss_total[5m]))
+
+    # ── SLO Recording Rules (Phase 9') ─────────────────────────────
+    - name: slo.recording
+      interval: 30s
+      rules:
+        # LLM Availability — 1h/6h/30d error budget burn rate
+        - record: slo:llm_availability:burn_rate_1h
+          expr: |
+            1 - (
+              rate(aiservice_llm_error_total[1h])
+              / rate(aiservice_llm_request_total[1h])
+            )
+        - record: slo:llm_availability:burn_rate_6h
+          expr: |
+            1 - (
+              rate(aiservice_llm_error_total[6h])
+              / rate(aiservice_llm_request_total[6h])
+            )
+        - record: slo:llm_availability:error_budget_remaining
+          expr: |
+            1 - (
+              (1 - slo:llm_availability:burn_rate_1h)
+              / (1 - 0.999)
+            )
+
+        # API Gateway Availability
+        - record: slo:api_gateway:burn_rate_1h
+          expr: |
+            1 - (
+              rate(http_server_errors_total[1h])
+              / rate(http_server_requests_total[1h])
+            )
+        - record: slo:api_gateway:error_budget_remaining
+          expr: |
+            1 - (
+              (1 - slo:api_gateway:burn_rate_1h)
+              / (1 - 0.9995)
+            )
+
+        # RAG Pipeline Latency SLI
+        - record: slo:rag_latency:good_ratio_5m
+          expr: |
+            sum(rate(aiservice_rag_e2e_latency_bucket{le="3000"}[5m]))
+            / sum(rate(aiservice_rag_e2e_latency_count[5m]))
+
+        # GPU Cluster Uptime
+        - record: slo:gpu_cluster:uptime
+          expr: avg(up{job="dcgm-exporter"})
 {{- end }}
