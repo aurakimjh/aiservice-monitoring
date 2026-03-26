@@ -85,6 +85,7 @@ GPU VRAM은 AI 모델이 올라가는 **작업 책상의 크기**입니다.
 8. [Context Propagation 설계](#8-context-propagation-설계)
 12. [Java / .NET 전용 메트릭 (Phase 24 완료)](#12-java--net-전용-메트릭-phase-24-완료)
 13. [perf/eBPF 프로파일링 메트릭 (Phase 35)](#13-perfebpf-프로파일링-메트릭-phase-35)
+14. [JVM Virtual Thread 메트릭 (Phase 39)](#14-jvm-virtual-thread-메트릭-phase-39)
 
 ---
 
@@ -1897,6 +1898,71 @@ abs(
 | `profiling.offcpu.io_wait_ratio` | > 50% | > 80% | Slack #oncall (I/O 병목 의심) |
 | `flamegraph.render.duration` p99 | > 2s | > 5s | Slack #oncall |
 | `profiling.session.total{status="failed"}` rate/5m | > 3 | > 10 | PagerDuty |
+
+---
+
+## 14. JVM Virtual Thread 메트릭 (Phase 39)
+
+> **적용 조건**: JDK 21+ 런타임 자동 감지 시 활성화. 수집 방법: Java Attach API(Phase 34) + JFR 이벤트 구독.
+> **관련 설계**: [JAVA_DOTNET_SDK_DESIGN.md §10](./JAVA_DOTNET_SDK_DESIGN.md)
+
+### 14.1 Virtual Thread 수
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `jvm.virtual_thread.count` | Gauge | 1 | `agent_id`, `state` (`active`\|`waiting`) | 현재 활성/대기 중인 Virtual Thread 수 |
+| `jvm.virtual_thread.started.total` | Counter | 1 | `agent_id` | 누적 생성된 Virtual Thread 수 (JFR `jdk.VirtualThreadStart`) |
+
+### 14.2 Pinning 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `jvm.virtual_thread.pinned.count` | Counter | 1 | `agent_id` | Carrier Thread에 고정(Pinning)된 이벤트 누적 수 |
+| `jvm.virtual_thread.pinned.duration_ms` | Histogram | ms | `agent_id` | Pinning 지속 시간 분포 (p50/p95/p99) |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `jvm.virtual_thread.pinned.count` rate/1m | > 10 | > 50 | Slack #oncall (synchronized 블록 Pinning 감지) |
+| `jvm.virtual_thread.pinned.duration_ms` p99 | > 200ms | > 1000ms | PagerDuty (심각한 Carrier Thread 점유) |
+
+### 14.3 Carrier Thread Pool (ForkJoinPool) 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `jvm.carrier_pool.parallelism` | Gauge | 1 | `agent_id` | Carrier Thread 최대 수 (기본값: 논리 CPU 수) |
+| `jvm.carrier_pool.active` | Gauge | 1 | `agent_id` | 현재 실행 중인 Carrier Thread 수 |
+| `jvm.carrier_pool.idle` | Gauge | 1 | `agent_id` | 유휴 Carrier Thread 수 (`parallelism - active`) |
+| `jvm.carrier_pool.queued_tasks` | Gauge | 1 | `agent_id` | Carrier Pool 대기 큐의 Virtual Thread 작업 수 |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `jvm.carrier_pool.active / jvm.carrier_pool.parallelism` | > 0.8 | > 0.95 | Slack #oncall (Carrier Pool 포화) |
+| `jvm.carrier_pool.queued_tasks` | > 100 | > 500 | PagerDuty (스케줄링 지연 누적) |
+
+### 14.4 스케줄링 실패 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `jvm.virtual_thread.submit_failed` | Counter | 1 | `agent_id` | Carrier Pool 포화로 Virtual Thread 스케줄링 실패 횟수 (JFR `jdk.VirtualThreadSubmitFailed`) |
+
+**SLO 기준값:**
+
+| 메트릭 | 경고 | 위험 |
+|--------|------|------|
+| `jvm.virtual_thread.submit_failed` rate/1m | > 1 | > 5 |
+
+### 14.5 Continuation 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `jvm.virtual_thread.park.total` | Counter | 1 | `agent_id` | Continuation yield 횟수 (JFR `jdk.VirtualThreadPark`) |
+| `jvm.virtual_thread.unpark.total` | Counter | 1 | `agent_id` | Continuation resume 횟수 (JFR `jdk.VirtualThreadUnpark`) |
+
+> `park / unpark` 비율이 1에 가까울수록 정상 (스케줄링 균형). 비율이 크게 벗어나면 대기 누적을 의미합니다.
 
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
 *관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md)*
