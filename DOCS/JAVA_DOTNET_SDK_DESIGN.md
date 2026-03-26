@@ -66,6 +66,7 @@ APM 시장의 현실을 보면 명확합니다:
 7. [수집 메트릭 확장](#7-수집-메트릭-확장)
 8. [구현 로드맵](#8-구현-로드맵)
 9. [DB 호출 & 외부 HTTP 호출 프로파일링 상세](#9-db-호출--외부-http-호출-프로파일링-상세)
+10. [JDK 21 Virtual Thread 모니터링 (Phase 39)](#10-jdk-21-virtual-thread-모니터링-phase-39)
 
 ---
 
@@ -1857,5 +1858,205 @@ profiling:
 
 ---
 
-*Phase 24 구현 완료, Phase 33 Attach 모드 설계 완료 — 이 문서는 구현 완료 및 설계 기준 기술 스펙입니다.*
+---
+
+## 10. JDK 21 Virtual Thread 모니터링 (Phase 39)
+
+> **배경**: JDK 21(LTS)에서 Virtual Thread(Project Loom)가 정식 출시되었습니다. 기존 Platform Thread(OS 1:1 매핑) 대비 수백만 개의 경량 스레드를 생성할 수 있어 I/O 집약적 워크로드에서 처리량이 획기적으로 향상됩니다. 그러나 기존 APM 도구는 Virtual Thread를 제대로 추적하지 못해 **Pinning·스케줄링 지연·Carrier Pool 포화** 같은 신규 병목을 탐지하지 못합니다.
+
+### 10.1 Platform Thread vs Virtual Thread 비교
+
+| 항목 | Platform Thread | Virtual Thread (JDK 21+) |
+|------|----------------|--------------------------|
+| **생성 비용** | OS 스레드 생성 (~1MB 스택) | 힙 객체 (~수 KB) |
+| **최대 수** | 수백~수천 (OS 제한) | 수백만 (JVM 힙 제한) |
+| **블로킹 I/O** | OS 스레드 점유 | Carrier Thread 반환 후 재스케줄 |
+| **스케줄러** | OS 스케줄러 | JVM 내부 ForkJoinPool(Carrier Pool) |
+| **synchronized 블록** | 정상 동작 | **Carrier Thread에 Pinning → 병목 위험** |
+| **Thread.sleep()** | OS 블로킹 | Non-blocking (Continuation yield) |
+| **기존 APM 추적** | 완전 지원 | 대부분 미지원 (Platform Thread로 보임) |
+
+### 10.2 JDK 버전 자동 감지 및 활성화
+
+AITOP Agent는 Java Attach API(Phase 34) 연결 시 `java.version` 시스템 프로퍼티를 확인하여 JDK 21+ 이면 Virtual Thread 모니터링 모듈을 자동 활성화합니다.
+
+```yaml
+# agent.yaml — Virtual Thread 모니터링 설정 (JDK 21+ 자동 감지 시 활성화)
+jvm:
+  virtual_thread:
+    enabled: auto          # auto | true | false (auto: JDK 21+ 감지 시 활성화)
+    jfr_enabled: true      # JFR 이벤트 구독 (VirtualThreadPinned, VirtualThreadSubmitFailed)
+    carrier_pool_enabled: true   # ForkJoinPool(Carrier Pool) 상태 수집
+    continuation_tracking: true  # Continuation Yield/Resume 빈도 추적
+    thread_dump_json: true        # jcmd JSON 포맷 Thread Dump (Virtual Thread 포함)
+    poll_interval_sec: 10         # JMX 폴링 주기
+```
+
+**버전 감지 로직 (Go Agent 측):**
+
+```go
+// internal/jvm/virtual_thread_detector.go
+func DetectVirtualThreadSupport(pid int) (bool, string, error) {
+    // Java Attach API로 JVM 연결 후 SystemProperties 조회
+    props, err := attach.GetSystemProperties(pid)
+    if err != nil {
+        return false, "", err
+    }
+    version := props["java.version"]  // "21.0.2", "21.0.5", "22", ...
+    major, err := parseJavaMajorVersion(version)
+    if err != nil {
+        return false, version, err
+    }
+    return major >= 21, version, nil
+}
+```
+
+### 10.3 수집 항목
+
+#### 10.3.1 Virtual Thread 수 — JMX Threading MXBean + JFR
+
+| 항목 | 수집 방법 | 설명 |
+|------|----------|------|
+| 생성된 Virtual Thread 누적 수 | JFR `jdk.VirtualThreadStart` 이벤트 카운트 | 생성 속도 추이 |
+| 현재 활성 Virtual Thread 수 | JMX `ThreadMXBean.getThreadCount()` - Platform Thread 수 | 실시간 활성 수 |
+| WAITING/BLOCKED Virtual Thread 수 | JFR `jdk.VirtualThreadPinned` + Thread Dump 분석 | I/O·Lock 대기 중인 수 |
+
+#### 10.3.2 Carrier Thread Pool (ForkJoinPool) 상태
+
+Virtual Thread는 내부적으로 `ForkJoinPool`(기본: 논리 CPU 수만큼 생성)의 Platform Thread(Carrier Thread)를 빌려서 실행됩니다.
+
+| 항목 | 수집 방법 | 설명 |
+|------|----------|------|
+| `parallelism` | JMX `ForkJoinPool.getParallelism()` | Carrier Thread 최대 수 |
+| `activeCount` | JMX `ForkJoinPool.getActiveThreadCount()` | 현재 실행 중인 Carrier Thread 수 |
+| `idleCount` | `parallelism - activeCount` | 유휴 Carrier Thread 수 |
+| `queuedTaskCount` | JMX `ForkJoinPool.getQueuedTaskCount()` | 대기 중인 Virtual Thread 작업 수 |
+
+**수집 코드 예시 (aitop-attach-helper.jar 확장):**
+
+```java
+// VirtualThreadCollector.java (aitop-attach-helper.jar에 추가)
+public VirtualThreadMetrics collect() {
+    // ForkJoinPool 접근: Thread Scheduler는 JVM 내부 ForkJoinPool
+    ForkJoinPool carrierPool = (ForkJoinPool)
+        Executors.class.getDeclaredField("VIRTUAL_THREAD_SCHEDULER").get(null);
+
+    return VirtualThreadMetrics.builder()
+        .parallelism(carrierPool.getParallelism())
+        .activeCount(carrierPool.getActiveThreadCount())
+        .queuedTaskCount((int) carrierPool.getQueuedTaskCount())
+        .build();
+}
+```
+
+#### 10.3.3 Pinning 감지 — JFR `jdk.VirtualThreadPinned`
+
+**Pinning**은 Virtual Thread가 `synchronized` 블록 또는 native 메소드 안에서 블로킹 I/O를 호출할 때 Carrier Thread를 반환하지 못하고 **점유(고정)** 하는 현상입니다. Platform Thread처럼 동작하여 처리량을 저하시킵니다.
+
+```
+정상 흐름:
+  Virtual Thread → I/O 블로킹 → Carrier Thread 반환 → 다른 Virtual Thread 실행
+  ↓ (I/O 완료 후)
+  Virtual Thread → Carrier Thread 재할당 → 실행 재개
+
+Pinning 발생:
+  Virtual Thread (synchronized 내부) → I/O 블로킹 → Carrier Thread 점유 유지
+  → Carrier Pool 포화 → 처리량 저하 → 경고 필요
+```
+
+| JFR 이벤트 | 필드 | 설명 |
+|-----------|------|------|
+| `jdk.VirtualThreadPinned` | `duration` (ms) | Pinning 지속 시간 |
+| `jdk.VirtualThreadPinned` | `stackTrace` | Pinning 발생 스택 (어떤 메소드가 원인인지 파악) |
+
+**JFR 구독 설정 (aitop-attach-helper.jar):**
+
+```java
+// JFR 이벤트 구독 — Pinning 감지
+RecordingConfiguration config = RecordingConfiguration.builder()
+    .addEvent("jdk.VirtualThreadPinned", enabled -> enabled
+        .threshold(Duration.ofMillis(20))  // 20ms 이상 Pinning만 기록
+        .stackTrace(true))
+    .addEvent("jdk.VirtualThreadSubmitFailed", enabled -> enabled.enabled(true))
+    .addEvent("jdk.VirtualThreadStart",        enabled -> enabled.enabled(true))
+    .addEvent("jdk.VirtualThreadEnd",          enabled -> enabled.enabled(true))
+    .build();
+```
+
+#### 10.3.4 스케줄링 지연 — JFR `jdk.VirtualThreadSubmitFailed`
+
+Carrier Pool이 포화 상태일 때 Virtual Thread를 스케줄링하지 못하면 `jdk.VirtualThreadSubmitFailed` 이벤트가 발생합니다. 이 이벤트의 빈도가 높으면 `parallelism` 값을 높이거나 Pinning을 제거해야 합니다.
+
+#### 10.3.5 Continuation Yield/Resume 빈도
+
+Virtual Thread의 일시 중단(yield)과 재개(resume) 빈도를 추적하여 스케줄링 효율성을 평가합니다.
+
+| JFR 이벤트 | 설명 |
+|-----------|------|
+| `jdk.VirtualThreadPark` | Continuation yield (대기 진입) |
+| `jdk.VirtualThreadUnpark` | Continuation resume (실행 재개) |
+
+#### 10.3.6 Thread Dump — jcmd JSON 포맷 (Virtual Thread 포함)
+
+JDK 21부터 `jcmd <pid> Thread.dump_to_file -format=json <file>` 명령으로 Virtual Thread를 포함한 Thread Dump를 JSON 포맷으로 생성할 수 있습니다. AITOP Agent는 이를 파싱하여 Virtual Thread 스택을 Collection Server에 전송합니다.
+
+```json
+// Thread Dump JSON 구조 예시 (JDK 21+ jcmd 출력)
+{
+  "threadDump": {
+    "time": "2026-03-26T12:00:00Z",
+    "runtimeVersion": "21.0.2+13-58",
+    "threadContainers": [
+      {
+        "container": "VirtualThreads",
+        "threads": [
+          {
+            "tid": 100001,
+            "name": "#100001",
+            "state": "WAITING",
+            "stack": ["java.lang.VirtualThread.park(VirtualThread.java:593)", ...]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 10.4 수집 방법: Java Attach API + JFR 이벤트 구독
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AITOP Agent (Go)                             │
+│                                                                   │
+│  JVM Attach 모듈 (Phase 34)                                       │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  VirtualThreadDetector: JDK 버전 확인 (21+ 여부)          │    │
+│  │         ↓ JDK 21+                                         │    │
+│  │  VirtualThreadCollector                                    │    │
+│  │  ├─ JMX Poller:  ForkJoinPool 상태 (parallelism/active)   │    │
+│  │  │               ThreadMXBean (활성 Virtual Thread 추정)  │    │
+│  │  └─ JFR Subscriber:                                       │    │
+│  │       · jdk.VirtualThreadPinned    → Pinning 감지         │    │
+│  │       · jdk.VirtualThreadSubmitFailed → 스케줄링 지연     │    │
+│  │       · jdk.VirtualThreadStart/End → 생성/종료 카운트     │    │
+│  │       · jdk.VirtualThreadPark/Unpark → Yield/Resume 빈도  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│         ↓ OTel Metric + Event                                     │
+│  Collection Server → VictoriaMetrics (저장)                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 10.5 알림 기준
+
+| 조건 | 심각도 | 설명 |
+|------|--------|------|
+| `jvm.virtual_thread.pinned.count` rate/1m > 10 | ⚠️ WARNING | synchronized 블록에서 Pinning 빈발 — 코드 리뷰 필요 |
+| `jvm.virtual_thread.pinned.duration_ms` p99 > 1000 | 🔴 CRITICAL | Pinning 지속 시간 1초 초과 — 심각한 처리량 저하 |
+| `jvm.virtual_thread.submit_failed` rate/1m > 5 | 🔴 CRITICAL | Carrier Pool 포화 — parallelism 증가 또는 Pinning 제거 |
+| `jvm.carrier_pool.active / jvm.carrier_pool.parallelism` > 0.9 | ⚠️ WARNING | Carrier Pool 90% 이상 점유 |
+
+---
+
+*Phase 24 구현 완료, Phase 33 Attach 모드 설계 완료, Phase 39 Virtual Thread 모니터링 설계 추가 — 이 문서는 구현 완료 및 설계 기준 기술 스펙입니다.*
 *관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [METRICS_DESIGN.md](./METRICS_DESIGN.md) | [XLOG_DASHBOARD_REDESIGN.md](./XLOG_DASHBOARD_REDESIGN.md) | [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md)*
