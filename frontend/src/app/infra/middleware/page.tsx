@@ -7,8 +7,8 @@ import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getMiddlewareRuntimes, getConnPoolAlertEvents } from '@/lib/demo-data';
-import type { MiddlewareRuntime, ConnectionPoolMetrics } from '@/types/monitoring';
-import { Server, Layers, Activity, AlertTriangle, ExternalLink } from 'lucide-react';
+import type { MiddlewareRuntime, ConnectionPoolMetrics, VirtualThreadSnapshot, VTAlertRecord, VTPinnedStack } from '@/types/monitoring';
+import { Server, Layers, Activity, AlertTriangle, ExternalLink, Cpu, Zap, Pin, Clock } from 'lucide-react';
 
 const LANG_LABELS: Record<string, string> = {
   java:   'Java',
@@ -222,6 +222,245 @@ function GoroutineCard({ count, hostname }: { count: number; hostname: string })
   );
 }
 
+// ── Virtual Thread Gadget 1: Carrier Pool Gauge ───────────────────────────────
+function CarrierPoolGauge({ vt }: { vt: VirtualThreadSnapshot }) {
+  const pct = Math.round(vt.carrierPool.utilization * 100);
+  const color = pct >= 90 ? 'var(--status-critical)' : pct >= 70 ? 'var(--status-warning)' : 'var(--status-healthy)';
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-3">
+        {([
+          ['Parallelism', vt.carrierPool.parallelism],
+          ['Active', vt.carrierPool.activeCount],
+          ['Queued', vt.carrierPool.queuedTasks],
+          ['Util %', pct + '%'],
+        ] as [string, string | number][]).map(([label, val]) => (
+          <div key={label} className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+            <div className="text-lg font-mono font-bold" style={{ color: label === 'Util %' ? color : 'var(--text-primary)' }}>{val}</div>
+            <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{label}</div>
+          </div>
+        ))}
+      </div>
+      {/* Utilization radial-style bar */}
+      <div>
+        <div className="flex justify-between text-[10px] text-[var(--text-muted)] mb-1">
+          <span>Carrier Pool Utilization</span>
+          <span style={{ color }}>{pct}%</span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-[var(--bg-secondary)] overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+        </div>
+        <div className="flex justify-between text-[9px] text-[var(--text-muted)] mt-0.5">
+          <span>0%</span>
+          <span className="text-[var(--status-warning)]">70%</span>
+          <span className="text-[var(--status-critical)]">90%</span>
+          <span>100%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Virtual Thread Gadget 2: VT Count ─────────────────────────────────────────
+function VirtualThreadCountGadget({ vt }: { vt: VirtualThreadSnapshot }) {
+  const data = vt.activeHistory ?? [];
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+          <div className="text-2xl font-mono font-bold text-[var(--status-healthy)]">{vt.activeCount.toLocaleString()}</div>
+          <div className="text-[10px] text-[var(--text-muted)] mt-0.5">Active</div>
+        </div>
+        <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+          <div className="text-2xl font-mono font-bold text-[var(--status-warning)]">{vt.waitingCount.toLocaleString()}</div>
+          <div className="text-[10px] text-[var(--text-muted)] mt-0.5">Waiting</div>
+        </div>
+        <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+          <div className="text-2xl font-mono font-bold text-[var(--text-muted)]">{vt.mountedCount}</div>
+          <div className="text-[10px] text-[var(--text-muted)] mt-0.5">Mounted</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <Zap size={12} className="text-[var(--status-healthy)]" />
+        <span>{vt.createdPerMin.toLocaleString()} created/min</span>
+      </div>
+      {data.length > 0 && (
+        <EChartsWrapper
+          style={{ height: 80 }}
+          option={{
+            grid: { top: 4, bottom: 4, left: 40, right: 8 },
+            xAxis: { type: 'category', show: false, data: data.map((_, i) => i) },
+            yAxis: { type: 'value', axisLabel: { color: 'var(--text-muted)', fontSize: 10 } },
+            series: [{
+              type: 'line', smooth: true, symbol: 'none',
+              data,
+              lineStyle: { color: 'var(--status-healthy)', width: 2 },
+              areaStyle: { color: 'var(--status-healthy)', opacity: 0.1 },
+            }],
+            tooltip: { trigger: 'axis', formatter: (p: any) => `Active: ${p[0].value}` },
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Virtual Thread Gadget 3: Pinning Warning ──────────────────────────────────
+function PinningGadget({
+  vt, pinnedStacks, alerts, onStackClick,
+}: {
+  vt: VirtualThreadSnapshot;
+  pinnedStacks?: VTPinnedStack[];
+  alerts?: VTAlertRecord[];
+  onStackClick?: (stack: VTPinnedStack) => void;
+}) {
+  const hasCritical = (alerts ?? []).some((a) => a.severity === 'critical' && !a.acked);
+  const hasWarning = !hasCritical && (alerts ?? []).some((a) => a.severity === 'warning' && !a.acked);
+  const borderClass = hasCritical
+    ? 'border-red-500/30 bg-red-500/5'
+    : hasWarning
+    ? 'border-yellow-500/30 bg-yellow-500/5'
+    : 'border-[var(--border-muted)]';
+
+  const topStacks = (pinnedStacks ?? []).slice(0, 3);
+
+  return (
+    <div className={cn('rounded-lg border p-3 space-y-3', borderClass)}>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="text-center">
+          <div className={cn('text-2xl font-mono font-bold', vt.pinnedCount > 10 ? 'text-[var(--status-warning)]' : 'text-[var(--text-primary)]')}>
+            {vt.pinnedCount}
+          </div>
+          <div className="text-[10px] text-[var(--text-muted)]">Events/min</div>
+        </div>
+        <div className="text-center">
+          <div className={cn('text-2xl font-mono font-bold', vt.pinnedP99Ms > 1000 ? 'text-[var(--status-critical)]' : vt.pinnedP99Ms > 200 ? 'text-[var(--status-warning)]' : 'text-[var(--text-primary)]')}>
+            {vt.pinnedP99Ms.toFixed(0)}
+          </div>
+          <div className="text-[10px] text-[var(--text-muted)]">P99 (ms)</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-mono font-bold text-[var(--text-muted)]">{topStacks.length}</div>
+          <div className="text-[10px] text-[var(--text-muted)]">Stack sites</div>
+        </div>
+      </div>
+      {topStacks.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Top Pinning Methods</div>
+          {topStacks.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onStackClick?.(s)}
+              className="w-full text-left p-2 rounded-md bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] transition-colors flex items-center gap-2"
+            >
+              <Pin size={10} className="text-[var(--status-warning)] shrink-0" />
+              <span className="text-[10px] text-[var(--text-secondary)] truncate font-mono">{s.topMethod}</span>
+              <span className="ml-auto text-[10px] text-[var(--status-warning)] tabular-nums shrink-0">{s.durationMs.toFixed(0)}ms</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Virtual Thread Gadget 4: Submit-Failed Bar Chart ─────────────────────────
+function SubmitFailedChart({ vt }: { vt: VirtualThreadSnapshot }) {
+  const data = vt.submitFailedHistory ?? [];
+  const maxVal = Math.max(...data, 1);
+  const xLabels = data.map((_, i) => {
+    const mins = data.length - 1 - i;
+    return mins === 0 ? 'now' : `-${mins}m`;
+  });
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+        <Clock size={12} />
+        <span>Submit-Failed / min — last {data.length} min</span>
+        <span className="ml-auto tabular-nums font-medium text-[var(--text-primary)]">
+          Avg: {data.length ? (data.reduce((a, b) => a + b, 0) / data.length).toFixed(1) : 0}/min
+        </span>
+      </div>
+      <EChartsWrapper
+        style={{ height: 100 }}
+        option={{
+          grid: { top: 8, bottom: 24, left: 32, right: 8 },
+          xAxis: {
+            type: 'category',
+            data: xLabels,
+            axisLabel: { color: 'var(--text-muted)', fontSize: 9, interval: 4 },
+          },
+          yAxis: {
+            type: 'value',
+            min: 0,
+            max: Math.max(maxVal * 1.5, 5),
+            axisLabel: { color: 'var(--text-muted)', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'var(--border-muted)', type: 'dashed' } },
+          },
+          series: [
+            {
+              type: 'bar',
+              data: data.map((v) => ({
+                value: v,
+                itemStyle: { color: v > 5 ? 'var(--status-critical)' : v > 0 ? 'var(--status-warning)' : 'var(--bg-tertiary)' },
+              })),
+              barMaxWidth: 12,
+            },
+            {
+              // CRITICAL threshold line at 5
+              type: 'line', symbol: 'none', silent: true,
+              data: Array(data.length).fill(5),
+              lineStyle: { color: 'var(--status-critical)', type: 'dashed', width: 1 },
+            },
+          ],
+          tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}: ${p[0].value} failures` },
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Pinning Stack Panel (slide panel) ─────────────────────────────────────────
+function PinningStackPanel({ stack, onClose }: { stack: VTPinnedStack | null; onClose: () => void }) {
+  if (!stack) return null;
+  return (
+    <div className="fixed inset-y-0 right-0 w-96 bg-[var(--bg-secondary)] border-l border-[var(--border-muted)] z-50 flex flex-col shadow-2xl">
+      <div className="flex items-center justify-between p-4 border-b border-[var(--border-muted)]">
+        <div className="flex items-center gap-2">
+          <Pin size={14} className="text-[var(--status-warning)]" />
+          <span className="text-sm font-semibold text-[var(--text-primary)]">Pinning Stack Trace</span>
+        </div>
+        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-lg leading-none">&times;</button>
+      </div>
+      <div className="p-4 space-y-3 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+            <div className="text-lg font-mono font-bold text-[var(--status-warning)]">{stack.durationMs.toFixed(1)}</div>
+            <div className="text-[10px] text-[var(--text-muted)]">Duration (ms)</div>
+          </div>
+          <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] text-center">
+            <div className="text-xs font-mono text-[var(--text-secondary)] break-all leading-relaxed">{stack.capturedAt.substring(11, 19)}</div>
+            <div className="text-[10px] text-[var(--text-muted)]">Captured</div>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Top Method</div>
+          <code className="text-xs text-[var(--status-warning)] font-mono break-all">{stack.topMethod}</code>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Full Stack</div>
+          <pre className="text-[10px] font-mono text-[var(--text-secondary)] bg-[var(--bg-tertiary)] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+            {stack.stackTrace}
+          </pre>
+        </div>
+        <div className="text-[10px] text-[var(--text-muted)] bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2">
+          Virtual Thread pinning occurs when a Virtual Thread is blocked on a synchronized block or native method, preventing the Carrier Thread from being re-used. Refactor to use java.util.concurrent.locks.ReentrantLock or avoid synchronized blocks.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Connection Pool Row ───────────────────────────────────────────────────────
 function ConnPoolRow({ pool }: { pool: ConnectionPoolMetrics }) {
   const pct = Math.round(pool.utilization * 100);
@@ -251,58 +490,127 @@ function ConnPoolRow({ pool }: { pool: ConnectionPoolMetrics }) {
 
 // ── Runtime Host Card ─────────────────────────────────────────────────────────
 function RuntimeCard({ runtime }: { runtime: MiddlewareRuntime }) {
+  const [pinnedStack, setPinnedStack] = useState<import('@/types/monitoring').VTPinnedStack | null>(null);
+  const vt = runtime.virtualThreads;
+  const isJDK21Plus = runtime.language === 'java' && !!vt;
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <Badge variant="status" className={cn('text-[10px] uppercase font-bold', LANG_COLORS[runtime.language])}>
-              {LANG_LABELS[runtime.language]}
-            </Badge>
-            <CardTitle>{runtime.hostname}</CardTitle>
-          </div>
-        </div>
-      </CardHeader>
-      <div className="px-4 pb-4 space-y-4">
-        {/* Thread Pools (Java / .NET) */}
-        {runtime.threadPools && runtime.threadPools.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Thread Pool</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {runtime.threadPools.map((tp) => <ThreadPoolCard key={tp.name} pool={tp} />)}
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <Badge variant="status" className={cn('text-[10px] uppercase font-bold', LANG_COLORS[runtime.language])}>
+                {LANG_LABELS[runtime.language]}
+              </Badge>
+              {/* Phase 39: JDK version badge */}
+              {runtime.jdkVersion && (
+                <Badge variant="status" className="text-[10px] bg-orange-500/15 text-orange-300 border-orange-500/30 font-mono">
+                  JDK {runtime.jdkVersion}
+                </Badge>
+              )}
+              {isJDK21Plus && (
+                <Badge variant="status" className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/30">
+                  Virtual Threads
+                </Badge>
+              )}
+              <CardTitle>{runtime.hostname}</CardTitle>
             </div>
           </div>
-        )}
-        {/* Event Loop (Node.js) */}
-        {runtime.eventLoop && (
-          <div className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Event Loop</h4>
-            <EventLoopCard el={runtime.eventLoop} />
-          </div>
-        )}
-        {/* Worker Pool (Python) */}
-        {runtime.workers && (
-          <div className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Worker Pool</h4>
-            <WorkerPoolCard workers={runtime.workers} />
-          </div>
-        )}
-        {/* Goroutines (Go) */}
-        {runtime.goroutines !== undefined && (
-          <div className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Goroutines</h4>
-            <GoroutineCard count={runtime.goroutines} hostname={runtime.hostname} />
-          </div>
-        )}
-        {/* Connection Pools */}
-        {runtime.connectionPools && runtime.connectionPools.length > 0 && (
-          <div className="space-y-1">
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Connection Pool</h4>
-            {runtime.connectionPools.map((cp) => <ConnPoolRow key={cp.name} pool={cp} />)}
-          </div>
-        )}
-      </div>
-    </Card>
+        </CardHeader>
+        <div className="px-4 pb-4 space-y-4">
+          {/* Thread Pools (Java / .NET) */}
+          {runtime.threadPools && runtime.threadPools.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Thread Pool</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {runtime.threadPools.map((tp) => <ThreadPoolCard key={tp.name} pool={tp} />)}
+              </div>
+            </div>
+          )}
+          {/* Event Loop (Node.js) */}
+          {runtime.eventLoop && (
+            <div className="space-y-2">
+              <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Event Loop</h4>
+              <EventLoopCard el={runtime.eventLoop} />
+            </div>
+          )}
+          {/* Worker Pool (Python) */}
+          {runtime.workers && (
+            <div className="space-y-2">
+              <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Worker Pool</h4>
+              <WorkerPoolCard workers={runtime.workers} />
+            </div>
+          )}
+          {/* Goroutines (Go) */}
+          {runtime.goroutines !== undefined && (
+            <div className="space-y-2">
+              <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Goroutines</h4>
+              <GoroutineCard count={runtime.goroutines} hostname={runtime.hostname} />
+            </div>
+          )}
+          {/* Connection Pools */}
+          {runtime.connectionPools && runtime.connectionPools.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Connection Pool</h4>
+              {runtime.connectionPools.map((cp) => <ConnPoolRow key={cp.name} pool={cp} />)}
+            </div>
+          )}
+
+          {/* ── Phase 39: Virtual Thread Section (JDK 21+ only) ─────────── */}
+          {isJDK21Plus && vt && (
+            <div className="space-y-4 pt-2 border-t border-[var(--border-muted)]">
+              <div className="flex items-center gap-2">
+                <Cpu size={12} className="text-purple-400" />
+                <h4 className="text-[10px] uppercase tracking-wider text-purple-400 font-semibold">
+                  Virtual Thread Monitoring
+                </h4>
+              </div>
+
+              {/* Gadget 1: Carrier Pool Gauge */}
+              <div className="space-y-1.5">
+                <h5 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">
+                  <Cpu size={10} /> Carrier Pool (ForkJoinPool)
+                </h5>
+                <CarrierPoolGauge vt={vt} />
+              </div>
+
+              {/* Gadget 2: VT Count */}
+              <div className="space-y-1.5">
+                <h5 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">
+                  <Zap size={10} /> Virtual Thread Count
+                </h5>
+                <VirtualThreadCountGadget vt={vt} />
+              </div>
+
+              {/* Gadget 3: Pinning Warning */}
+              <div className="space-y-1.5">
+                <h5 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">
+                  <Pin size={10} /> Pinning Detection
+                </h5>
+                <PinningGadget
+                  vt={vt}
+                  pinnedStacks={runtime.vtPinnedStacks}
+                  alerts={runtime.vtAlerts}
+                  onStackClick={setPinnedStack}
+                />
+              </div>
+
+              {/* Gadget 4: Submit-Failed Chart */}
+              <div className="space-y-1.5">
+                <h5 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold flex items-center gap-1">
+                  <Activity size={10} /> Scheduling Failures (30 min)
+                </h5>
+                <SubmitFailedChart vt={vt} />
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Pinning stack slide panel */}
+      <PinningStackPanel stack={pinnedStack} onClose={() => setPinnedStack(null)} />
+    </>
   );
 }
 
@@ -334,9 +642,14 @@ export default function MiddlewarePage() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">Middleware Runtime Monitoring</h1>
-        <a href="/infra/middleware/connection-pool" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors">
-          <Activity size={12} />Connection Pool Dashboard
-        </a>
+        <div className="flex items-center gap-3">
+          <a href="/infra/middleware/thread-dump" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors">
+            <Cpu size={12} />Thread Dump Viewer
+          </a>
+          <a href="/infra/middleware/connection-pool" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors">
+            <Activity size={12} />Connection Pool Dashboard
+          </a>
+        </div>
       </div>
 
       {/* KPIs */}

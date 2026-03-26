@@ -1542,6 +1542,7 @@ export function getGroupDashboard(groupId: string): GroupDashboard {
 export function getMiddlewareRuntimes(): MiddlewareRuntime[] {
   return [
     { hostId: 'h-api-01', hostname: 'prod-api-01', language: 'java',
+      jdkVersion: '21.0.2',
       threadPools: [
         { name: 'tomcat-exec', activeThreads: 45, maxThreads: 200, queuedTasks: 3, completedTasks: 128400, utilization: 0.225 },
         { name: 'async-pool', activeThreads: 8, maxThreads: 50, queuedTasks: 0, completedTasks: 45200, utilization: 0.16 },
@@ -1549,6 +1550,30 @@ export function getMiddlewareRuntimes(): MiddlewareRuntime[] {
       connectionPools: [
         { name: 'HikariCP-primary', activeConnections: 12, idleConnections: 8, maxConnections: 20, waitCount: 0, utilization: 0.6, leakSuspected: false },
         { name: 'HikariCP-readonly', activeConnections: 5, idleConnections: 10, maxConnections: 15, waitCount: 0, utilization: 0.33, leakSuspected: false },
+      ],
+      virtualThreads: {
+        activeCount: 1284, waitingCount: 342, mountedCount: 8, createdPerMin: 4500,
+        submitFailedRate: 1.2, pinnedCount: 7, pinnedP99Ms: 145.3,
+        carrierPool: { parallelism: 16, activeCount: 12, queuedTasks: 24, utilization: 0.75 },
+        submitFailedHistory: [0,0,1,0,0,2,1,0,0,1,0,0,1,2,0,0,1,0,0,0,1,0,2,1,0,0,1,0,0,1],
+        activeHistory: [800,820,850,890,920,870,910,960,1100,1200,1284,1310,1280,1250,1230,1200,1180,1220,1260,1284,1300,1320,1284,1260,1240,1280,1284,1300,1284,1284],
+        collectedAt: new Date().toISOString(),
+      },
+      vtAlerts: [
+        { alertId: 'vt-alert-000001', severity: 'warning' as const, rule: 'vt.pinned.rate',
+          message: 'Virtual Thread pinning rate too high: 7 events/min (threshold: 10)',
+          value: 7, threshold: 10, firedAt: new Date(Date.now() - 5*60000).toISOString(), acked: false },
+      ],
+      vtPinnedStacks: [
+        { id: 'pin-001', durationMs: 245.8, topMethod: 'com.example.LegacySync.doWork',
+          stackTrace: 'java.lang.Object.wait(Object.java)\n  com.example.LegacySync.doWork(LegacySync.java:42)\n  java.lang.Thread.run(Thread.java:833)',
+          capturedAt: new Date(Date.now() - 3*60000).toISOString() },
+        { id: 'pin-002', durationMs: 189.2, topMethod: 'com.example.FileService.readSync',
+          stackTrace: 'sun.nio.fs.UnixNativeDispatcher.read()\n  com.example.FileService.readSync(FileService.java:88)\n  java.lang.Thread.run(Thread.java:833)',
+          capturedAt: new Date(Date.now() - 2*60000).toISOString() },
+        { id: 'pin-003', durationMs: 124.5, topMethod: 'com.example.ReflectionUtil.call',
+          stackTrace: 'jdk.internal.reflect.NativeMethodAccessorImpl.invoke()\n  com.example.ReflectionUtil.call(ReflectionUtil.java:15)\n  java.lang.Thread.run(Thread.java:833)',
+          capturedAt: new Date(Date.now() - 60000).toISOString() },
       ],
     },
     { hostId: 'h-api-02', hostname: 'prod-api-02', language: 'nodejs',
