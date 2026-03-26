@@ -17,11 +17,12 @@ import (
 
 // JavaMetrics holds collected Java middleware runtime data.
 type JavaMetrics struct {
-	Language    string              `json:"language"`
-	Detail      string              `json:"detail"`
-	ThreadPools []ThreadPoolData    `json:"thread_pools,omitempty"`
-	ConnPools   []ConnPoolData      `json:"connection_pools,omitempty"`
-	JVMInfo     *JVMRuntimeInfo     `json:"jvm_info,omitempty"`
+	Language       string                `json:"language"`
+	Detail         string                `json:"detail"`
+	ThreadPools    []ThreadPoolData      `json:"thread_pools,omitempty"`
+	ConnPools      []ConnPoolData        `json:"connection_pools,omitempty"`
+	JVMInfo        *JVMRuntimeInfo       `json:"jvm_info,omitempty"`
+	VirtualThreads *VirtualThreadMetrics `json:"virtual_threads,omitempty"` // Phase 39: JDK 21+
 }
 
 // ThreadPoolData captures a named Java thread pool snapshot.
@@ -71,6 +72,12 @@ func collectJava(ctx context.Context, lang DetectedLanguage, cfg models.CollectC
 		metrics.JVMInfo = collectJVMInfo(pid)
 		metrics.ThreadPools = collectJavaThreadPools(pid)
 		metrics.ConnPools = collectJavaConnPools(pid, cfg)
+		// Phase 39: collect Virtual Thread metrics if JDK 21+
+		javaVer := ""
+		if metrics.JVMInfo != nil {
+			javaVer = metrics.JVMInfo.Version
+		}
+		metrics.VirtualThreads = collectJavaVirtualThreads(pid, javaVer)
 	} else {
 		result.Errors = append(result.Errors, models.CollectError{
 			Code:    models.ErrEnvNotDetected,
@@ -96,6 +103,10 @@ func collectJava(ctx context.Context, lang DetectedLanguage, cfg models.CollectC
 	for _, cp := range metrics.ConnPools {
 		emitConnPoolItem(cp, result)
 	}
+
+	// Phase 39: emit Virtual Thread gauge items + alerts
+	emitVirtualThreadItems(metrics.VirtualThreads, result)
+	emitVirtualThreadAlerts(metrics.VirtualThreads, result)
 }
 
 // discoverJVMPID returns the first JVM PID found via jcmd.

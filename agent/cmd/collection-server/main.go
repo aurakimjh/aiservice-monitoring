@@ -2069,6 +2069,9 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// ── Batch Alert Rules API (Phase 38) ─────────────────────────────────────
 	registerBatchAlertRoutes(mux)
 
+	// ── Virtual Thread Monitoring API (Phase 39) ──────────────────────────────
+	registerVirtualThreadRoutes(mux)
+
 	// ── perf/eBPF Flamegraph API (Phase 35) ──────────────────────────────────
 	registerFlamegraphRoutes(mux, store)
 

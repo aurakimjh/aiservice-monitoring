@@ -938,15 +938,60 @@ export interface EventLoopMetrics {
   activeRequests: number;
 }
 
+// Phase 39: JDK 21 Virtual Thread types
+export interface CarrierPoolStats {
+  parallelism: number;
+  activeCount: number;
+  queuedTasks: number;
+  utilization: number; // 0-1
+}
+
+export interface VTPinnedStack {
+  id: string;
+  durationMs: number;
+  stackTrace: string;
+  topMethod: string;
+  capturedAt: string;
+}
+
+export interface VTAlertRecord {
+  alertId: string;
+  severity: 'warning' | 'critical';
+  rule: string;
+  message: string;
+  value: number;
+  threshold: number;
+  firedAt: string;
+  acked: boolean;
+}
+
+export interface VirtualThreadSnapshot {
+  activeCount: number;
+  waitingCount: number;
+  mountedCount: number;
+  createdPerMin: number;
+  submitFailedRate: number;
+  pinnedCount: number;
+  pinnedP99Ms: number;
+  carrierPool: CarrierPoolStats;
+  submitFailedHistory: number[]; // 30 × 1-min buckets
+  activeHistory: number[];       // 30 × 1-min buckets
+  collectedAt: string;
+}
+
 export interface MiddlewareRuntime {
   hostId: string;
   hostname: string;
   language: 'java' | 'dotnet' | 'nodejs' | 'python' | 'go';
+  jdkVersion?: string;    // e.g. "21.0.2" — Phase 39 badge
   threadPools?: ThreadPoolMetrics[];
   connectionPools?: ConnectionPoolMetrics[];
   eventLoop?: EventLoopMetrics;
   goroutines?: number;
   workers?: { active: number; max: number; idle: number };
+  virtualThreads?: VirtualThreadSnapshot; // Phase 39: JDK 21+ only
+  vtAlerts?: VTAlertRecord[];             // Phase 39: active alerts
+  vtPinnedStacks?: VTPinnedStack[];       // Phase 39: top pinning stacks
 }
 
 export interface RedisMetrics {

@@ -26,9 +26,10 @@ type JavaAttacher struct {
 }
 
 type javaSession struct {
-	PID       int
-	AgentJar  string
-	AttachedAt time.Time
+	PID              int
+	AgentJar         string
+	AttachedAt       time.Time
+	VirtualThreadInfo *VirtualThreadInfo // non-nil if JDK 21+
 }
 
 // NewJavaAttacher creates a JavaAttacher.
@@ -166,10 +167,24 @@ func (a *JavaAttacher) Attach(ctx context.Context, pid int) error {
 		return mapJavaHelperError(msg, pid)
 	}
 
+	// Probe JDK version to enable Virtual Thread monitoring on JDK 21+
+	vtInfo, _ := DetectVirtualThreadSupport(pid)
+	if vtInfo != nil && vtInfo.VirtualThreadEnabled {
+		// Activate JFR Virtual Thread event subscription via helper
+		vtArgs := []string{
+			"-jar", helperJar,
+			"--pid", strconv.Itoa(pid),
+			"--action", "vt-subscribe",
+		}
+		vtCmd := exec.Command(javaExe, vtArgs...)
+		_ = vtCmd.Run() // best-effort; helper may not support vt-subscribe yet
+	}
+
 	a.sessions[pid] = &javaSession{
-		PID:        pid,
-		AgentJar:   agentJar,
-		AttachedAt: time.Now(),
+		PID:               pid,
+		AgentJar:          agentJar,
+		AttachedAt:        time.Now(),
+		VirtualThreadInfo: vtInfo,
 	}
 	return nil
 }
@@ -205,6 +220,15 @@ func (a *JavaAttacher) Detach(ctx context.Context, pid int) error {
 	cmd := exec.CommandContext(cmdCtx, javaExe, args...)
 	_ = cmd.Run() // best-effort
 	return nil
+}
+
+// IsVirtualThreadEnabled returns true if the session for pid has JDK 21+
+// Virtual Thread monitoring active.
+func (a *JavaAttacher) IsVirtualThreadEnabled(pid int) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	s, ok := a.sessions[pid]
+	return ok && s.VirtualThreadInfo != nil && s.VirtualThreadInfo.VirtualThreadEnabled
 }
 
 // CollectProfile uses async-profiler via the helper for a live snapshot,
