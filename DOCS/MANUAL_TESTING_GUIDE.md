@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: 이 프로젝트를 처음 접하는 초보자 (코딩 경험 불필요)
-> **최종 업데이트**: 2026-03-26 (Phase 1-38 완료 / 배치·eBPF·Attach·GPU·플러그인 신규 기능 반영)
+> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 릴리스 — RUM·Golden Signals·런타임·DB 모니터링·K8s 배포·SLO 튜닝 포함)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:

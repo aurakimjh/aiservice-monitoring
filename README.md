@@ -4,7 +4,7 @@
 >
 > **대상 독자**: SRE, Platform Engineer, MLOps Engineer, AI Engineer
 > **기반 표준**: OpenTelemetry Specification v1.31 | OTel Collector v0.104+
-> **최종 업데이트**: 2026-03-26 (Phase 1-38 전체 완료 + Phase 7' E2E 실행 완료 — 배치 모니터링, perf/eBPF 프로파일링, Runtime Attach, Plugin Manager)
+> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 릴리스 승인 — RUM·Golden Signals·런타임 모니터링·DB 모니터링·K8s 배포·SLO 튜닝)
 
 ---
 
@@ -36,6 +36,11 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 | **진단 보고서** | IT 55항목 + AI 31항목 = 86개 자동 진단 및 교차 분석 |
 | **가드레일 가시성** | 차단율, 위반 유형, 레이턴시 기여도 실시간 측정 |
 | **미들웨어 모니터링** | Redis/Memcached 캐시 + RabbitMQ/Kafka 메시지 큐 모니터링 |
+| **RUM** | Core Web Vitals (LCP/FID/CLS/INP), Session Replay, 글로벌 PoP 레이턴시 |
+| **SRE Golden Signals** | Latency/Traffic/Errors/Saturation 통합 뷰 + SLO Burn Rate 경고 |
+| **런타임 모니터링** | Python GIL/Free-Thread, .NET AOT/ThreadPool, Go Scheduler Latency |
+| **DB 모니터링** | PostgreSQL/MySQL 슬로우 쿼리, 락 분석, 대기 이벤트, 실행 계획 |
+| **SLO 기반 알림** | 6개 SLO + 2계층 Burn Rate Alert (page/ticket) + Error Budget 추적 |
 | **멀티테넌트** | 프로젝트 기반 리소스 격리, White-label, RBAC |
 | **국제화** | 한국어/영어/일본어 3개 언어 지원 |
 
