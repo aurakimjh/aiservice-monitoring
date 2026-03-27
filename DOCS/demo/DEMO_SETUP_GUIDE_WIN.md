@@ -666,23 +666,46 @@ cd C:\demo\guardrail-demo
 uvicorn guardrail_service:app --host 0.0.0.0 --port 8094
 ```
 
-### Step 4: 언어별 데모 앱 (탭 4~8)
+### Step 4: 언어별 데모 앱 (탭 4~8) — OTel 계측 포함
+
+> **v1.1 업데이트**: `C:\workspace\demo-site`에 5개 언어 OTel 계측이 내장되어 있습니다.
+> `OTEL_EXPORTER_OTLP_ENDPOINT` 환경변수를 설정하면 자동으로 트레이스/메트릭이 수집됩니다.
+> 환경변수를 설정하지 않으면 OTel 없이 앱만 실행됩니다.
 
 ```powershell
-# 탭 4 — Java
-cd C:\demo\java-demo\java-demo && .\mvnw.cmd spring-boot:run
+# 탭 4 — Java (OTel javaagent 자동 계측)
+cd C:\workspace\demo-site\java-app
+.\start-otel.bat
+# 또는 기존 방식: cd C:\demo\java-demo\java-demo && .\mvnw.cmd spring-boot:run
 
-# 탭 5 — .NET
-cd C:\demo\dotnet-demo\DotNetDemo && dotnet run
+# 탭 5 — .NET (OTel SDK 내장)
+cd C:\workspace\demo-site\dotnet-app
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317"
+dotnet run
+# 또는 기존 방식: cd C:\demo\dotnet-demo\DotNetDemo && dotnet run
 
-# 탭 6 — Go
-cd C:\demo\go-demo && go run main.go
+# 탭 6 — Go (OTel SDK — otelgin + otelpgx + redisotel)
+cd C:\workspace\demo-site\go-app
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317"
+$env:OTEL_SERVICE_NAME = "go-demo-app"
+go run .
+# 또는 기존 방식: cd C:\demo\go-demo && go run main.go
 
-# 탭 7 — Python FastAPI
-cd C:\demo\python-demo && .\.venv\Scripts\activate && uvicorn main:app --port 8084
+# 탭 7 — Python FastAPI (OTel SDK — FastAPI + psycopg + Redis + httpx)
+cd C:\workspace\demo-site\python-app
+pip install -r requirements.txt
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
+$env:OTEL_SERVICE_NAME = "python-demo-app"
+uvicorn main:app --port 8084
+# 또는 기존 방식: cd C:\demo\python-demo && uvicorn main:app --port 8084
 
-# 탭 8 — Node.js
-cd C:\demo\nodejs-demo && node app.js
+# 탭 8 — Node.js (OTel SDK — Express + pg + ioredis)
+cd C:\workspace\demo-site\nodejs-app
+npm install
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
+$env:OTEL_SERVICE_NAME = "nodejs-demo-app"
+node app.js
+# 또는 기존 방식: cd C:\demo\nodejs-demo && node app.js
 ```
 
 ### Step 5: 배치 서비스 (WSL2 bash 탭)

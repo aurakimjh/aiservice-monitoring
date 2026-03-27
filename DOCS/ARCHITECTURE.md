@@ -3,7 +3,7 @@
 > **문서 버전**: v3.5.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 — RUM·Golden Signals·런타임(Python/Go/.NET)·DB 모니터링 / K8s Helm 배포 / SLO Burn Rate 튜닝)
+> **최종 업데이트**: 2026-03-27 (v1.1.0 — Phase 41~47 완료: 실데이터 연동 기반(Jaeger+Agent+프록시+듀얼모드) + OTel 5개 언어 계측 + Frontend 32+ 페이지 실데이터 전환 + 커스텀 대시보드 빌더 + APM 가젯 8종)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
