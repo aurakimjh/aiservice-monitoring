@@ -374,7 +374,7 @@ export default function InfraPage() {
                         )}
                         onClick={() => togglePending(a.id)}
                       >
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selectedPending.has(a.id)}
