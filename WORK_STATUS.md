@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 Phase A+B 전체 완료: 엔티티 모델 + 프론트엔드 연동)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 전체 완료: Phase A+B+C 엔티티 모델 + 프론트엔드 + 대시보드 통합)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -106,15 +106,22 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
      · 레벨별 노드/엣지 자동 생성, ServiceMap 재활용
      · 하단 범례 + 노드 카운트
 
-── Phase C: 대시보드 통합 ─────────────────────────────────────────────────
-[C-1] 프로젝트 대시보드                                               [░░░░░░░░░░]   0%  📋
-     · 프로젝트 단위 KPI, 서비스 현황, 알림 요약
-[C-2] 서비스 대시보드 위젯 인스턴스 지원                               [░░░░░░░░░░]   0%  📋
-     · APM 가젯에 인스턴스 SUM/Individual 토글 연동
-[C-3] AI 파이프라인 위젯                                              [░░░░░░░░░░]   0%  📋
-     · 스테이지별 워터폴, 비용 집계 위젯
-[C-4] 커스텀 대시보드 필터                                            [░░░░░░░░░░]   0%  📋
-     · 프로젝트/서비스/호스트 기준 위젯 데이터 필터
+── Phase C: 대시보드 통합 ✅ (2026-03-28) ─────────────────────────────────
+[C-1] 프로젝트 대시보드                                               [██████████] 100%  ✅
+     · /projects/[id]: useDataSource 실데이터 (hosts, services, AI)
+     · 프로젝트별 KPI + 차트 + Health Grid + 30초 자동 갱신
+[C-2] 서비스 대시보드 위젯 인스턴스 지원                               [██████████] 100%  ✅
+     · WidgetConfig.serviceId + SUM/Individual Prometheus 쿼리 분기
+     · 위젯 설정 패널에 Service 입력 필드 추가
+[C-3] AI 파이프라인 위젯                                              [██████████] 100%  ✅
+     · ai-pipeline-waterfall: RAG 스테이지 워터폴 (5단계 latency 바)
+     · ai-ttft-trend: TTFT P95 실시간 차트 + SLO 2s 임계치
+     · ai-token-cost: 시간당 비용 차트 + Budget $15/h + 일일 예상
+     · 대시보드 빌더 AI Pipeline 그룹 등록
+[C-4] 커스텀 대시보드 필터                                            [██████████] 100%  ✅
+     · WidgetConfig.projectId / hostId 필터 필드
+     · 위젯 설정 > topbar 전역 프로젝트 우선순위 상속
+     · Prometheus 쿼리에 필터 레이블 자동 적용
 
 ═══════════════════════════════════════════════════════════════════════
   v1.3 AI Observability (경쟁사 분석 기반, 설계: AI_OBSERVABILITY_DESIGN.md)

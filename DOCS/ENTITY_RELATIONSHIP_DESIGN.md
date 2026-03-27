@@ -297,14 +297,14 @@ Agent가 프로세스 스캔으로 감지한 서비스와 OTel trace의 `service
 | B-4 | AI 파이프라인 대시보드 | Service Group 카드 + 생성 모달 + 메트릭 | `9c381b0` |
 | B-5 | 토폴로지 드릴다운 | 3레벨 탭 (Services/Hosts/Instances) | `f2d7261` |
 
-### Phase C: 대시보드 통합 (📋 예정)
+### Phase C: 대시보드 통합 ✅ 완료
 
-| # | 작업 | 설명 |
-|---|------|------|
-| C-1 | 프로젝트 대시보드 | 프로젝트 단위 KPI, 서비스 현황, 알림 |
-| C-2 | 서비스 대시보드 위젯 | 인스턴스 SUM/Individual 토글 |
-| C-3 | AI 파이프라인 위젯 | 스테이지별 워터폴, TTFT, Cost |
-| C-4 | 커스텀 대시보드 필터 | 프로젝트/서비스/호스트 기준 위젯 필터 |
+| # | 작업 | 설명 | 커밋 |
+|---|------|------|------|
+| C-1 | 프로젝트 대시보드 | 프로젝트별 KPI + 실데이터 (hosts/services/AI) | `9ed6429` |
+| C-2 | 서비스 대시보드 위젯 | 인스턴스 SUM/Individual Prometheus 연동 | `3a70670` |
+| C-3 | AI 파이프라인 위젯 | Waterfall + TTFT Trend + Token Cost 3종 | `6b0b215` |
+| C-4 | 커스텀 대시보드 필터 | 프로젝트/서비스/호스트 필터 + topbar 상속 | `f1eb8dc` |
 
 ---
 
