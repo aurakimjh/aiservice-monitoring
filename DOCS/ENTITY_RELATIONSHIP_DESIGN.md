@@ -1,8 +1,9 @@
 # AITOP 엔티티 관계 설계
 
-> **버전**: v1.0 (초안)
-> **작성일**: 2026-03-27
+> **버전**: v1.1 (구현 완료)
+> **작성일**: 2026-03-27 / **구현 완료**: 2026-03-28
 > **목적**: 프로젝트 → 서버(호스트) → 서비스 → 인스턴스 간 관계 모델 정의
+> **구현 상태**: Phase A (Backend 5건) + Phase B (Frontend 5건) 전체 완료
 
 ---
 
@@ -276,27 +277,27 @@ Agent가 프로세스 스캔으로 감지한 서비스와 OTel trace의 `service
 
 ## 7. 마이그레이션 계획
 
-### Phase A: 엔티티 모델 구현 (Backend)
+### Phase A: 엔티티 모델 구현 (Backend) ✅ 완료
 
-| # | 작업 | 설명 |
-|---|------|------|
-| A-1 | Project CRUD API | Collection Server에 프로젝트 관리 API + SQLite 저장 |
-| A-2 | Host → Project 할당 | Agent 승인 시 프로젝트 선택 UI, API |
-| A-3 | Service 자동 감지 | Agent 프로세스 스캔 + OTel service.name 매핑 |
-| A-4 | Instance 모델 | 서비스의 host:port 인스턴스 목록 관리 |
-| A-5 | Service Group API | AI 파이프라인 그룹 CRUD |
+| # | 작업 | 설명 | 커밋 |
+|---|------|------|------|
+| A-1 | Project CRUD API | Collection Server에 프로젝트 관리 API + SQLite 저장 | `6d79f24` |
+| A-2 | Host → Project 할당 | Agent 승인 시 프로젝트 선택 UI, API | `90e362e` |
+| A-3 | Service 자동 감지 | Jaeger sync + OTel service.name 매핑 + CRUD | `873a527` |
+| A-4 | Instance 모델 | 서비스의 host:port 인스턴스 목록 관리 | `fcf1714` |
+| A-5 | Service Group API | AI 파이프라인 그룹 CRUD + 메트릭 집계 | `43ea386` |
 
-### Phase B: 프론트엔드 연동
+### Phase B: 프론트엔드 연동 ✅ 완료
 
-| # | 작업 | 설명 |
-|---|------|------|
-| B-1 | 프로젝트 셀렉터 실데이터 | topbar 프로젝트 드롭다운 → API 연동 |
-| B-2 | 프로젝트별 필터링 | 모든 페이지에서 선택 프로젝트 기준 데이터 필터 |
-| B-3 | 서비스 페이지 고도화 | 인스턴스 목록, 호스트 매핑, 엔드포인트 분류 |
-| B-4 | AI 파이프라인 대시보드 | Service Group 기반 파이프라인 시각화 |
-| B-5 | 토폴로지 고도화 | Project → Host → Service → Instance 4단계 드릴다운 |
+| # | 작업 | 설명 | 커밋 |
+|---|------|------|------|
+| B-1 | 프로젝트 셀렉터 실데이터 | fetchProjects(mode) → API/Demo 전환 | `dc504dc` |
+| B-2 | 프로젝트별 필터링 | 전 페이지 ?project_id= 전달 | `b70dcdc` |
+| B-3 | 서비스 페이지 고도화 | Instances 탭 + 호스트 매핑 + DataSourceBadge | `ece8966` |
+| B-4 | AI 파이프라인 대시보드 | Service Group 카드 + 생성 모달 + 메트릭 | `9c381b0` |
+| B-5 | 토폴로지 드릴다운 | 3레벨 탭 (Services/Hosts/Instances) | `f2d7261` |
 
-### Phase C: 대시보드 통합
+### Phase C: 대시보드 통합 (📋 예정)
 
 | # | 작업 | 설명 |
 |---|------|------|

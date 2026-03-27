@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 Phase A 완료 + Phase B-1~B-2 완료)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 Phase A+B 전체 완료: 엔티티 모델 + 프론트엔드 연동)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -92,14 +92,19 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
      · Home, Infra, Services, AI — API에 ?project_id= 전달
      · Backend /realdata/hosts: SQLite project_id 기반 필터
      · topbar 프로젝트 선택 → 전 페이지 데이터 자동 필터링
-[B-3] 서비스 페이지 고도화                                            [░░░░░░░░░░]   0%  📋
-     · 인스턴스 목록, 호스트 매핑, 엔드포인트 분류
-     · SUM / Individual 인스턴스 뷰 토글
-[B-4] AI 파이프라인 대시보드                                          [░░░░░░░░░░]   0%  📋
-     · Service Group 기반 파이프라인 시각화
-     · 스테이지별 워터폴, TTFT, GPU, Cost
-[B-5] 토폴로지 4단계 드릴다운                                         [░░░░░░░░░░]   0%  📋
-     · Project → Host → Service → Instance
+[B-3] 서비스 페이지 고도화                                            [██████████] 100%  ✅
+     · /services/[id]: useDataSource('/services/{id}') 실데이터 조회
+     · Instances 탭 신규: GET /instances?service_id= 연동
+     · 인스턴스 테이블 (hostname, endpoint, PID, CPU, MEM, status)
+     · hostname → /infra/{hostname} 링크, 인스턴스 수 Badge
+[B-4] AI 파이프라인 대시보드                                          [██████████] 100%  ✅
+     · /ai: AI Pipelines 섹션 — GET /service-groups?project_id=
+     · 파이프라인 카드: 타입 색상 + 스테이지 플로우(→) + 집계 메트릭
+     · "New Pipeline" 모달 → POST /service-groups
+[B-5] 토폴로지 4단계 드릴다운                                         [██████████] 100%  ✅
+     · 3레벨 탭: Services(Jaeger) / Hosts(Agent) / Instances(API)
+     · 레벨별 노드/엣지 자동 생성, ServiceMap 재활용
+     · 하단 범례 + 노드 카운트
 
 ── Phase C: 대시보드 통합 ─────────────────────────────────────────────────
 [C-1] 프로젝트 대시보드                                               [░░░░░░░░░░]   0%  📋
