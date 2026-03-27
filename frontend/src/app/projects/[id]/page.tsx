@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Button, Tabs } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Button, Tabs, DataSourceBadge } from '@/components/ui';
 import { Badge } from '@/components/ui/badge';
 import { KPICard, StatusIndicator, ServiceHealthGrid, AlertBanner } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
+import { useDataSource } from '@/hooks/use-data-source';
 import {
   getProjectHosts, getProjectServices, getProjectAIServices,
   getProjectAlerts, getHealthCells, generateTimeSeries,
@@ -28,11 +29,48 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: <Settings size={13} /> },
 ];
 
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
+  : 'http://localhost:8080/api/v1';
+
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const project = useProjectStore((s) => s.getProject(id));
+  const storeProject = useProjectStore((s) => s.getProject(id));
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Live project from API
+  const demoProject = useCallback(() => storeProject ?? null, [storeProject]);
+  const { data: project, source } = useDataSource(
+    `/projects/${id}`,
+    demoProject,
+  );
+
+  // Live data: hosts, services, alerts for this project
+  const demoHosts = useCallback(() => getProjectHosts(id), [id]);
+  const demoServices = useCallback(() => getProjectServices(id), [id]);
+  const demoAI = useCallback(() => getProjectAIServices(id), [id]);
+  const demoAlerts = useCallback(() => getProjectAlerts(id), [id]);
+
+  const { data: hostsData } = useDataSource(`/realdata/hosts?project_id=${id}`, demoHosts, {
+    refreshInterval: 30_000,
+    transform: (raw) => (raw as { items?: unknown[] }).items ?? raw,
+  });
+  const { data: servicesData } = useDataSource(`/services?project_id=${id}`, demoServices, {
+    refreshInterval: 30_000,
+    transform: (raw) => (raw as { items?: unknown[] }).items ?? raw,
+  });
+  const { data: aiServicesData } = useDataSource(`/ai/services?project_id=${id}`, demoAI, {
+    refreshInterval: 30_000,
+    transform: (raw) => (raw as { items?: unknown[] }).items ?? raw,
+  });
+
+  const hosts = (hostsData ?? []) as ReturnType<typeof getProjectHosts>;
+  const services = (servicesData ?? []) as ReturnType<typeof getProjectServices>;
+  const aiServices = (aiServicesData ?? []) as ReturnType<typeof getProjectAIServices>;
+  const alerts = getProjectAlerts(id); // alerts still demo for now
+  const healthCells = getHealthCells(id);
+  const firingAlerts = alerts.filter((a) => a.status === 'firing');
 
   if (!project) {
     return (
@@ -43,13 +81,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       </div>
     );
   }
-
-  const hosts = getProjectHosts(id);
-  const services = getProjectServices(id);
-  const aiServices = getProjectAIServices(id);
-  const alerts = getProjectAlerts(id);
-  const healthCells = getHealthCells(id);
-  const firingAlerts = alerts.filter((a) => a.status === 'firing');
 
   return (
     <div className="space-y-4">
@@ -65,6 +96,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <div className="flex items-center gap-2">
             <StatusIndicator status={project.status} size="lg" />
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">{project.name}</h1>
+            <DataSourceBadge source={source} />
             <Badge variant="status" status={project.status}>{project.status}</Badge>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-1">{project.description}</p>
