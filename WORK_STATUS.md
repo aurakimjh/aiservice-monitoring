@@ -106,6 +106,104 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
      · 프로젝트/서비스/호스트 기준 위젯 데이터 필터
 
 ═══════════════════════════════════════════════════════════════════════
+  v1.3 AI Observability (경쟁사 분석 기반, 설계: AI_OBSERVABILITY_DESIGN.md)
+═══════════════════════════════════════════════════════════════════════
+
+── Phase D: LLM 호출 트레이싱 (P0 — 모든 경쟁사 보유) ─────────────────────
+[D-1] OTel GenAI Semantic Conventions 도입                          [░░░░░░░░░░]   0%  📋
+     · gen_ai.system, gen_ai.request.model, gen_ai.usage.input_tokens 등
+     · OTel Collector에 GenAI span 처리 파이프라인 추가
+     · Jaeger에서 LLM span 별도 표시
+[D-2] Python OTel GenAI 자동 계측                                    [░░░░░░░░░░]   0%  📋
+     · opentelemetry-instrumentation-openai / anthropic / langchain
+     · RAG 서비스 데모 앱에 적용 (rag_service.py)
+     · Prompt/Response 텍스트 캡처 (마스킹 옵션)
+[D-3] LLM Span 뷰어 (Frontend)                                      [░░░░░░░░░░]   0%  📋
+     · 트레이스 상세에서 LLM span: prompt/response 패널
+     · 토큰 수, 비용, TTFT, 모델명 표시
+     · Agent step → Tool call → LLM call 워터폴
+
+── Phase E: 토큰 + 비용 추적 (P0 — AI FinOps) ────────────────────────────
+[E-1] 모델 가격 테이블 + 비용 자동 계산                               [░░░░░░░░░░]   0%  📋
+     · 모델별 input/output $/1M tokens 설정 (Admin UI)
+     · LLM span의 token count → 자동 비용 계산
+     · 로컬 LLM (Ollama 등) = $0 처리
+[E-2] 비용 집계 API + 대시보드                                        [░░░░░░░░░░]   0%  📋
+     · 시간별/일별 비용 by model, service, project
+     · Budget vs Actual 바 차트
+     · 비용 이상 급증 알림 (AI ITEM #1)
+[E-3] 토큰 사용량 대시보드                                            [░░░░░░░░░░]   0%  📋
+     · 서비스별 일일 토큰 소비 추이
+     · 모델별 요청 분포 (pie)
+     · 평균 token/request, cost/request
+
+── Phase F: Agent/Workflow Step 트레이싱 (P1 — Agentic AI) ────────────────
+[F-1] Agent Span + Tool Span 모델                                    [░░░░░░░░░░]   0%  📋
+     · Workflow → Agent → Tool → LLM 4단계 span 계층
+     · Agent loop 감지 (tool_call > N → 자동 알림)
+     · MCP (Model Context Protocol) request lifecycle 추적
+[F-2] Retrieval Span (RAG 파이프라인)                                 [░░░░░░░░░░]   0%  📋
+     · Vector Search: collection, top_k, results, latency
+     · Rerank: rerank_model, score 분포
+     · Embedding: model, dimension, batch_size
+[F-3] AI 파이프라인 워터폴 뷰 (Frontend)                              [░░░░░░░░░░]   0%  📋
+     · RAG: Guardrail(in) → Embedding → Search → LLM → Guardrail(out)
+     · 스테이지별 latency 바 차트
+     · 병목 스테이지 하이라이트
+
+── Phase G: 프리빌트 AI 대시보드 (P1) ─────────────────────────────────────
+[G-1] AI Overview 대시보드                                            [░░░░░░░░░░]   0%  📋
+     · AI 서비스 수, 모델 수, 일일 요청, 총 비용
+     · P95 TTFT, TPS, Error Rate
+     · 모델별 요청 분포, 비용 추이
+[G-2] LLM Performance 대시보드                                        [░░░░░░░░░░]   0%  📋
+     · 모델별 Latency P50/P95, TTFT, Error Rate
+     · Agent Step 분석, Tool Call 분포
+     · Retrieval 품질 Score 추이
+[G-3] AI Cost & Governance 대시보드                                   [░░░░░░░░░░]   0%  📋
+     · 프로젝트/팀별 비용 breakdown
+     · Budget vs Actual, 보안 이벤트
+     · Eval Score 추이 + Regression 알림
+
+── Phase H: 품질 평가 + 보안 (P2 — 차별화) ────────────────────────────────
+[H-1] Eval Framework (품질 평가)                                      [░░░░░░░░░░]   0%  📋
+     · 응답별 Evaluator: relevance, faithfulness, toxicity, hallucination
+     · Score 저장 + 추이 대시보드
+     · A/B test: prompt 버전별 품질 비교
+     · Human feedback (thumbs up/down) 수집
+[H-2] Prompt 버전 관리                                                [░░░░░░░░░░]   0%  📋
+     · Prompt Registry: 버전, 변수, 변경 이력
+     · 버전별 성능/비용/품질 비교
+     · Model Version Drift 탐지
+[H-3] AI 보안 모니터링                                                [░░░░░░░░░░]   0%  📋
+     · Prompt Injection 탐지 (패턴 + Guardrail span)
+     · PII Leak 스캐닝 (응답 내 개인정보)
+     · Agent Loop 감지 + 자동 차단
+     · 보안 이벤트 대시보드
+
+── Phase I: AI 진단 ITEM 상용화 (AITOP 차별화) ────────────────────────────
+[I-1] AI ITEM #1: LLM 비용 이상 급증 진단                             [░░░░░░░░░░]   0%  📋
+     · Rule: 일일 비용 > 임계치 or 전일 대비 N% 증가
+     · Evidence: cost by model/service 시계열 + 급증 원인 trace 링크
+     · Report: 비용 급증 보고서 자동 생성
+[I-2] AI ITEM #2: Agent Loop / Excessive Tool Call                   [░░░░░░░░░░]   0%  📋
+     · Rule: tool_call count > N per request
+     · Evidence: Agent span 워터폴 + loop 패턴 시각화
+     · Action: 자동 알림 + Agent 중지 권고
+[I-3] AI ITEM #3: RAG Retrieval Quality Degradation                  [░░░░░░░░░░]   0%  📋
+     · Rule: retrieval relevance score < 임계치
+     · Evidence: query → search results → LLM response 연결
+     · Report: 품질 저하 원인 분석 (벡터 DB, 모델, 데이터)
+[I-4] AI ITEM #4: GPU Memory Saturation                              [░░░░░░░░░░]   0%  📋
+     · Rule: VRAM 사용률 > 90% 지속 N분
+     · Evidence: GPU 메트릭 시계열 + inference 큐 깊이
+     · Action: 스케일업 권고 또는 모델 경량화 제안
+[I-5] AI ITEM #5: Prompt Governance / Model Version Drift            [░░░░░░░░░░]   0%  📋
+     · Rule: 모델 버전 변경 감지 + 품질 score 급락
+     · Evidence: 변경 전후 eval score 비교
+     · Report: 모델 변경 영향 분석 보고서
+
+═══════════════════════════════════════════════════════════════════════
   TO-DO — 기존 코드 작업 (Phase 1~47 완료)
 ═══════════════════════════════════════════════════════════════════════
 
