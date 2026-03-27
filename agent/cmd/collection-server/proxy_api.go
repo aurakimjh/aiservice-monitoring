@@ -34,6 +34,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,6 +48,40 @@ var (
 func initProxyConfig() {
 	prometheusURL = envOrDefault("AITOP_PROMETHEUS_URL", "http://localhost:9090")
 	jaegerURL = envOrDefault("AITOP_JAEGER_URL", "http://localhost:16686")
+}
+
+// queryPromScalar executes a Prometheus instant query and returns the first scalar value.
+func queryPromScalar(query string) float64 {
+	url := fmt.Sprintf("%s/api/v1/query?query=%s", prometheusURL, query)
+	resp, err := proxyClient.Get(url)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Status string `json:"status"`
+		Data   struct {
+			Result []struct {
+				Value []json.RawMessage `json:"value"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil || result.Status != "success" {
+		return 0
+	}
+	if len(result.Data.Result) == 0 || len(result.Data.Result[0].Value) < 2 {
+		return 0
+	}
+	var valStr string
+	if err := json.Unmarshal(result.Data.Result[0].Value[1], &valStr); err != nil {
+		return 0
+	}
+	val, _ := strconv.ParseFloat(valStr, 64)
+	if val != val { // NaN check
+		return 0
+	}
+	return val
 }
 
 // proxyRequest forwards a request to an upstream and copies the response back.
@@ -374,6 +409,82 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		result := agentToMap(agent)
 		agent.mu.RUnlock()
 		writeJSON(w, http.StatusOK, result)
+	})
+
+	// GET /api/v1/realdata/services — Jaeger 서비스 + Prometheus 메트릭 결합
+	mux.HandleFunc("GET /api/v1/realdata/services", func(w http.ResponseWriter, r *http.Request) {
+		// 1. Get services from Jaeger
+		resp, err := proxyClient.Get(jaegerURL + "/api/services")
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}, "total": 0, "source": "live"})
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var jaegerResp struct {
+			Data []string `json:"data"`
+		}
+		_ = json.Unmarshal(body, &jaegerResp)
+
+		// 2. For each service, query Prometheus for metrics
+		services := make([]map[string]interface{}, 0)
+		for _, svcName := range jaegerResp.Data {
+			if svcName == "jaeger-all-in-one" {
+				continue // skip Jaeger itself
+			}
+			svc := map[string]interface{}{
+				"id":          svcName,
+				"name":        svcName,
+				"framework":   "-",
+				"language":    "-",
+				"status":      "healthy",
+				"latency_p50": 0.0,
+				"latency_p95": 0.0,
+				"latency_p99": 0.0,
+				"rpm":         0.0,
+				"error_rate":  0.0,
+			}
+
+			// RPM: sum(rate(demo_http_server_duration_milliseconds_count{exported_job="svc"}[5m])) * 60
+			rpmQ := fmt.Sprintf(`sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s"}[5m]))*60`, svcName)
+			if val := queryPromScalar(rpmQ); val > 0 {
+				svc["rpm"] = val
+			}
+
+			// P95 latency
+			p95Q := fmt.Sprintf(`histogram_quantile(0.95,sum(rate(demo_http_server_duration_milliseconds_bucket{exported_job="%s"}[5m]))by(le))`, svcName)
+			if val := queryPromScalar(p95Q); val > 0 {
+				svc["latency_p95"] = val
+			}
+
+			// P50 latency
+			p50Q := fmt.Sprintf(`histogram_quantile(0.50,sum(rate(demo_http_server_duration_milliseconds_bucket{exported_job="%s"}[5m]))by(le))`, svcName)
+			if val := queryPromScalar(p50Q); val > 0 {
+				svc["latency_p50"] = val
+			}
+
+			// Error rate: errors / total * 100
+			errQ := fmt.Sprintf(`sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s",http_status_code=~"5.."}[5m]))/sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s"}[5m]))*100`, svcName, svcName)
+			if val := queryPromScalar(errQ); val >= 0 {
+				svc["error_rate"] = val
+			}
+
+			// Determine status from P95 and error rate
+			if p95, ok := svc["latency_p95"].(float64); ok && p95 > 2000 {
+				svc["status"] = "warning"
+			}
+			if errRate, ok := svc["error_rate"].(float64); ok && errRate > 5 {
+				svc["status"] = "critical"
+			}
+
+			services = append(services, svc)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items":  services,
+			"total":  len(services),
+			"source": "live",
+		})
 	})
 
 	// GET /api/v1/realdata/connectivity — 전체 백엔드 연결 상태

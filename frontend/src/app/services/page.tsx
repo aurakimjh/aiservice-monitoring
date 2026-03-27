@@ -30,22 +30,22 @@ const LAYER_OPTIONS: { label: string; value: string }[] = [
   ...Object.entries(LAYER_CONFIG).map(([k, v]) => ({ label: v.label, value: k })),
 ];
 
-// Transform Jaeger services → Service[] with basic metrics
-function transformJaegerToServices(raw: unknown): Service[] {
-  const resp = raw as { data?: string[] };
-  if (!resp.data?.length) return [];
-  return resp.data.map((name, i) => ({
-    id: `svc-${i}`,
-    name,
-    framework: '-',
-    language: '-',
+// Transform /realdata/services API → Service[]
+function transformServices(raw: unknown): Service[] {
+  const resp = raw as { items?: Array<Record<string, unknown>> };
+  if (!resp.items?.length) return [];
+  return resp.items.map((item) => ({
+    id: String(item.id ?? item.name),
+    name: String(item.name ?? ''),
+    framework: String(item.framework ?? '-'),
+    language: String(item.language ?? '-'),
     hostIds: [],
-    latencyP50: 0,
-    latencyP95: 0,
-    latencyP99: 0,
-    rpm: 0,
-    errorRate: 0,
-    status: 'healthy' as const,
+    latencyP50: Math.round(Number(item.latency_p50 ?? 0)),
+    latencyP95: Math.round(Number(item.latency_p95 ?? 0)),
+    latencyP99: Math.round(Number(item.latency_p99 ?? 0)),
+    rpm: Math.round(Number(item.rpm ?? 0)),
+    errorRate: Math.round(Number(item.error_rate ?? 0) * 100) / 100,
+    status: (item.status === 'critical' ? 'critical' : item.status === 'warning' ? 'warning' : 'healthy') as 'healthy' | 'warning' | 'critical',
   }));
 }
 
@@ -61,9 +61,9 @@ export default function ServicesPage() {
   );
 
   const { data: services, source } = useDataSource<Service[]>(
-    '/proxy/jaeger/services',
+    '/realdata/services',
     demoServices,
-    { refreshInterval: 30_000, transform: transformJaegerToServices },
+    { refreshInterval: 30_000, transform: transformServices },
   );
   const { data: topology } = useDataSource(
     '/proxy/jaeger/dependencies',
