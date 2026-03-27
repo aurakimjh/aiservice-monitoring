@@ -332,6 +332,9 @@ type agentRecord struct {
 	OSMetrics     *models.OSMetrics       `json:"os_metrics,omitempty"`
 }
 
+// serverStore is the package-level SQLite store for persistence.
+var serverStore *Store
+
 // fleet is the in-memory agent registry.
 type fleet struct {
 	mu     sync.RWMutex
@@ -389,6 +392,11 @@ func (f *fleet) upsert(hb *models.Heartbeat) {
 		rec.Status = models.AgentDegraded
 	}
 	rec.mu.Unlock()
+
+	// Persist to SQLite
+	if serverStore != nil {
+		go serverStore.SaveAgent(rec)
+	}
 }
 
 func (f *fleet) list() []*agentRecord {
@@ -485,11 +493,32 @@ func main() {
 	}
 	logger.Info("storage backend initialized", "type", store.Type())
 
+	// SQLite store for persistence
+	sqlStore, err := OpenStore(logger)
+	if err != nil {
+		logger.Error("sqlite store failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlStore.Close()
+	serverStore = sqlStore
+	logger.Info("sqlite store initialized")
+
 	f := newFleet()
 	gr := newGroupRegistry()
 	sr := newScheduleRegistry()
 	cr := newConfigRegistry()
 	sar := newSDKAlertRegistry()
+
+	// Restore agents from SQLite
+	if savedAgents, loadErr := sqlStore.LoadAgents(); loadErr == nil && len(savedAgents) > 0 {
+		for _, rec := range savedAgents {
+			f.mu.Lock()
+			f.agents[rec.ID] = rec
+			f.mu.Unlock()
+		}
+		logger.Info("restored agents from db", "count", len(savedAgents))
+	}
+
 	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store)
 
 	// Apply middleware: CORS → JWT Auth
@@ -506,6 +535,7 @@ func main() {
 		"/health",
 		"/api/v1/proxy/",
 		"/api/v1/realdata/",
+		"/api/v1/projects",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))

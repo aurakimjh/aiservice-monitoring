@@ -353,6 +353,9 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 				rec.Approved = true
 				rec.mu.Unlock()
 				approved++
+				if serverStore != nil {
+					serverStore.SetAgentApproved(id, true)
+				}
 			}
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -485,6 +488,120 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 			"total":  len(services),
 			"source": "live",
 		})
+	})
+
+	// ── Project CRUD ──────────────────────────────────────────────
+
+	// POST /api/v1/projects — 프로젝트 생성
+	mux.HandleFunc("POST /api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"})
+			return
+		}
+		var body struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Environment string `json:"environment"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name required"})
+			return
+		}
+		if body.Environment == "" {
+			body.Environment = "production"
+		}
+		p := &Project{Name: body.Name, Description: body.Description, Environment: body.Environment}
+		if err := serverStore.CreateProject(p); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, p)
+	})
+
+	// GET /api/v1/projects — 프로젝트 목록
+	mux.HandleFunc("GET /api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}, "total": 0})
+			return
+		}
+		projects, err := serverStore.ListProjects()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if projects == nil {
+			projects = []Project{}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": projects, "total": len(projects)})
+	})
+
+	// GET /api/v1/projects/{id} — 프로젝트 상세
+	mux.HandleFunc("GET /api/v1/projects/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/projects/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		p, err := serverStore.GetProject(id)
+		if err != nil || p == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, p)
+	})
+
+	// PUT /api/v1/projects/{id} — 프로젝트 수정
+	mux.HandleFunc("PUT /api/v1/projects/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/projects/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		var body struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Environment string `json:"environment"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if err := serverStore.UpdateProject(id, body.Name, body.Description, body.Environment); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	})
+
+	// DELETE /api/v1/projects/{id} — 프로젝트 삭제
+	mux.HandleFunc("DELETE /api/v1/projects/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/projects/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		if err := serverStore.DeleteProject(id); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
+	// POST /api/v1/projects/{id}/hosts — 호스트를 프로젝트에 할당
+	mux.HandleFunc("POST /api/v1/projects/{projectId}/hosts", func(w http.ResponseWriter, r *http.Request) {
+		projectID := r.PathValue("projectId")
+		var body struct {
+			AgentIDs []string `json:"agent_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+		assigned := 0
+		for _, agentID := range body.AgentIDs {
+			if serverStore != nil {
+				serverStore.SetAgentProject(agentID, projectID)
+			}
+			assigned++
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"assigned": assigned})
 	})
 
 	// GET /api/v1/realdata/connectivity — 전체 백엔드 연결 상태
