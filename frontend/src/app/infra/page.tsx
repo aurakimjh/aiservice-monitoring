@@ -98,8 +98,12 @@ export default function InfraPage() {
     [currentProjectId],
   );
 
+  const hostsApiPath = currentProjectId
+    ? `/realdata/hosts?project_id=${currentProjectId}`
+    : '/realdata/hosts';
+
   const { data: hosts, source, refetch } = useDataSource<Host[]>(
-    '/realdata/hosts',
+    hostsApiPath,
     demoFallback,
     { refreshInterval: 15_000, transform: transformHosts },
   );

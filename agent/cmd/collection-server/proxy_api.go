@@ -302,13 +302,36 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		}
 	}
 
-	// GET /api/v1/realdata/hosts — 승인된(approved) 호스트만 반환
+	// GET /api/v1/realdata/hosts — 승인된(approved) 호스트만 반환 (?project_id= 필터)
 	mux.HandleFunc("GET /api/v1/realdata/hosts", func(w http.ResponseWriter, r *http.Request) {
+		projectFilter := r.URL.Query().Get("project_id")
 		agents := f.list()
 		hosts := make([]map[string]interface{}, 0)
+
+		// project_id별 agent 조회를 위해 SQLite에서 project_id 매핑 로드
+		agentProjects := map[string]string{} // agent_id → project_id
+		if serverStore != nil && projectFilter != "" {
+			rows, _ := serverStore.db.Query(`SELECT id, project_id FROM agents WHERE project_id = ?`, projectFilter)
+			if rows != nil {
+				defer rows.Close()
+				for rows.Next() {
+					var aid, pid string
+					rows.Scan(&aid, &pid)
+					agentProjects[aid] = pid
+				}
+			}
+		}
+
 		for _, a := range agents {
 			a.mu.RLock()
 			if a.Approved {
+				// project_id 필터 적용
+				if projectFilter != "" {
+					if _, ok := agentProjects[a.ID]; !ok {
+						a.mu.RUnlock()
+						continue
+					}
+				}
 				hosts = append(hosts, agentToMap(a))
 			}
 			a.mu.RUnlock()

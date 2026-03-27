@@ -49,8 +49,12 @@ export default function AIServicesPage() {
     () => getProjectAIServices(currentProjectId ?? 'proj-ai-prod'),
     [currentProjectId],
   );
+  const aiApiPath = currentProjectId
+    ? `/ai/services?project_id=${currentProjectId}`
+    : '/ai/services';
+
   const { data: aiServicesData, source } = useDataSource<AIService[]>(
-    '/ai/services',
+    aiApiPath,
     demoFallback,
     { refreshInterval: 30_000, transform: (raw) => (raw as { items?: AIService[] }).items ?? raw as AIService[] },
   );

@@ -7,6 +7,7 @@ import { AlertBanner } from '@/components/monitoring';
 import { Card, CardHeader, CardTitle, DataSourceBadge } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts';
 import { useDataSource } from '@/hooks/use-data-source';
+import { useProjectStore } from '@/stores/project-store';
 import type { Status } from '@/types/monitoring';
 
 // ── Demo fallback data ──
@@ -50,10 +51,15 @@ function demoOverview(): OverviewData {
 }
 
 export default function HomePage() {
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const demoFallback = useCallback(() => demoOverview(), []);
 
+  const overviewPath = currentProjectId
+    ? `/realdata/overview?project_id=${currentProjectId}`
+    : '/realdata/overview';
+
   const { data: overview, source, loading } = useDataSource<OverviewData>(
-    '/realdata/overview',
+    overviewPath,
     demoFallback,
     { refreshInterval: 30_000 },
   );

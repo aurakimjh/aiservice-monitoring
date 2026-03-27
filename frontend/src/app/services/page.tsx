@@ -60,8 +60,12 @@ export default function ServicesPage() {
     [currentProjectId],
   );
 
+  const servicesApiPath = currentProjectId
+    ? `/services?project_id=${currentProjectId}`
+    : '/services';
+
   const { data: services, source } = useDataSource<Service[]>(
-    '/services',
+    servicesApiPath,
     demoServices,
     { refreshInterval: 30_000, transform: transformServices },
   );
