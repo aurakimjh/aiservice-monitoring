@@ -390,7 +390,10 @@ export interface ExecutiveSummary {
 
 // Phase 14-1: Custom Dashboard Builder
 
-export type WidgetType = 'kpi' | 'timeseries' | 'bar' | 'pie' | 'gauge' | 'table' | 'text';
+export type WidgetType =
+  | 'kpi' | 'timeseries' | 'bar' | 'pie' | 'gauge' | 'table' | 'text'
+  | 'apm-tps' | 'apm-tps-daily' | 'apm-users-daily' | 'apm-response-time'
+  | 'apm-active-txn' | 'apm-active-status' | 'apm-txn-speed' | 'apm-concurrent-users';
 export type WidgetSize = '1x1' | '2x1' | '1x2' | '2x2';
 export type WidgetViewMode = 'sum' | 'individual';
 

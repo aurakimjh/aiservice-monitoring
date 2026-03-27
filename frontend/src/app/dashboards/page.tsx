@@ -10,15 +10,18 @@ import { useDashboardStore } from '@/stores/dashboard-store';
 import { getDashboardTemplates, METRIC_CATALOG, executeMetricQuery } from '@/lib/demo-data';
 import { useUIStore } from '@/stores/ui-store';
 import type { WidgetConfig, WidgetType, WidgetSize, DashboardConfig, WidgetViewMode } from '@/types/monitoring';
+import { APM_WIDGET_MAP } from '@/components/dashboards/apm-widgets';
 import {
   LayoutDashboard, Plus, X, GripVertical, Settings2, Save, Download, Upload,
   Copy, BarChart3, LineChart, PieChart, Type, Hash, Table2, Trash2,
   Check, Lock, Unlock, FolderPlus, Activity, Eye, Layers,
+  Zap, Calendar, Users, Clock, Radio, BarChart, ArrowRightLeft, UserCheck,
 } from 'lucide-react';
 
 // ── Constants ──
 
-const WIDGET_TYPES: { type: WidgetType; label: string; icon: React.ReactNode }[] = [
+const WIDGET_TYPES: { type: WidgetType; label: string; icon: React.ReactNode; group?: string }[] = [
+  // General
   { type: 'kpi', label: 'KPI Card', icon: <Hash size={14} /> },
   { type: 'timeseries', label: 'Time Series', icon: <LineChart size={14} /> },
   { type: 'bar', label: 'Bar Chart', icon: <BarChart3 size={14} /> },
@@ -26,6 +29,15 @@ const WIDGET_TYPES: { type: WidgetType; label: string; icon: React.ReactNode }[]
   { type: 'gauge', label: 'Gauge', icon: <Activity size={14} /> },
   { type: 'table', label: 'Table', icon: <Table2 size={14} /> },
   { type: 'text', label: 'Text / Note', icon: <Type size={14} /> },
+  // APM Widgets (Phase 47)
+  { type: 'apm-tps', label: 'TPS', icon: <Zap size={14} />, group: 'APM' },
+  { type: 'apm-tps-daily', label: 'Today TPS', icon: <Calendar size={14} />, group: 'APM' },
+  { type: 'apm-users-daily', label: 'Today Users', icon: <Users size={14} />, group: 'APM' },
+  { type: 'apm-response-time', label: 'Resp Time', icon: <Clock size={14} />, group: 'APM' },
+  { type: 'apm-active-txn', label: 'Active Txn', icon: <Radio size={14} />, group: 'APM' },
+  { type: 'apm-active-status', label: 'Active Status', icon: <BarChart size={14} />, group: 'APM' },
+  { type: 'apm-txn-speed', label: 'Txn Speed', icon: <ArrowRightLeft size={14} />, group: 'APM' },
+  { type: 'apm-concurrent-users', label: 'Concurrent', icon: <UserCheck size={14} />, group: 'APM' },
 ];
 
 const SIZE_OPTIONS: { value: WidgetSize; label: string }[] = [
@@ -254,14 +266,24 @@ export default function DashboardBuilderPage() {
             {showAddPanel && store.editMode && (
               <Card className="mt-3">
                 <CardHeader><CardTitle>Add Widget</CardTitle></CardHeader>
-                <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-                  {WIDGET_TYPES.map((wt) => (
-                    <button
-                      key={wt.type}
-                      onClick={() => { store.addWidget(wt.type); setShowAddPanel(false); }}
-                      className="flex flex-col items-center gap-1.5 p-3 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
-                    >
+                {/* General widgets */}
+                <div className="text-[10px] text-[var(--text-muted)] font-medium mb-1.5">General</div>
+                <div className="grid grid-cols-4 md:grid-cols-7 gap-2 mb-3">
+                  {WIDGET_TYPES.filter((w) => !w.group).map((wt) => (
+                    <button key={wt.type} onClick={() => { store.addWidget(wt.type); setShowAddPanel(false); }}
+                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
                       <span className="text-[var(--accent-primary)]">{wt.icon}</span>
+                      <span className="text-[10px] text-[var(--text-secondary)]">{wt.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* APM widgets */}
+                <div className="text-[10px] text-[var(--text-muted)] font-medium mb-1.5">APM Service</div>
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                  {WIDGET_TYPES.filter((w) => w.group === 'APM').map((wt) => (
+                    <button key={wt.type} onClick={() => { store.addWidget(wt.type); setShowAddPanel(false); }}
+                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                      <span className="text-[#F778BA]">{wt.icon}</span>
                       <span className="text-[10px] text-[var(--text-secondary)]">{wt.label}</span>
                     </button>
                   ))}
@@ -447,6 +469,12 @@ export default function DashboardBuilderPage() {
 // ── Widget Renderer (supports PromQL + Demo + Gauge + SUM/Individual) ──
 
 function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: boolean }) {
+  // APM widgets delegate to specialized components
+  const ApmComponent = APM_WIDGET_MAP[widget.type];
+  if (ApmComponent) {
+    const h = widget.size.endsWith('2') ? 268 : 128;
+    return <ApmComponent widget={widget} height={h} />;
+  }
   const [liveData, setLiveData] = useState<{ label: string; data: [number, number][] }[] | null>(null);
   const [source, setSource] = useState<'live' | 'demo'>('demo');
 
