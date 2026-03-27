@@ -10,7 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { getProjectHosts } from '@/lib/demo-data';
 import { useDataSource } from '@/hooks/use-data-source';
 import type { Host, Status } from '@/types/monitoring';
-import { Server, Table2, Hexagon, Plus, Check, AlertCircle } from 'lucide-react';
+import { Server, Table2, Hexagon, Plus, Check, AlertCircle, FolderPlus } from 'lucide-react';
 
 const VIEW_TABS = [
   { id: 'table', label: 'Table', icon: <Table2 size={13} /> },
@@ -106,43 +106,87 @@ export default function InfraPage() {
 
   const hostList = hosts ?? [];
 
+  // ── Projects (프로젝트 목록) ──
+  interface ProjectItem { id: string; name: string; environment: string }
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [showNewProject, setShowNewProject] = useState(false);
+
   // ── Pending agents (미승인) ──
   const [pendingAgents, setPendingAgents] = useState<PendingAgent[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPending, setSelectedPending] = useState<Set<string>>(new Set());
   const [approving, setApproving] = useState(false);
 
-  // Poll pending agents
+  // Poll pending agents + projects
   useEffect(() => {
-    const fetchPending = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/realdata/pending-agents`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (res.ok) {
-          const data = await res.json();
+        const [pendingRes, projRes] = await Promise.all([
+          fetch(`${API_BASE}/realdata/pending-agents`, { signal: AbortSignal.timeout(5000) }),
+          fetch(`${API_BASE}/projects`, { signal: AbortSignal.timeout(5000) }),
+        ]);
+        if (pendingRes.ok) {
+          const data = await pendingRes.json();
           setPendingAgents(data.items ?? []);
+        }
+        if (projRes.ok) {
+          const data = await projRes.json();
+          setProjects(data.items ?? []);
+          if (!selectedProjectId && data.items?.length > 0) {
+            setSelectedProjectId(data.items[0].id);
+          }
         }
       } catch { /* ignore */ }
     };
-    fetchPending();
-    const interval = setInterval(fetchPending, 10_000);
+    fetchData();
+    const interval = setInterval(fetchData, 10_000);
     return () => clearInterval(interval);
   }, []);
 
-  // Approve selected agents
+  // Create new project inline
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProjectName.trim(), environment: 'production' }),
+      });
+      if (res.ok) {
+        const proj = await res.json();
+        setProjects((prev) => [proj, ...prev]);
+        setSelectedProjectId(proj.id);
+        setNewProjectName('');
+        setShowNewProject(false);
+      }
+    } catch { /* ignore */ }
+  };
+
+  // Approve selected agents + assign to project
   const handleApprove = async () => {
     if (selectedPending.size === 0) return;
     setApproving(true);
     try {
+      const agentIds = Array.from(selectedPending);
+      // 1. Approve agents
       await fetch(`${API_BASE}/realdata/approve-agents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent_ids: Array.from(selectedPending) }),
+        body: JSON.stringify({ agent_ids: agentIds }),
       });
+      // 2. Assign to project (if selected)
+      if (selectedProjectId) {
+        await fetch(`${API_BASE}/projects/${selectedProjectId}/hosts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent_ids: agentIds }),
+        });
+      }
       setSelectedPending(new Set());
       setShowAddModal(false);
-      // Refresh hosts + pending
+      // Refresh
       refetch();
       const res = await fetch(`${API_BASE}/realdata/pending-agents`);
       if (res.ok) {
@@ -402,9 +446,44 @@ export default function InfraPage() {
                   </tbody>
                 </table>
               </Card>
-              <div className="flex items-center justify-between mt-4">
+              {/* Project 선택 */}
+              <div className="mt-4 p-3 bg-[var(--bg-tertiary)] rounded-[var(--radius-md)] space-y-2">
+                <div className="text-[11px] font-medium text-[var(--text-secondary)]">Assign to Project</div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    className="flex-1 px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                  >
+                    <option value="">— No project —</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.environment})</option>
+                    ))}
+                  </select>
+                  <Button variant="ghost" size="sm" onClick={() => setShowNewProject(!showNewProject)}>
+                    <FolderPlus size={13} />
+                  </Button>
+                </div>
+                {showNewProject && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="New project name..."
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                      className="flex-1 px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                    />
+                    <Button variant="primary" size="sm" onClick={handleCreateProject} disabled={!newProjectName.trim()}>Create</Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between mt-3">
                 <span className="text-xs text-[var(--text-muted)]">
                   {selectedPending.size} of {pendingAgents.length} selected
+                  {selectedProjectId && ` → ${projects.find((p) => p.id === selectedProjectId)?.name ?? ''}`}
                 </span>
                 <div className="flex gap-2">
                   <Button variant="secondary" size="md" onClick={() => setShowAddModal(false)}>Cancel</Button>
