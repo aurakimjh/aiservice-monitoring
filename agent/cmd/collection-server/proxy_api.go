@@ -370,17 +370,9 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 			return
 		}
 		agent.mu.RLock()
-		defer agent.mu.RUnlock()
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"id":             agent.ID,
-			"hostname":       agent.Hostname,
-			"os_type":        agent.OSType,
-			"os_version":     agent.OSVersion,
-			"cpu_percent":    agent.CPUPercent,
-			"memory_mb":      agent.MemoryMB,
-			"last_heartbeat": agent.LastHeartbeat,
-			"source":         "live",
-		})
+		result := agentToMap(agent)
+		agent.mu.RUnlock()
+		writeJSON(w, http.StatusOK, result)
 	})
 
 	// GET /api/v1/realdata/connectivity — 전체 백엔드 연결 상태

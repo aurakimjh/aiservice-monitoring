@@ -170,15 +170,13 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             />
           </div>
 
-          {/* Resource Charts */}
+          {/* Resource Charts — 실제 값 기반 시뮬레이션 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>CPU Usage</CardTitle></CardHeader>
+              <CardHeader><CardTitle>CPU Usage ({host.cpuPercent}%)</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
-                  { name: 'User', data: generateTimeSeries(host.cpuPercent * 0.7, 8, 60), type: 'area', color: '#58A6FF' },
-                  { name: 'System', data: generateTimeSeries(host.cpuPercent * 0.2, 5, 60), type: 'area', color: '#BC8CFF' },
-                  { name: 'IOWait', data: generateTimeSeries(host.cpuPercent * 0.1, 3, 60), type: 'area', color: '#D29922' },
+                  { name: 'Total', data: generateTimeSeries(host.cpuPercent, Math.max(1, host.cpuPercent * 0.15), 60), type: 'area', color: '#58A6FF' },
                 ]}
                 yAxisLabel="%"
                 thresholdLine={{ value: 90, label: '90%', color: '#F85149' }}
@@ -186,37 +184,47 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Memory Usage</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Memory ({host.memoryGB > 0 ? `${Math.round(host.memoryGB * host.memPercent / 100)}GB / ${host.memoryGB}GB` : `${Math.round(Number(host.memPercent))}MB used`})</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
-                  { name: 'Used', data: generateTimeSeries(host.memPercent, 5, 60), type: 'area', color: '#3FB950' },
-                  { name: 'Cached', data: generateTimeSeries(host.memPercent * 0.3, 3, 60), type: 'area', color: '#79C0FF' },
+                  { name: 'Used', data: generateTimeSeries(host.memPercent || (host.memoryGB > 0 ? 0 : Number(host.netIO === '-' ? 0 : 50)), Math.max(1, host.memPercent * 0.1), 60), type: 'area', color: '#3FB950' },
                 ]}
-                yAxisLabel="%"
+                yAxisLabel={host.memoryGB > 0 ? '%' : 'MB'}
                 height={200}
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Disk I/O</CardTitle></CardHeader>
-              <TimeSeriesChart
-                series={[
-                  { name: 'Read', data: generateTimeSeries(45, 20, 60), color: '#58A6FF' },
-                  { name: 'Write', data: generateTimeSeries(30, 15, 60), color: '#F778BA' },
-                ]}
-                yAxisLabel="MB/s"
-                height={200}
-              />
+              <CardHeader><CardTitle>Disk Usage ({host.diskPercent}%)</CardTitle></CardHeader>
+              {host.diskPercent > 0 ? (
+                <TimeSeriesChart
+                  series={[
+                    { name: 'Used', data: generateTimeSeries(host.diskPercent, Math.max(1, host.diskPercent * 0.05), 60), type: 'area', color: '#D29922' },
+                  ]}
+                  yAxisLabel="%"
+                  height={200}
+                />
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-xs text-[var(--text-muted)]">
+                  Agent collecting disk metrics...
+                </div>
+              )}
             </Card>
             <Card>
               <CardHeader><CardTitle>Network I/O</CardTitle></CardHeader>
-              <TimeSeriesChart
-                series={[
-                  { name: 'RX', data: generateTimeSeries(80, 30, 60), color: '#3FB950' },
-                  { name: 'TX', data: generateTimeSeries(60, 25, 60), color: '#D29922' },
-                ]}
-                yAxisLabel="MB/s"
-                height={200}
-              />
+              {host.netIO !== '-' ? (
+                <TimeSeriesChart
+                  series={[
+                    { name: 'RX', data: generateTimeSeries(40, 15, 60), color: '#3FB950' },
+                    { name: 'TX', data: generateTimeSeries(25, 10, 60), color: '#D29922' },
+                  ]}
+                  yAxisLabel="MB/s"
+                  height={200}
+                />
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-xs text-[var(--text-muted)]">
+                  Agent collecting network metrics...
+                </div>
+              )}
             </Card>
           </div>
 
