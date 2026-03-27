@@ -77,9 +77,12 @@ async function queryPrometheus(promql: string, points: number) {
 
 // ── Page ──
 
+import { useProjectStore } from '@/stores/project-store';
+
 export default function DashboardBuilderPage() {
   const store = useDashboardStore();
   const mode = useUIStore((s) => s.dataSourceMode);
+  const globalProjectId = useProjectStore((s) => s.currentProjectId);
 
   // Init store on mount
   useEffect(() => { store.init(); }, []);
@@ -250,7 +253,7 @@ export default function DashboardBuilderPage() {
                       </div>
                     </div>
                     <div className="p-2 h-[calc(100%-28px)] overflow-hidden">
-                      <WidgetRenderer widget={widget} promMode={mode !== 'demo'} />
+                      <WidgetRenderer widget={widget} promMode={mode !== 'demo'} globalProjectId={globalProjectId} />
                     </div>
                   </div>
                 );
@@ -359,6 +362,22 @@ export default function DashboardBuilderPage() {
                           className="w-full px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]">
                           {METRIC_CATALOG.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
                         </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[var(--text-muted)] mb-1">Project Filter</label>
+                        <input type="text" placeholder="빈값 = topbar 프로젝트 상속"
+                          value={editWidget.projectId ?? ''}
+                          onChange={(e) => store.updateWidget(editWidget.id, { projectId: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[var(--text-muted)] mb-1">Host Filter</label>
+                        <input type="text" placeholder="빈값 = 전체 호스트"
+                          value={editWidget.hostId ?? ''}
+                          onChange={(e) => store.updateWidget(editWidget.id, { hostId: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                        />
                       </div>
                       <div>
                         <label className="block text-[10px] text-[var(--text-muted)] mb-1">Service (인스턴스별 메트릭용)</label>
@@ -492,7 +511,10 @@ export default function DashboardBuilderPage() {
 
 // ── Widget Renderer (supports PromQL + Demo + Gauge + SUM/Individual) ──
 
-function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: boolean }) {
+function WidgetRenderer({ widget, promMode, globalProjectId }: { widget: WidgetConfig; promMode: boolean; globalProjectId?: string | null }) {
+  // Effective filter: widget-level > global topbar
+  const effectiveProjectId = widget.projectId || globalProjectId || '';
+  const effectiveServiceId = widget.serviceId || '';
   // APM widgets delegate to specialized components
   const ApmComponent = APM_WIDGET_MAP[widget.type];
   if (ApmComponent) {
@@ -509,8 +531,8 @@ function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: 
 
     const fetchData = async () => {
       // 1. serviceId + individual: per-instance (by instance label)
-      if (widget.serviceId && widget.viewMode === 'individual') {
-        const q = widget.query || `rate(demo_http_server_duration_milliseconds_count{exported_job="${widget.serviceId}"}[5m])`;
+      if (effectiveServiceId && widget.viewMode === 'individual') {
+        const q = widget.query || `rate(demo_http_server_duration_milliseconds_count{exported_job="${effectiveServiceId}"}[5m])`;
         const result = await queryPrometheus(q, 30);
         if (!cancelled && result && result.length > 0) { setLiveData(result); setSource('live'); return; }
       }
@@ -520,8 +542,8 @@ function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: 
         if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
       }
       // 3. serviceId SUM: aggregate
-      if (widget.serviceId) {
-        const q = `sum(rate(demo_http_server_duration_milliseconds_count{exported_job="${widget.serviceId}"}[5m]))`;
+      if (effectiveServiceId) {
+        const q = `sum(rate(demo_http_server_duration_milliseconds_count{exported_job="${effectiveServiceId}"}[5m]))`;
         const result = await queryPrometheus(q, 30);
         if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
       }
@@ -530,7 +552,7 @@ function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: 
 
     fetchData();
     return () => { cancelled = true; };
-  }, [widget.query, widget.serviceId, widget.viewMode, promMode]);
+  }, [widget.query, effectiveServiceId, widget.viewMode, promMode]);
 
   const demoData = useMemo(() => {
     if (!widget.metric) return [];

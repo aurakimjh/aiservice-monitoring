@@ -408,6 +408,8 @@ export interface WidgetConfig {
   content?: string;         // for text widget
   viewMode?: WidgetViewMode; // SUM(모아보기) vs individual(인스턴스별)
   serviceId?: string;        // 서비스 ID (인스턴스별 메트릭 조회용)
+  projectId?: string;        // 프로젝트 필터 (빈값 = topbar 상속)
+  hostId?: string;           // 호스트 필터
   refreshInterval?: number;  // per-widget refresh (ms), 0 = use global
 }
 
