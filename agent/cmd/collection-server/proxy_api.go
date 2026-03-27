@@ -348,8 +348,20 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 			return
 		}
 
-		// Default: return agent info
+		// Default: return agent info (lookup by ID or hostname)
 		agent, ok := f.get(hostID)
+		if !ok {
+			// Try lookup by hostname
+			for _, a := range f.list() {
+				a.mu.RLock()
+				if a.Hostname == hostID {
+					agent = a
+					ok = true
+				}
+				a.mu.RUnlock()
+				if ok { break }
+			}
+		}
 		if !ok {
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{
 				"error": "agent not found",

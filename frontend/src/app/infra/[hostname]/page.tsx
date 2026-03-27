@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard, GPUCard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getProjectHosts, generateTimeSeries, getMiddlewareRuntimes } from '@/lib/demo-data';
+import type { Host } from '@/types/monitoring';
 import { getRelativeTime, formatBytes } from '@/lib/utils';
 import { Server, Cpu, HardDrive, Network, Activity, Box, Terminal, ShieldCheck, Code } from 'lucide-react';
 
@@ -31,12 +33,51 @@ const DEMO_PROCESSES = [
   { pid: 1, name: 'systemd', user: 'root', cpu: 0.0, mem: 0.1, status: 'running' },
 ];
 
+// Transform single host API response
+function transformHostDetail(raw: unknown): Host | null {
+  const item = raw as Record<string, unknown>;
+  if (!item.id && !item.hostname) return null;
+  return {
+    id: String(item.id ?? item.hostname),
+    hostname: String(item.hostname ?? 'unknown'),
+    os: `${item.os_type ?? ''} ${item.os_version ?? ''}`.trim() || 'Unknown',
+    cpuCores: 0,
+    memoryGB: Math.round(Number(item.memory_mb ?? 0) / 1024),
+    status: (item.status === 'online' || item.status === 'healthy') ? 'healthy' : item.status === 'degraded' ? 'warning' : 'critical',
+    cpuPercent: Math.round(Number(item.cpu_percent ?? 0)),
+    memPercent: item.memory_mb ? Math.round(Number(item.memory_mb) / 1024 / 32 * 100) : 0,
+    diskPercent: 0,
+    netIO: '-',
+    middlewares: [],
+    agent: {
+      id: String(item.id ?? ''),
+      hostId: String(item.id ?? ''),
+      version: String(item.agent_version ?? '0.0.0'),
+      status: 'healthy',
+      plugins: [],
+      lastHeartbeat: String(item.last_heartbeat ?? new Date().toISOString()),
+      lastCollection: String(item.last_heartbeat ?? new Date().toISOString()),
+      mode: 'full' as const,
+    },
+  };
+}
+
 export default function HostDetailPage({ params }: { params: Promise<{ hostname: string }> }) {
   const { hostname } = use(params);
   const router = useRouter();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
-  const host = hosts.find((h) => h.hostname === hostname);
+
+  // Try live API first, fallback to demo data
+  const demoHost = useCallback((): Host | null => {
+    const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
+    return hosts.find((h) => h.hostname === hostname) ?? null;
+  }, [currentProjectId, hostname]);
+
+  const { data: host, source } = useDataSource<Host | null>(
+    `/realdata/hosts/${hostname}`,
+    demoHost,
+    { transform: transformHostDetail },
+  );
 
   const runtimes = getMiddlewareRuntimes();
   const hostRuntime = runtimes.find(r => r.hostname === hostname);

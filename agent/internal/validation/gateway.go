@@ -90,8 +90,14 @@ func (g *Gateway) Validate(data []byte) (*Result, []byte) {
 	if payload.CollectorID == "" {
 		result.Errors = append(result.Errors, "missing required field: collector_id")
 	}
+	// Default status to "success" if missing (Agent may not always set it)
 	if payload.Status == "" {
-		result.Errors = append(result.Errors, "missing required field: status")
+		payload.Status = "success"
+		// Re-marshal with default status
+		patched, _ := json.Marshal(payload)
+		if patched != nil {
+			data = patched
+		}
 	}
 	if len(result.Errors) > 0 {
 		result.Status = StatusRejected
