@@ -108,6 +108,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
           <div className="flex items-center gap-2">
             <StatusIndicator status={host.status} size="lg" pulse={host.status === 'critical'} />
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">{host.hostname}</h1>
+            <DataSourceBadge source={source} />
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
             <span>{host.os}</span>
@@ -163,7 +164,8 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             />
             <KPICard
               title="Network I/O"
-              value={host.netIO}
+              value={host.netIO !== '-' ? host.netIO : 'N/A'}
+              subtitle={host.netIO === '-' ? 'Agent collecting...' : undefined}
               status="healthy"
             />
           </div>
@@ -312,7 +314,17 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
       {/* ── Runtime Tab ── */}
       {activeTab === 'runtime' && (
         <div className="space-y-4">
-          {hostRuntime ? (
+          {source === 'live' && !hostRuntime ? (
+            <Card>
+              <div className="text-center py-12 space-y-2">
+                <Code size={28} className="mx-auto text-[var(--text-muted)] opacity-40" />
+                <div className="text-sm text-[var(--text-muted)]">Runtime metrics collection in progress...</div>
+                <div className="text-xs text-[var(--text-muted)]">
+                  Agent will auto-detect language runtime (Java/Python/.NET/Go/Node.js) and report thread pools, GC, event loop metrics
+                </div>
+              </div>
+            </Card>
+          ) : hostRuntime ? (
             <>
               {/* Language Badge */}
               <div>
@@ -496,62 +508,80 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
       {/* ── Processes Tab ── */}
       {activeTab === 'processes' && (
         <Card padding="none">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
-                  <th className="px-4 py-2.5 font-medium">PID</th>
-                  <th className="px-4 py-2.5 font-medium">Process</th>
-                  <th className="px-4 py-2.5 font-medium">User</th>
-                  <th className="px-4 py-2.5 font-medium text-right">CPU %</th>
-                  <th className="px-4 py-2.5 font-medium text-right">MEM %</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEMO_PROCESSES.map((p) => (
-                  <tr key={p.pid} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
-                    <td className="px-4 py-2 tabular-nums text-[var(--text-muted)]">{p.pid}</td>
-                    <td className="px-4 py-2 font-medium text-[var(--text-primary)] font-mono">{p.name}</td>
-                    <td className="px-4 py-2 text-[var(--text-secondary)]">{p.user}</td>
-                    <td className={cn('px-4 py-2 text-right tabular-nums', p.cpu > 20 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]')}>{p.cpu.toFixed(1)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{p.mem.toFixed(1)}</td>
-                    <td className="px-4 py-2">
-                      <StatusIndicator status="healthy" label={p.status} size="sm" />
-                    </td>
+          {source === 'live' ? (
+            <div className="text-center py-12 space-y-2">
+              <Terminal size={28} className="mx-auto text-[var(--text-muted)] opacity-40" />
+              <div className="text-sm text-[var(--text-muted)]">Process list collection in progress...</div>
+              <div className="text-xs text-[var(--text-muted)]">Agent OS Collector will report top processes in next cycle</div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2.5 font-medium">PID</th>
+                    <th className="px-4 py-2.5 font-medium">Process</th>
+                    <th className="px-4 py-2.5 font-medium">User</th>
+                    <th className="px-4 py-2.5 font-medium text-right">CPU %</th>
+                    <th className="px-4 py-2.5 font-medium text-right">MEM %</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {DEMO_PROCESSES.map((p) => (
+                    <tr key={p.pid} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                      <td className="px-4 py-2 tabular-nums text-[var(--text-muted)]">{p.pid}</td>
+                      <td className="px-4 py-2 font-medium text-[var(--text-primary)] font-mono">{p.name}</td>
+                      <td className="px-4 py-2 text-[var(--text-secondary)]">{p.user}</td>
+                      <td className={cn('px-4 py-2 text-right tabular-nums', p.cpu > 20 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]')}>{p.cpu.toFixed(1)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{p.mem.toFixed(1)}</td>
+                      <td className="px-4 py-2">
+                        <StatusIndicator status="healthy" label={p.status} size="sm" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
       {/* ── Logs Tab ── */}
       {activeTab === 'logs' && (
         <Card>
-          <div className="space-y-1 font-mono text-[11px]">
-            {[
-              { time: '14:32:15.234', level: 'INFO', msg: 'vLLM engine started on GPU 0,1 — model: Llama-3-70B' },
-              { time: '14:32:16.012', level: 'INFO', msg: 'Qdrant collection "documents_v3" loaded — 125,000 vectors' },
-              { time: '14:32:18.450', level: 'WARN', msg: 'GPU #0 temperature rising: 62°C → 68°C in last 5m' },
-              { time: '14:32:20.891', level: 'INFO', msg: 'rag-service processing request trace_id=abc123 — embedding phase' },
-              { time: '14:32:22.345', level: 'INFO', msg: 'AITOP agent heartbeat sent — status=healthy plugins=2 active' },
-              { time: '14:32:25.678', level: 'ERROR', msg: 'GPU #1 VRAM allocation failed: requested 2.1GB, available 1.8GB — falling back to CPU' },
-              { time: '14:32:28.123', level: 'INFO', msg: 'Batch request completed: 8 inferences, avg TTFT=1.1s, TPS=42' },
-            ].map((log, i) => (
-              <div key={i} className="flex gap-2 px-2 py-0.5 rounded hover:bg-[var(--bg-tertiary)]">
-                <span className="text-[var(--text-muted)] shrink-0">{log.time}</span>
-                <span className={cn(
-                  'shrink-0 w-11 text-center',
-                  log.level === 'ERROR' ? 'text-[var(--status-critical)]' :
-                  log.level === 'WARN' ? 'text-[var(--status-warning)]' :
-                  'text-[var(--status-info)]'
-                )}>{log.level}</span>
-                <span className="text-[var(--text-secondary)]">{log.msg}</span>
+          {source === 'live' ? (
+            <div className="text-center py-12 space-y-2">
+              <Box size={28} className="mx-auto text-[var(--text-muted)] opacity-40" />
+              <div className="text-sm text-[var(--text-muted)]">Host log collection in progress...</div>
+              <div className="text-xs text-[var(--text-muted)]">
+                Agent will forward syslog/journald entries. Check <a href="/logs" className="text-[var(--accent-primary)] hover:underline">Log Explorer</a> for aggregated logs.
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-1 font-mono text-[11px]">
+              {[
+                { time: '14:32:15.234', level: 'INFO', msg: 'vLLM engine started on GPU 0,1 — model: Llama-3-70B' },
+                { time: '14:32:16.012', level: 'INFO', msg: 'Qdrant collection "documents_v3" loaded — 125,000 vectors' },
+                { time: '14:32:18.450', level: 'WARN', msg: 'GPU #0 temperature rising: 62°C → 68°C in last 5m' },
+                { time: '14:32:20.891', level: 'INFO', msg: 'rag-service processing request trace_id=abc123 — embedding phase' },
+                { time: '14:32:22.345', level: 'INFO', msg: 'AITOP agent heartbeat sent — status=healthy plugins=2 active' },
+                { time: '14:32:25.678', level: 'ERROR', msg: 'GPU #1 VRAM allocation failed: requested 2.1GB, available 1.8GB — falling back to CPU' },
+                { time: '14:32:28.123', level: 'INFO', msg: 'Batch request completed: 8 inferences, avg TTFT=1.1s, TPS=42' },
+              ].map((log, i) => (
+                <div key={i} className="flex gap-2 px-2 py-0.5 rounded hover:bg-[var(--bg-tertiary)]">
+                  <span className="text-[var(--text-muted)] shrink-0">{log.time}</span>
+                  <span className={cn(
+                    'shrink-0 w-11 text-center',
+                    log.level === 'ERROR' ? 'text-[var(--status-critical)]' :
+                    log.level === 'WARN' ? 'text-[var(--status-warning)]' :
+                    'text-[var(--status-info)]'
+                  )}>{log.level}</span>
+                  <span className="text-[var(--text-secondary)]">{log.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
     </div>
