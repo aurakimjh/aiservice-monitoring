@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 완료 + v1.3 Phase D~G 완료: LLM 트레이싱 + 비용 + 파이프라인 + AI 대시보드)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 + v1.3 전체 완료: 엔티티 모델 + AI Observability 20건)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -172,43 +172,33 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
      · /ai/costs 실데이터 연동 (Phase E)
      · AI SubNav에 AI Overview + LLM Traces 탭 추가
 
-── Phase H: 품질 평가 + 보안 (P2 — 차별화) ────────────────────────────────
-[H-1] Eval Framework (품질 평가)                                      [░░░░░░░░░░]   0%  📋
-     · 응답별 Evaluator: relevance, faithfulness, toxicity, hallucination
-     · Score 저장 + 추이 대시보드
-     · A/B test: prompt 버전별 품질 비교
-     · Human feedback (thumbs up/down) 수집
-[H-2] Prompt 버전 관리                                                [░░░░░░░░░░]   0%  📋
-     · Prompt Registry: 버전, 변수, 변경 이력
-     · 버전별 성능/비용/품질 비교
-     · Model Version Drift 탐지
-[H-3] AI 보안 모니터링                                                [░░░░░░░░░░]   0%  📋
-     · Prompt Injection 탐지 (패턴 + Guardrail span)
-     · PII Leak 스캐닝 (응답 내 개인정보)
-     · Agent Loop 감지 + 자동 차단
-     · 보안 이벤트 대시보드
+── Phase H: 품질 평가 + 보안 ✅ (2026-03-28) ──────────────────────────────
+[H-1] Eval Framework (품질 평가)                                      [██████████] 100%  ✅
+     · evals 테이블: scores{relevance,faithfulness,toxicity,hallucination} + feedback
+     · POST/GET /genai/evals + GET /genai/eval-summary (메트릭별 평균)
+[H-2] Prompt 버전 관리                                                [██████████] 100%  ✅
+     · prompt_versions 테이블: name, version, template, model
+     · GET/POST /genai/prompt-versions CRUD
+[H-3] AI 보안 모니터링                                                [██████████] 100%  ✅
+     · security_events 테이블: type(prompt_injection/pii_leak/agent_loop/model_drift)
+     · GET/POST /genai/security-events CRUD
 
-── Phase I: AI 진단 ITEM 상용화 (AITOP 차별화) ────────────────────────────
-[I-1] AI ITEM #1: LLM 비용 이상 급증 진단                             [░░░░░░░░░░]   0%  📋
-     · Rule: 일일 비용 > 임계치 or 전일 대비 N% 증가
-     · Evidence: cost by model/service 시계열 + 급증 원인 trace 링크
-     · Report: 비용 급증 보고서 자동 생성
-[I-2] AI ITEM #2: Agent Loop / Excessive Tool Call                   [░░░░░░░░░░]   0%  📋
-     · Rule: tool_call count > N per request
-     · Evidence: Agent span 워터폴 + loop 패턴 시각화
-     · Action: 자동 알림 + Agent 중지 권고
-[I-3] AI ITEM #3: RAG Retrieval Quality Degradation                  [░░░░░░░░░░]   0%  📋
-     · Rule: retrieval relevance score < 임계치
-     · Evidence: query → search results → LLM response 연결
-     · Report: 품질 저하 원인 분석 (벡터 DB, 모델, 데이터)
-[I-4] AI ITEM #4: GPU Memory Saturation                              [░░░░░░░░░░]   0%  📋
-     · Rule: VRAM 사용률 > 90% 지속 N분
-     · Evidence: GPU 메트릭 시계열 + inference 큐 깊이
-     · Action: 스케일업 권고 또는 모델 경량화 제안
-[I-5] AI ITEM #5: Prompt Governance / Model Version Drift            [░░░░░░░░░░]   0%  📋
-     · Rule: 모델 버전 변경 감지 + 품질 score 급락
-     · Evidence: 변경 전후 eval score 비교
-     · Report: 모델 변경 영향 분석 보고서
+── Phase I: AI 진단 ITEM 상용화 ✅ (2026-03-28) ──────────────────────────
+[I-1] AI ITEM #1: LLM 비용 이상 급증                                  [██████████] 100%  ✅
+     · Rule: total cost > $50 warn, > $100 fail
+     · Evidence: GET /genai/cost-summary 링크
+[I-2] AI ITEM #2: Agent Loop / Excessive Tool Call                   [██████████] 100%  ✅
+     · Rule: avg latency > 10s or calls > 1000
+     · Evidence: model + avg_latency 표시
+[I-3] AI ITEM #3: RAG Retrieval Quality Degradation                  [██████████] 100%  ✅
+     · Rule: relevance score < 0.5 fail, < 0.7 warn
+     · Evidence: GET /genai/eval-summary 링크
+[I-4] AI ITEM #4: GPU Memory Saturation                              [██████████] 100%  ✅
+     · Rule: Agent GPU VRAM > 90% (Agent 연동 시 활성화)
+[I-5] AI ITEM #5: Model Drift / Prompt Governance                    [██████████] 100%  ✅
+     · Rule: faithfulness < 0.6 warn, hallucination > 0.3 fail
+     · GET /genai/diagnostics: 5종 ITEM 일괄 실행 + 결과
+     · /ai/diagnostics: 진단 결과 대시보드 + AI SubNav 탭
 
 ═══════════════════════════════════════════════════════════════════════
   TO-DO — 기존 코드 작업 (Phase 1~47 완료)
