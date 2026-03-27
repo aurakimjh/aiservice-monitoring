@@ -74,9 +74,21 @@ export function TopBar() {
     setCommandPaletteOpen,
   } = useUIStore();
 
-  const currentProjectId = useProjectStore((s) => s.currentProjectId) ?? 'ai-prod';
+  const dataSourceMode = useUIStore((s) => s.dataSourceMode);
+  const projects = useProjectStore((s) => s.projects);
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
-  const currentProject = DEMO_PROJECTS.find((p) => p.id === currentProjectId) ?? DEMO_PROJECTS[0];
+  const setLiveMode = useProjectStore((s) => s.setLiveMode);
+
+  // Sync project store with data source mode
+  const projectsRef = projects;
+  if (dataSourceMode === 'live' && projectsRef.length > 0 && projectsRef[0]?.id === DEMO_PROJECTS[0]?.id) {
+    setLiveMode(true);
+  } else if (dataSourceMode !== 'live' && projectsRef.length === 0) {
+    setLiveMode(false);
+  }
+
+  const currentProject = projects.find((p) => p.id === currentProjectId) ?? projects[0];
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -121,28 +133,40 @@ export function TopBar() {
               'transition-colors',
             )}
           >
-            <span className={cn('w-2 h-2 rounded-full', statusDotColor[currentProject.status])} />
-            <span className="max-w-[140px] truncate">{currentProject.name}</span>
+            {currentProject ? (
+              <>
+                <span className={cn('w-2 h-2 rounded-full', statusDotColor[currentProject.status])} />
+                <span className="max-w-[140px] truncate">{currentProject.name}</span>
+              </>
+            ) : (
+              <span className="text-[var(--text-muted)]">No Project</span>
+            )}
             <ChevronDown size={12} className="text-[var(--text-muted)]" />
           </div>
         }
       >
         <DropdownLabel>Projects</DropdownLabel>
-        {DEMO_PROJECTS.map((p) => (
-          <DropdownItem
-            key={p.id}
-            active={p.id === currentProjectId}
-            onClick={() => setCurrentProject(p.id)}
-            icon={<span className={cn('w-2 h-2 rounded-full', statusDotColor[p.status])} />}
-          >
-            <div className="flex items-center gap-2">
-              <span>{p.name}</span>
-              <span className={cn('text-[10px]', envBadge[p.env])}>{p.env}</span>
-            </div>
+        {projects.length === 0 ? (
+          <DropdownItem disabled>
+            <span className="text-[var(--text-muted)] text-xs">No projects (Live mode)</span>
           </DropdownItem>
-        ))}
+        ) : (
+          projects.map((p) => (
+            <DropdownItem
+              key={p.id}
+              active={p.id === currentProjectId}
+              onClick={() => setCurrentProject(p.id)}
+              icon={<span className={cn('w-2 h-2 rounded-full', statusDotColor[p.status])} />}
+            >
+              <div className="flex items-center gap-2">
+                <span>{p.name}</span>
+                {'env' in p && <span className={cn('text-[10px]', envBadge[(p as { env: string }).env])}>{(p as { env: string }).env}</span>}
+              </div>
+            </DropdownItem>
+          ))
+        )}
         <DropdownSeparator />
-        <DropdownItem icon={<ExternalLink size={12} />}>
+        <DropdownItem icon={<ExternalLink size={12} />} onClick={() => router.push('/projects')}>
           View all projects
         </DropdownItem>
       </Dropdown>
