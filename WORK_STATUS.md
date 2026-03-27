@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-27 (Session 53 — v1.1 완료 + v1.2 엔티티 관계 설계)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 Phase A 완료 + Phase B-1~B-2 완료)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -63,29 +63,35 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
   v1.2 엔티티 관계 모델 + 실데이터 고도화 (설계: ENTITY_RELATIONSHIP_DESIGN.md)
 ═══════════════════════════════════════════════════════════════════════
 
-── Phase A: 엔티티 모델 Backend 구현 ──────────────────────────────────────
-[A-1] Project CRUD API + SQLite 영속화                              [░░░░░░░░░░]   0%  📋
-     · POST/GET/PUT/DELETE /api/v1/projects
-     · Collection Server 재시작해도 프로젝트/Agent 상태 유지
-[A-2] Host → Project 할당                                           [░░░░░░░░░░]   0%  📋
-     · Agent 승인 시 프로젝트 선택 UI
-     · POST /api/v1/projects/{id}/hosts
-[A-3] Service 자동 감지 + OTel 매핑                                   [░░░░░░░░░░]   0%  📋
-     · Agent 프로세스 스캔 → service_name 자동 등록
-     · OTel service.name ↔ AITOP Service 매핑
-     · 서비스 메타데이터 (type, framework, language, owner)
-[A-4] Instance 모델 (서비스의 실행 단위)                               [░░░░░░░░░░]   0%  📋
-     · host_id + service_name + port → Instance
-     · 인스턴스별 개별 메트릭 (CPU, TPS, Latency)
-[A-5] Service Group API (AI Pipeline)                               [░░░░░░░░░░]   0%  📋
-     · "RAG Pipeline" = embedding + vectordb + llm + guardrail
-     · CRUD + 그룹별 집계 메트릭
+── Phase A: 엔티티 모델 Backend 구현 ✅ (2026-03-28) ──────────────────────
+[A-1] Project CRUD API + SQLite 영속화                              [██████████] 100%  ✅
+     · POST/GET/PUT/DELETE /api/v1/projects + SQLite 저장
+     · agents 테이블: 승인 상태 + OS 메트릭 + 프로젝트 할당 영속화
+     · CS 재시작해도 데이터 유지 (D-006 해결)
+[A-2] Host → Project 할당                                           [██████████] 100%  ✅
+     · Add Host 모달에 프로젝트 선택 드롭다운 + 새 프로젝트 인라인 생성
+     · Approve 시 POST /projects/{id}/hosts 자동 할당
+[A-3] Service 자동 감지 + OTel 매핑                                   [██████████] 100%  ✅
+     · syncServicesFromJaeger(): Jaeger → SQLite 자동 등록
+     · services 테이블: name UNIQUE, project_id, type, framework, language
+     · GET /api/v1/services + Prometheus 메트릭 결합
+[A-4] Instance 모델 (서비스의 실행 단위)                               [██████████] 100%  ✅
+     · instances 테이블: service_id, host_id, endpoint, pid, status
+     · syncInstancesFromAgents(): Agent↔Service 매핑 자동 생성
+     · GET /api/v1/instances?service_id= + active_instances 카운트
+[A-5] Service Group API (AI Pipeline)                               [██████████] 100%  ✅
+     · service_groups 테이블: name, type(rag/agent/training/inference), service_ids
+     · CRUD + 멤버 서비스 Prometheus 집계 (total_rpm, max_p95)
 
 ── Phase B: 프론트엔드 엔티티 연동 ────────────────────────────────────────
-[B-1] 프로젝트 셀렉터 실데이터 전환                                   [░░░░░░░░░░]   0%  📋
-     · topbar 프로젝트 드롭다운 → /api/v1/projects API
-[B-2] 프로젝트별 필터링 (전 페이지)                                   [░░░░░░░░░░]   0%  📋
-     · 선택 프로젝트 기준 호스트/서비스/알림 필터링
+[B-1] 프로젝트 셀렉터 실데이터 전환                                   [██████████] 100%  ✅
+     · fetchProjects(mode): /api/v1/projects API 호출
+     · Demo: DEMO_PROJECTS fallback / Live: API only / Auto: API→데모
+     · 드롭다운 헤더 (Live)/(Demo) 소스 표시
+[B-2] 프로젝트별 필터링 (전 페이지)                                   [██████████] 100%  ✅
+     · Home, Infra, Services, AI — API에 ?project_id= 전달
+     · Backend /realdata/hosts: SQLite project_id 기반 필터
+     · topbar 프로젝트 선택 → 전 페이지 데이터 자동 필터링
 [B-3] 서비스 페이지 고도화                                            [░░░░░░░░░░]   0%  📋
      · 인스턴스 목록, 호스트 매핑, 엔드포인트 분류
      · SUM / Individual 인스턴스 뷰 토글

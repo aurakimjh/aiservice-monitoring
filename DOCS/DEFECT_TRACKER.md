@@ -1,7 +1,7 @@
 # AITOP 결함 목록 및 진행 상황
 
-> **최종 업데이트**: 2026-03-27 (Session 53)
-> **총 건수**: 19건 (해결 15 / 진행중 2 / 접수 2)
+> **최종 업데이트**: 2026-03-28 (Session 54)
+> **총 건수**: 19건 (해결 16 / 진행중 1 / 접수 2)
 
 ---
 
@@ -25,7 +25,7 @@
 | D-003 | Major | 호스트 상세 페이지 404 (Live 모드) | ✅ 해결 | `/infra/[hostname]`이 데모 데이터에서만 검색 | `useDataSource('/realdata/hosts/{hostname}')` 연동 + hostname 조회 지원 | `b27c4a1` |
 | D-004 | Major | Windows Agent — CPU/Memory/Disk/Network/Process 미수집 | ✅ 해결 | Linux /proc 전용 코드만 존재 | `sysmetrics_windows.go` — GetSystemTimes, GlobalMemoryStatusEx, GetDiskFreeSpaceEx, tasklist, netstat | `a8f2c31` |
 | D-005 | Minor | 호스트 상세 API 응답에 agent_version, status 누락 | ✅ 해결 | 상세 핸들러가 `agentToMap` 미사용 | 상세 API에서도 `agentToMap` 사용하도록 수정 | `b27c4a1` |
-| D-006 | Minor | Collection Server 재시작 시 Agent approved 상태 초기화 | 📋 접수 | In-memory 저장소라 재시작하면 리셋 | LocalStorage 또는 SQLite 영속화 필요 |  |
+| D-006 | Minor | Collection Server 재시작 시 Agent approved 상태 초기화 | ✅ 해결 | In-memory 저장소라 재시작하면 리셋 | A-1 SQLite 영속화로 해결 (store.go) | `6d79f24` |
 | D-007 | Minor | Windows Agent Network I/O — 첫 수집 시 0 | 🔧 진행중 | 델타 계산에 이전 값 필요 (첫 회차는 baseline) | 2회차 Heartbeat부터 정상 표시 | 설계상 정상 |
 | D-008 | Minor | Linux 컨테이너 Agent — Disk 0개, Process 1개 | 📋 접수 | Alpine 컨테이너 내부에서 /dev/ 마운트 제한, 프로세스 1개만 존재 | 호스트 PID namespace 공유 또는 privileged 모드 필요 |  |
 
@@ -58,8 +58,8 @@
 ## 4. 해결 통계
 
 ```
-해결됨:  14건  ██████████████░░░░  78%
-진행중:   2건  ██░░░░░░░░░░░░░░░░  11%
+해결됨:  16건  ████████████████░░  84%
+진행중:   1건  █░░░░░░░░░░░░░░░░░   5%
 접수:     2건  ██░░░░░░░░░░░░░░░░  11%
 ```
 
@@ -78,6 +78,5 @@
 | 우선순위 | # | 제목 | 비고 |
 |----------|---|------|------|
 | P1 | D-020 | .NET 데모 앱 CS8803 | 5개 언어 중 1개 미동작 |
-| P2 | D-006 | CS 재시작 시 Agent 상태 초기화 | 데모 중 CS 재시작하면 Agent 재승인 필요 |
-| P3 | D-008 | Linux 컨테이너 Disk/Process 제한 | 컨테이너 환경 한계 |
-| P4 | D-021 | Frontend dev 서버 포트 잔존 | 워크어라운드 존재 |
+| P2 | D-008 | Linux 컨테이너 Disk/Process 제한 | 컨테이너 환경 한계 |
+| P3 | D-021 | Frontend dev 서버 포트 잔존 | 워크어라운드 존재 |
