@@ -641,6 +641,107 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		})
 	})
 
+	// GET /api/v1/genai/pipeline-traces — RAG 파이프라인 트레이스 (워터폴용)
+	mux.HandleFunc("GET /api/v1/genai/pipeline-traces", func(w http.ResponseWriter, r *http.Request) {
+		service := r.URL.Query().Get("service")
+		if service == "" {
+			service = "rag-service"
+		}
+		limit := r.URL.Query().Get("limit")
+		if limit == "" {
+			limit = "20"
+		}
+
+		jaegerQ := fmt.Sprintf("%s/api/traces?service=%s&limit=%s", jaegerURL, service, limit)
+		resp, err := proxyClient.Get(jaegerQ)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}, "total": 0})
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		var jaegerResp struct {
+			Data []struct {
+				TraceID string `json:"traceID"`
+				Spans   []struct {
+					SpanID        string `json:"spanID"`
+					OperationName string `json:"operationName"`
+					StartTime     int64  `json:"startTime"`
+					Duration      int64  `json:"duration"`
+					References    []struct {
+						RefType string `json:"refType"`
+						SpanID  string `json:"spanID"`
+					} `json:"references"`
+					Tags []struct {
+						Key   string      `json:"key"`
+						Value interface{} `json:"value"`
+					} `json:"tags"`
+				} `json:"spans"`
+			} `json:"data"`
+		}
+		json.Unmarshal(body, &jaegerResp)
+
+		pipelines := make([]map[string]interface{}, 0)
+		for _, trace := range jaegerResp.Data {
+			// Find workflow span (rag.workflow or root)
+			var rootStart int64
+			stages := make([]map[string]interface{}, 0)
+
+			for _, span := range trace.Spans {
+				if span.OperationName == "rag.workflow" {
+					rootStart = span.StartTime
+				}
+				// Collect RAG stages
+				if strings.HasPrefix(span.OperationName, "rag.") || strings.HasPrefix(span.OperationName, "gen_ai.") {
+					attrs := map[string]interface{}{}
+					for _, tag := range span.Tags {
+						attrs[tag.Key] = tag.Value
+					}
+					stages = append(stages, map[string]interface{}{
+						"span_id":    span.SpanID,
+						"name":       span.OperationName,
+						"start_us":   span.StartTime,
+						"duration_ms": span.Duration / 1000,
+						"attributes": attrs,
+					})
+				}
+			}
+			if len(stages) == 0 {
+				continue
+			}
+			if rootStart == 0 && len(trace.Spans) > 0 {
+				rootStart = trace.Spans[0].StartTime
+			}
+
+			// Calculate offsets from root
+			for _, s := range stages {
+				startUs := s["start_us"].(int64)
+				s["offset_ms"] = (startUs - rootStart) / 1000
+				delete(s, "start_us")
+			}
+
+			totalMs := int64(0)
+			for _, s := range stages {
+				end := s["offset_ms"].(int64) + s["duration_ms"].(int64)
+				if end > totalMs {
+					totalMs = end
+				}
+			}
+
+			pipelines = append(pipelines, map[string]interface{}{
+				"trace_id":  trace.TraceID,
+				"total_ms":  totalMs,
+				"stages":    stages,
+			})
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": pipelines,
+			"total": len(pipelines),
+		})
+	})
+
 	// ── Token Cost APIs ──────────────────────────────────────────
 
 	// GET /api/v1/genai/cost-summary — 모델별 토큰 비용 집계
