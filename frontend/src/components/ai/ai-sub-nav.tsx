@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Bot, FlaskConical, BookOpen, DollarSign, Cpu, Brain, BarChart3 } from 'lucide-react';
+import { Bot, FlaskConical, BookOpen, DollarSign, Cpu, Brain, BarChart3, Stethoscope } from 'lucide-react';
 
 const AI_TABS = [
   { label: 'AI Services', href: '/ai', icon: Bot },
@@ -13,6 +13,7 @@ const AI_TABS = [
   { label: 'Prompt Hub', href: '/ai/prompts', icon: BookOpen },
   { label: 'Cost Optimization', href: '/ai/costs', icon: DollarSign },
   { label: 'GPU Cluster', href: '/ai/gpu', icon: Cpu },
+  { label: 'AI Diagnostics', href: '/ai/diagnostics', icon: Stethoscope },
 ];
 
 export function AISubNav() {

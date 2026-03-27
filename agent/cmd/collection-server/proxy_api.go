@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -739,6 +740,28 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"items": pipelines,
 			"total": len(pipelines),
+		})
+	})
+
+	// ── AI Diagnostic Items ──────────────────────────────────────
+
+	// GET /api/v1/genai/diagnostics — AI 진단 ITEM 5종 실행 + 결과
+	mux.HandleFunc("GET /api/v1/genai/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		results := RunAIItems(serverStore, slog.Default())
+		passed := 0; warned := 0; failed := 0
+		for _, r := range results {
+			switch r.Status {
+			case "pass": passed++
+			case "warn": warned++
+			case "fail": failed++
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items":  results,
+			"total":  len(results),
+			"passed": passed,
+			"warned": warned,
+			"failed": failed,
 		})
 	})
 
