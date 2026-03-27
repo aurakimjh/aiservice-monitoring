@@ -390,8 +390,9 @@ export interface ExecutiveSummary {
 
 // Phase 14-1: Custom Dashboard Builder
 
-export type WidgetType = 'kpi' | 'timeseries' | 'bar' | 'pie' | 'table' | 'text';
+export type WidgetType = 'kpi' | 'timeseries' | 'bar' | 'pie' | 'gauge' | 'table' | 'text';
 export type WidgetSize = '1x1' | '2x1' | '1x2' | '2x2';
+export type WidgetViewMode = 'sum' | 'individual';
 
 export interface WidgetConfig {
   id: string;
@@ -399,8 +400,10 @@ export interface WidgetConfig {
   title: string;
   size: WidgetSize;
   metric?: string;
-  query?: string;
-  content?: string; // for text widget
+  query?: string;           // PromQL query (used when connecting to Prometheus)
+  content?: string;         // for text widget
+  viewMode?: WidgetViewMode; // SUM(모아보기) vs individual(인스턴스별)
+  refreshInterval?: number;  // per-widget refresh (ms), 0 = use global
 }
 
 export interface DashboardConfig {

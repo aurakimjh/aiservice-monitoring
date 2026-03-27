@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-27 (Session 53 — Phase 42~45 완료: OTel 5개 언어 + Frontend Tier 1~3 전체 실데이터 전환)
+> **최종 업데이트**: 2026-03-27 (Session 53 — Phase 42~46 완료: OTel 5개 언어 + Frontend 전체 실데이터 + 커스텀 대시보드)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -56,7 +56,7 @@ Phase 45:    데모 사이트 OTel 계측 (5개 언어)                ███
 Phase 42:    Frontend Tier 1 실데이터 전환 (홈·인프라·Fleet·트레이스) ████████████ 100% ✅
 Phase 43:    Frontend Tier 2 (서비스·메트릭·로그·알림·토폴로지)      ████████████ 100% ✅
 Phase 44:    Frontend Tier 3 (AI·SLO·프로파일링·진단)                ████████████ 100% ✅
-Phase 46:    커스텀 대시보드 시스템                                   ░░░░░░░░░░   0% 📋
+Phase 46:    커스텀 대시보드 시스템                                   ████████████ 100% ✅
 Phase 47:    APM 서비스 대시보드 위젯 (8종)                           ░░░░░░░░░░   0% 📋
 
 ═══════════════════════════════════════════════════════════════════════
@@ -377,26 +377,26 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
      · useDataSource('/topology/changes') → 토폴로지 변경 이력
      · DataSourceBadge 페이지 헤더에 표시
 
-── Phase 46: 커스텀 대시보드 시스템 (Phase 42 완료 후) ─────────────────────
-[75] Phase 46-1: 대시보드 빌더 엔진                               [░░░░░░░░░░]   0%  📋
-     · 드래그 앤 드롭 가젯 배치 (react-grid-layout 기반)
-     · 가젯 추가/제거/리사이즈/이동 — 편집 모드 토글 (🔒보기 / ✏️편집)
-     · 레이아웃 저장/불러오기 (JSON → Collection Server 또는 LocalStorage)
-     · 대시보드 CRUD: 생성 / 복제 / 이름 변경 / 삭제
-     · 대시보드 목록 페이지 (/dashboards) — 내 대시보드 + 공유 + 템플릿
-[76] Phase 46-2: 가젯 라이브러리 (위젯 팔레트)                    [░░░░░░░░░░]   0%  📋
-     · 가젯 타입: line, area, bar, gauge, table, stat, heatmap, scatter, pie, text
-     · 가젯 설정 패널 (사이드 드로어):
-       - 데이터 소스 (Prometheus PromQL / Collection Server API)
-       - 시간 범위 (전역 or 개별) / 새로고침 주기 / 임계치 색상
-     · 가젯 프리셋 템플릿: APM, AI, 인프라, 배치, GPU 카테고리별
-[77] Phase 46-3: 가젯 보기 모드 전환 (SUM / 개별 인스턴스)       [░░░░░░░░░░]   0%  📋
-     · 가젯 우측 상단 아이콘: 📊 SUM(모아보기) ↔ 📈 개별(인스턴스별)
-     · SUM: 전체 합산/평균 단일 라인 / 개별: 인스턴스별 라인 색상 구분
-     · 10개 초과 시 자동 경고 + Top-N 필터
-     · "금일 TPS", "금일 사용자 수" 등 비교 전용 가젯은 SUM 고정
-[78] Phase 46-4: 대시보드 공유 + 내보내기                          [░░░░░░░░░░]   0%  📋
-     · 공유 URL (읽기 전용) / JSON import/export / PDF·PNG 스냅샷
+── Phase 46: 커스텀 대시보드 시스템 ✅ (2026-03-27) ───────────────────────
+[75] Phase 46-1: 대시보드 빌더 엔진                               [██████████] 100%  ✅
+     · Zustand dashboard-store: 다중 대시보드 CRUD + LocalStorage 영속화
+     · 드래그 앤 드롭 가젯 배치 (CSS Grid + HTML5 DnD)
+     · 편집 모드 토글 (Lock/Unlock) — 보기 전용 모드에서 설정 숨김
+     · 대시보드 목록 뷰 (카드 그리드) — 생성/복제/삭제/열기
+     · 템플릿 뷰: 3종 프리셋 (AI Service, Infrastructure, Executive)
+[76] Phase 46-2: 가젯 라이브러리 + PromQL 데이터 소스              [██████████] 100%  ✅
+     · 가젯 7종: kpi, timeseries, bar, pie, gauge, table, text
+     · 위젯 설정 패널: 타입/크기/메트릭/PromQL/텍스트 편집
+     · PromQL 직접 입력 → Prometheus proxy query_range 실행
+     · 데모 데이터 자동 폴백 (Prometheus 미연결 시)
+[77] Phase 46-3: 가젯 보기 모드 전환 (SUM / 개별 인스턴스)       [██████████] 100%  ✅
+     · 가젯 헤더 Eye 아이콘: SUM ↔ Individual 토글
+     · SUM: 전체 시계열 합산 단일 라인 / Individual: 인스턴스별 색상 구분
+     · WidgetViewMode 타입 + viewMode 필드 추가
+[78] Phase 46-4: 대시보드 공유 + Import/Export                    [██████████] 100%  ✅
+     · Export: JSON 파일 다운로드 (기존 유지)
+     · Import: JSON 파일 업로드 → 자동 대시보드 생성
+     · 다중 대시보드 간 전환 + 템플릿에서 인스턴스화
 
 ── Phase 47: APM 서비스 대시보드 가젯 (WhaTap 참조, Phase 46 위에 구현) ────
 [79] Phase 47-1: TPS 가젯                                         [░░░░░░░░░░]   0%  📋
