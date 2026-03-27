@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
@@ -75,14 +76,18 @@ export function TopBar() {
   } = useUIStore();
 
   const dataSourceMode = useUIStore((s) => s.dataSourceMode);
-  const isLive = dataSourceMode === 'live';
   const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const projectSource = useProjectStore((s) => s.source);
 
-  // Live 모드: 데모 프로젝트 숨김
-  const visibleProjects = isLive ? [] : projects;
-  const currentProject = isLive ? null : (projects.find((p) => p.id === currentProjectId) ?? projects[0]);
+  // 모드 변경 시 프로젝트 목록 재로드
+  useEffect(() => {
+    fetchProjects(dataSourceMode);
+  }, [dataSourceMode, fetchProjects]);
+
+  const currentProject = projects.find((p) => p.id === currentProjectId) ?? projects[0] ?? null;
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -139,15 +144,20 @@ export function TopBar() {
           </div>
         }
       >
-        <DropdownLabel>Projects</DropdownLabel>
-        {visibleProjects.length === 0 ? (
+        <DropdownLabel>
+          Projects
+          <span className="ml-1 text-[9px] text-[var(--text-muted)]">
+            ({projectSource === 'api' ? 'Live' : 'Demo'})
+          </span>
+        </DropdownLabel>
+        {projects.length === 0 ? (
           <DropdownItem disabled>
             <span className="text-[var(--text-muted)] text-xs">
-              {isLive ? 'Live 모드 — 실제 프로젝트 API 연동 필요' : 'No projects'}
+              No projects — create one in Settings or Infrastructure
             </span>
           </DropdownItem>
         ) : (
-          visibleProjects.map((p) => (
+          projects.map((p) => (
             <DropdownItem
               key={p.id}
               active={p.id === currentProjectId}
@@ -156,7 +166,7 @@ export function TopBar() {
             >
               <div className="flex items-center gap-2">
                 <span>{p.name}</span>
-                {'env' in p && <span className={cn('text-[10px]', envBadge[(p as { env: string }).env])}>{(p as { env: string }).env}</span>}
+                <span className={cn('text-[10px]', envBadge[p.environment] ?? 'text-[var(--text-muted)]')}>{p.environment}</span>
               </div>
             </DropdownItem>
           ))
@@ -215,7 +225,7 @@ export function TopBar() {
             <Button variant="ghost" size="icon" title="Alerts">
               <div className="relative">
                 <Bell size={16} />
-                {!isLive && DEMO_ALERTS.length > 0 && (
+                {projectSource === 'demo' && DEMO_ALERTS.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--status-critical)] text-white text-[8px] font-bold rounded-full flex items-center justify-center">
                     {DEMO_ALERTS.length}
                   </span>
@@ -225,9 +235,9 @@ export function TopBar() {
           }
         >
           <DropdownLabel>Recent Alerts</DropdownLabel>
-          {isLive ? (
+          {projectSource === 'api' ? (
             <DropdownItem disabled>
-              <span className="text-[var(--text-muted)] text-xs">No alerts (Live mode)</span>
+              <span className="text-[var(--text-muted)] text-xs">No alerts yet</span>
             </DropdownItem>
           ) : (
             DEMO_ALERTS.map((alert) => (
