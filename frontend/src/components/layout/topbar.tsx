@@ -75,20 +75,14 @@ export function TopBar() {
   } = useUIStore();
 
   const dataSourceMode = useUIStore((s) => s.dataSourceMode);
+  const isLive = dataSourceMode === 'live';
   const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
-  const setLiveMode = useProjectStore((s) => s.setLiveMode);
 
-  // Sync project store with data source mode
-  const projectsRef = projects;
-  if (dataSourceMode === 'live' && projectsRef.length > 0 && projectsRef[0]?.id === DEMO_PROJECTS[0]?.id) {
-    setLiveMode(true);
-  } else if (dataSourceMode !== 'live' && projectsRef.length === 0) {
-    setLiveMode(false);
-  }
-
-  const currentProject = projects.find((p) => p.id === currentProjectId) ?? projects[0];
+  // Live 모드: 데모 프로젝트 숨김
+  const visibleProjects = isLive ? [] : projects;
+  const currentProject = isLive ? null : (projects.find((p) => p.id === currentProjectId) ?? projects[0]);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -146,12 +140,14 @@ export function TopBar() {
         }
       >
         <DropdownLabel>Projects</DropdownLabel>
-        {projects.length === 0 ? (
+        {visibleProjects.length === 0 ? (
           <DropdownItem disabled>
-            <span className="text-[var(--text-muted)] text-xs">No projects (Live mode)</span>
+            <span className="text-[var(--text-muted)] text-xs">
+              {isLive ? 'Live 모드 — 실제 프로젝트 API 연동 필요' : 'No projects'}
+            </span>
           </DropdownItem>
         ) : (
-          projects.map((p) => (
+          visibleProjects.map((p) => (
             <DropdownItem
               key={p.id}
               active={p.id === currentProjectId}
@@ -219,27 +215,35 @@ export function TopBar() {
             <Button variant="ghost" size="icon" title="Alerts">
               <div className="relative">
                 <Bell size={16} />
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--status-critical)] text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-                  {DEMO_ALERTS.length}
-                </span>
+                {!isLive && DEMO_ALERTS.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--status-critical)] text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+                    {DEMO_ALERTS.length}
+                  </span>
+                )}
               </div>
             </Button>
           }
         >
           <DropdownLabel>Recent Alerts</DropdownLabel>
-          {DEMO_ALERTS.map((alert) => (
-            <DropdownItem
-              key={alert.id}
-              icon={severityIcon[alert.severity]}
-            >
-              <div>
-                <div className="text-xs font-medium">{alert.title}</div>
-                <div className="text-[10px] text-[var(--text-muted)]">
-                  {alert.target} &middot; {alert.time}
-                </div>
-              </div>
+          {isLive ? (
+            <DropdownItem disabled>
+              <span className="text-[var(--text-muted)] text-xs">No alerts (Live mode)</span>
             </DropdownItem>
-          ))}
+          ) : (
+            DEMO_ALERTS.map((alert) => (
+              <DropdownItem
+                key={alert.id}
+                icon={severityIcon[alert.severity]}
+              >
+                <div>
+                  <div className="text-xs font-medium">{alert.title}</div>
+                  <div className="text-[10px] text-[var(--text-muted)]">
+                    {alert.target} &middot; {alert.time}
+                  </div>
+                </div>
+              </DropdownItem>
+            ))
+          )}
           <DropdownSeparator />
           <DropdownItem icon={<ExternalLink size={12} />}>
             View all alerts

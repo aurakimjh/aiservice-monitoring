@@ -8,6 +8,7 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { SearchInput, Button, Select } from '@/components/ui';
 import { StatusIndicator } from '@/components/monitoring';
 import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
 import { getRelativeTime } from '@/lib/utils';
 import { FolderOpen, Plus, Server, Network, Bot, Bell } from 'lucide-react';
 import type { Environment, Status } from '@/types/monitoring';
@@ -34,7 +35,9 @@ const envColor: Record<Environment, string> = {
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const projects = useProjectStore((s) => s.projects);
+  const dataSourceMode = useUIStore((s) => s.dataSourceMode);
+  const storeProjects = useProjectStore((s) => s.projects);
+  const projects = dataSourceMode === 'live' ? [] : storeProjects;
   const [search, setSearch] = useState('');
   const [envFilter, setEnvFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
