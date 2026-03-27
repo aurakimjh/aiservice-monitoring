@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { TimeRange } from '@/types/monitoring';
 import { TIME_RANGES } from '@/types/monitoring';
 import type { Locale } from '@/lib/i18n';
@@ -28,25 +29,40 @@ interface UIState {
   dismissDemoBanner: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
-  sidebarExpanded: true,
-  theme: 'dark',
-  locale: 'ko',
-  timeRange: TIME_RANGES[2], // Last 1h
-  autoRefresh: true,
-  refreshInterval: 5000,
-  commandPaletteOpen: false,
-  dataSourceMode: 'auto',
-  demoBannerDismissed: false,
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      sidebarExpanded: true,
+      theme: 'dark',
+      locale: 'ko',
+      timeRange: TIME_RANGES[2], // Last 1h
+      autoRefresh: true,
+      refreshInterval: 5000,
+      commandPaletteOpen: false,
+      dataSourceMode: 'auto',
+      demoBannerDismissed: false,
 
-  toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
-  setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
-  setTheme: (theme) => set({ theme }),
-  setLocale: (locale) => set({ locale }),
-  setTimeRange: (timeRange) => set({ timeRange }),
-  setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
-  setRefreshInterval: (refreshInterval) => set({ refreshInterval }),
-  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
-  setDataSourceMode: (dataSourceMode) => set({ dataSourceMode, demoBannerDismissed: false }),
-  dismissDemoBanner: () => set({ demoBannerDismissed: true }),
-}));
+      toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
+      setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
+      setTheme: (theme) => set({ theme }),
+      setLocale: (locale) => set({ locale }),
+      setTimeRange: (timeRange) => set({ timeRange }),
+      setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
+      setRefreshInterval: (refreshInterval) => set({ refreshInterval }),
+      setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+      setDataSourceMode: (dataSourceMode) => set({ dataSourceMode, demoBannerDismissed: false }),
+      dismissDemoBanner: () => set({ demoBannerDismissed: true }),
+    }),
+    {
+      name: 'aitop-ui-settings',
+      partialize: (state) => ({
+        sidebarExpanded: state.sidebarExpanded,
+        theme: state.theme,
+        locale: state.locale,
+        dataSourceMode: state.dataSourceMode,
+        autoRefresh: state.autoRefresh,
+        refreshInterval: state.refreshInterval,
+      }),
+    },
+  ),
+);
