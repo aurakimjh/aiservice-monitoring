@@ -117,6 +117,36 @@ func (s *Store) migrate() error {
 			FOREIGN KEY (project_id) REFERENCES projects(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS evals (
+			id         TEXT PRIMARY KEY,
+			trace_id   TEXT DEFAULT '',
+			span_id    TEXT DEFAULT '',
+			service    TEXT DEFAULT '',
+			model      TEXT DEFAULT '',
+			scores     TEXT DEFAULT '{}',
+			feedback   TEXT DEFAULT '',
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE TABLE IF NOT EXISTS prompt_versions (
+			id         TEXT PRIMARY KEY,
+			name       TEXT NOT NULL,
+			version    TEXT DEFAULT '1.0',
+			template   TEXT DEFAULT '',
+			model      TEXT DEFAULT '',
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE TABLE IF NOT EXISTS security_events (
+			id         TEXT PRIMARY KEY,
+			type       TEXT NOT NULL,
+			severity   TEXT DEFAULT 'medium',
+			trace_id   TEXT DEFAULT '',
+			service    TEXT DEFAULT '',
+			detail     TEXT DEFAULT '',
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+
 		CREATE TABLE IF NOT EXISTS model_prices (
 			id                TEXT PRIMARY KEY,
 			provider          TEXT NOT NULL,
@@ -494,6 +524,138 @@ type TokenUsageSummary struct {
 	TotalOutput  int     `json:"total_output_tokens"`
 	TotalCost    float64 `json:"total_cost_usd"`
 	AvgLatency   float64 `json:"avg_latency_ms"`
+}
+
+// ── Eval (Quality Evaluation) ──
+
+type EvalRecord struct {
+	ID         string             `json:"id"`
+	TraceID    string             `json:"trace_id"`
+	SpanID     string             `json:"span_id"`
+	Service    string             `json:"service"`
+	Model      string             `json:"model"`
+	Scores     map[string]float64 `json:"scores"` // relevance, faithfulness, toxicity, hallucination
+	Feedback   string             `json:"feedback"` // thumbs_up, thumbs_down, ""
+	CreatedAt  string             `json:"created_at"`
+}
+
+func (s *Store) InsertEval(rec *EvalRecord) error {
+	if rec.ID == "" {
+		rec.ID = fmt.Sprintf("eval-%d", time.Now().UnixMilli())
+	}
+	scoresJSON, _ := json.Marshal(rec.Scores)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`
+		INSERT OR REPLACE INTO evals (id, trace_id, span_id, service, model, scores, feedback, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, rec.ID, rec.TraceID, rec.SpanID, rec.Service, rec.Model, string(scoresJSON), rec.Feedback, now)
+	return err
+}
+
+func (s *Store) ListEvals(limit int) ([]EvalRecord, error) {
+	if limit <= 0 { limit = 50 }
+	rows, err := s.db.Query(`SELECT id, trace_id, span_id, service, model, scores, feedback, created_at FROM evals ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var evals []EvalRecord
+	for rows.Next() {
+		var e EvalRecord
+		var scoresJSON string
+		rows.Scan(&e.ID, &e.TraceID, &e.SpanID, &e.Service, &e.Model, &scoresJSON, &e.Feedback, &e.CreatedAt)
+		json.Unmarshal([]byte(scoresJSON), &e.Scores)
+		evals = append(evals, e)
+	}
+	return evals, nil
+}
+
+type EvalSummary struct {
+	Metric   string  `json:"metric"`
+	AvgScore float64 `json:"avg_score"`
+	Count    int     `json:"count"`
+}
+
+func (s *Store) GetEvalSummary() ([]EvalSummary, error) {
+	evals, err := s.ListEvals(1000)
+	if err != nil { return nil, err }
+	totals := map[string]struct{ sum float64; count int }{}
+	for _, e := range evals {
+		for k, v := range e.Scores {
+			t := totals[k]
+			t.sum += v; t.count++
+			totals[k] = t
+		}
+	}
+	var summaries []EvalSummary
+	for k, t := range totals {
+		summaries = append(summaries, EvalSummary{Metric: k, AvgScore: t.sum / float64(t.count), Count: t.count})
+	}
+	return summaries, nil
+}
+
+// ── Prompt Version ──
+
+type PromptVersion struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Template  string `json:"template"`
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (s *Store) UpsertPromptVersion(pv *PromptVersion) error {
+	if pv.ID == "" { pv.ID = fmt.Sprintf("pv-%d", time.Now().UnixMilli()) }
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO prompt_versions (id, name, version, template, model, created_at) VALUES (?,?,?,?,?,?)`,
+		pv.ID, pv.Name, pv.Version, pv.Template, pv.Model, now)
+	return err
+}
+
+func (s *Store) ListPromptVersions() ([]PromptVersion, error) {
+	rows, err := s.db.Query(`SELECT id, name, version, template, model, created_at FROM prompt_versions ORDER BY name, created_at DESC`)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var pvs []PromptVersion
+	for rows.Next() {
+		var pv PromptVersion
+		rows.Scan(&pv.ID, &pv.Name, &pv.Version, &pv.Template, &pv.Model, &pv.CreatedAt)
+		pvs = append(pvs, pv)
+	}
+	return pvs, nil
+}
+
+// ── Security Events ──
+
+type SecurityEvent struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"` // prompt_injection, pii_leak, agent_loop, model_drift
+	Severity  string `json:"severity"` // critical, high, medium, low
+	TraceID   string `json:"trace_id"`
+	Service   string `json:"service"`
+	Detail    string `json:"detail"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (s *Store) InsertSecurityEvent(ev *SecurityEvent) error {
+	if ev.ID == "" { ev.ID = fmt.Sprintf("sec-%d", time.Now().UnixMilli()) }
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`INSERT INTO security_events (id, type, severity, trace_id, service, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
+		ev.ID, ev.Type, ev.Severity, ev.TraceID, ev.Service, ev.Detail, now)
+	return err
+}
+
+func (s *Store) ListSecurityEvents(limit int) ([]SecurityEvent, error) {
+	if limit <= 0 { limit = 50 }
+	rows, err := s.db.Query(`SELECT id, type, severity, trace_id, service, detail, created_at FROM security_events ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var events []SecurityEvent
+	for rows.Next() {
+		var ev SecurityEvent
+		rows.Scan(&ev.ID, &ev.Type, &ev.Severity, &ev.TraceID, &ev.Service, &ev.Detail, &ev.CreatedAt)
+		events = append(events, ev)
+	}
+	return events, nil
 }
 
 func (s *Store) GetTokenUsageSummary() ([]TokenUsageSummary, error) {

@@ -742,6 +742,73 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		})
 	})
 
+	// ── Eval + Prompt + Security APIs ────────────────────────────
+
+	// POST /api/v1/genai/evals — 품질 평가 기록
+	mux.HandleFunc("POST /api/v1/genai/evals", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"}); return }
+		var body EvalRecord
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"}); return
+		}
+		serverStore.InsertEval(&body)
+		writeJSON(w, http.StatusCreated, body)
+	})
+
+	// GET /api/v1/genai/evals — 평가 목록
+	mux.HandleFunc("GET /api/v1/genai/evals", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}}); return }
+		evals, _ := serverStore.ListEvals(100)
+		if evals == nil { evals = []EvalRecord{} }
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": evals, "total": len(evals)})
+	})
+
+	// GET /api/v1/genai/eval-summary — 평가 메트릭 집계
+	mux.HandleFunc("GET /api/v1/genai/eval-summary", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}}); return }
+		summaries, _ := serverStore.GetEvalSummary()
+		if summaries == nil { summaries = []EvalSummary{} }
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": summaries, "total": len(summaries)})
+	})
+
+	// GET /api/v1/genai/prompt-versions — 프롬프트 버전 목록
+	mux.HandleFunc("GET /api/v1/genai/prompt-versions", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}}); return }
+		pvs, _ := serverStore.ListPromptVersions()
+		if pvs == nil { pvs = []PromptVersion{} }
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": pvs, "total": len(pvs)})
+	})
+
+	// POST /api/v1/genai/prompt-versions — 프롬프트 버전 등록
+	mux.HandleFunc("POST /api/v1/genai/prompt-versions", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"}); return }
+		var body PromptVersion
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name required"}); return
+		}
+		serverStore.UpsertPromptVersion(&body)
+		writeJSON(w, http.StatusCreated, body)
+	})
+
+	// GET /api/v1/genai/security-events — 보안 이벤트 목록
+	mux.HandleFunc("GET /api/v1/genai/security-events", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}}); return }
+		events, _ := serverStore.ListSecurityEvents(100)
+		if events == nil { events = []SecurityEvent{} }
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": events, "total": len(events)})
+	})
+
+	// POST /api/v1/genai/security-events — 보안 이벤트 기록
+	mux.HandleFunc("POST /api/v1/genai/security-events", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil { writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"}); return }
+		var body SecurityEvent
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"}); return
+		}
+		serverStore.InsertSecurityEvent(&body)
+		writeJSON(w, http.StatusCreated, body)
+	})
+
 	// ── Token Cost APIs ──────────────────────────────────────────
 
 	// GET /api/v1/genai/cost-summary — 모델별 토큰 비용 집계
