@@ -117,6 +117,28 @@ func (s *Store) migrate() error {
 			FOREIGN KEY (project_id) REFERENCES projects(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS model_prices (
+			id                TEXT PRIMARY KEY,
+			provider          TEXT NOT NULL,
+			model             TEXT NOT NULL,
+			input_per_million REAL DEFAULT 0,
+			output_per_million REAL DEFAULT 0
+		);
+
+		CREATE TABLE IF NOT EXISTS token_usage (
+			trace_id      TEXT,
+			span_id       TEXT,
+			service       TEXT DEFAULT '',
+			provider      TEXT DEFAULT '',
+			model         TEXT DEFAULT '',
+			input_tokens  INTEGER DEFAULT 0,
+			output_tokens INTEGER DEFAULT 0,
+			cost_usd      REAL DEFAULT 0,
+			latency_ms    REAL DEFAULT 0,
+			timestamp     TEXT DEFAULT (datetime('now')),
+			PRIMARY KEY (trace_id, span_id)
+		);
+
 		CREATE TABLE IF NOT EXISTS instances (
 			id          TEXT PRIMARY KEY,
 			service_id  TEXT NOT NULL,
@@ -132,7 +154,22 @@ func (s *Store) migrate() error {
 			FOREIGN KEY (service_id) REFERENCES services(id)
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	// Seed default model prices
+	defaults := []ModelPrice{
+		{Provider: "openai", Model: "gpt-4o", InputPerMillion: 2.5, OutputPerMillion: 10.0},
+		{Provider: "openai", Model: "gpt-4o-mini", InputPerMillion: 0.15, OutputPerMillion: 0.6},
+		{Provider: "anthropic", Model: "claude-sonnet-4", InputPerMillion: 3.0, OutputPerMillion: 15.0},
+		{Provider: "anthropic", Model: "claude-haiku-4", InputPerMillion: 0.25, OutputPerMillion: 1.25},
+		{Provider: "ollama", Model: "llama3.2:3b", InputPerMillion: 0, OutputPerMillion: 0},
+		{Provider: "local", Model: "local", InputPerMillion: 0, OutputPerMillion: 0},
+	}
+	for _, d := range defaults {
+		s.UpsertModelPrice(&d)
+	}
+	return nil
 }
 
 // ── Service ──
@@ -364,6 +401,119 @@ func (s *Store) UpdateServiceGroup(id string, name, description, sgType string, 
 func (s *Store) DeleteServiceGroup(id string) error {
 	_, err := s.db.Exec(`DELETE FROM service_groups WHERE id=?`, id)
 	return err
+}
+
+// ── Model Pricing ──
+
+// ModelPrice represents per-model token pricing.
+type ModelPrice struct {
+	ID              string  `json:"id"`
+	Provider        string  `json:"provider"`         // openai, anthropic, ollama, local
+	Model           string  `json:"model"`             // gpt-4o, claude-sonnet-4, llama3.2:3b
+	InputPerMillion float64 `json:"input_per_million"` // $/1M input tokens
+	OutputPerMillion float64 `json:"output_per_million"` // $/1M output tokens
+}
+
+func (s *Store) UpsertModelPrice(mp *ModelPrice) error {
+	if mp.ID == "" {
+		mp.ID = fmt.Sprintf("mp-%s-%s", mp.Provider, mp.Model)
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO model_prices (id, provider, model, input_per_million, output_per_million)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET input_per_million=excluded.input_per_million, output_per_million=excluded.output_per_million
+	`, mp.ID, mp.Provider, mp.Model, mp.InputPerMillion, mp.OutputPerMillion)
+	return err
+}
+
+func (s *Store) ListModelPrices() ([]ModelPrice, error) {
+	rows, err := s.db.Query(`SELECT id, provider, model, input_per_million, output_per_million FROM model_prices ORDER BY provider, model`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var prices []ModelPrice
+	for rows.Next() {
+		var mp ModelPrice
+		rows.Scan(&mp.ID, &mp.Provider, &mp.Model, &mp.InputPerMillion, &mp.OutputPerMillion)
+		prices = append(prices, mp)
+	}
+	return prices, nil
+}
+
+func (s *Store) GetModelPrice(provider, model string) *ModelPrice {
+	var mp ModelPrice
+	err := s.db.QueryRow(`SELECT id, provider, model, input_per_million, output_per_million FROM model_prices WHERE provider=? AND model=?`, provider, model).
+		Scan(&mp.ID, &mp.Provider, &mp.Model, &mp.InputPerMillion, &mp.OutputPerMillion)
+	if err != nil {
+		return nil
+	}
+	return &mp
+}
+
+// CalcCost calculates cost from tokens + model price.
+func (s *Store) CalcCost(provider, model string, inputTokens, outputTokens int) float64 {
+	mp := s.GetModelPrice(provider, model)
+	if mp == nil {
+		return 0
+	}
+	return (float64(inputTokens) * mp.InputPerMillion / 1_000_000) + (float64(outputTokens) * mp.OutputPerMillion / 1_000_000)
+}
+
+// ── Token Usage Log ──
+
+// TokenUsageRecord tracks per-request token usage for aggregation.
+type TokenUsageRecord struct {
+	TraceID      string  `json:"trace_id"`
+	SpanID       string  `json:"span_id"`
+	Service      string  `json:"service"`
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	CostUSD      float64 `json:"cost_usd"`
+	LatencyMS    float64 `json:"latency_ms"`
+	Timestamp    string  `json:"timestamp"`
+}
+
+func (s *Store) InsertTokenUsage(rec *TokenUsageRecord) error {
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO token_usage (trace_id, span_id, service, provider, model, input_tokens, output_tokens, cost_usd, latency_ms, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, rec.TraceID, rec.SpanID, rec.Service, rec.Provider, rec.Model,
+		rec.InputTokens, rec.OutputTokens, rec.CostUSD, rec.LatencyMS, rec.Timestamp)
+	return err
+}
+
+// TokenUsageSummary returns aggregated token usage.
+type TokenUsageSummary struct {
+	Model        string  `json:"model"`
+	Provider     string  `json:"provider"`
+	TotalCalls   int     `json:"total_calls"`
+	TotalInput   int     `json:"total_input_tokens"`
+	TotalOutput  int     `json:"total_output_tokens"`
+	TotalCost    float64 `json:"total_cost_usd"`
+	AvgLatency   float64 `json:"avg_latency_ms"`
+}
+
+func (s *Store) GetTokenUsageSummary() ([]TokenUsageSummary, error) {
+	rows, err := s.db.Query(`
+		SELECT model, provider, COUNT(*) as calls, SUM(input_tokens), SUM(output_tokens), SUM(cost_usd), AVG(latency_ms)
+		FROM token_usage
+		GROUP BY model, provider
+		ORDER BY SUM(cost_usd) DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var summaries []TokenUsageSummary
+	for rows.Next() {
+		var s2 TokenUsageSummary
+		rows.Scan(&s2.Model, &s2.Provider, &s2.TotalCalls, &s2.TotalInput, &s2.TotalOutput, &s2.TotalCost, &s2.AvgLatency)
+		summaries = append(summaries, s2)
+	}
+	return summaries, nil
 }
 
 // ── Project CRUD ──

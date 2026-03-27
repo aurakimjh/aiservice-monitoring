@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { AISubNav } from '@/components/ai';
-import { Breadcrumb, Card, CardHeader, CardTitle, Tabs, Badge } from '@/components/ui';
+import { Breadcrumb, Card, CardHeader, CardTitle, Tabs, Badge, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getModelCostProfiles, getCacheAnalysis, getCostRecommendations, getBudgetAlerts } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { CostRecommendationCard } from '@/components/ai/cost-recommendation-card';
 import { Bot, DollarSign, TrendingDown, Database, Bell } from 'lucide-react';
 
@@ -17,15 +18,33 @@ const TABS = [
   { id: 'budget', label: 'Budget' },
 ];
 
+interface CostSummaryItem {
+  model: string; provider: string; total_calls: number;
+  total_input_tokens: number; total_output_tokens: number;
+  total_cost_usd: number; avg_latency_ms: number;
+}
+
 export default function AICostOptimizationPage() {
   const [activeTab, setActiveTab] = useState('models');
+
+  // Live cost summary from API
+  const demoCostSummary = useCallback(() => ({ items: [] as CostSummaryItem[], total_cost: 0, total_tokens: 0 }), []);
+  const { data: costData, source } = useDataSource(
+    '/genai/cost-summary',
+    demoCostSummary,
+    { refreshInterval: 30_000 },
+  );
+  const liveSummary = (costData as { items?: CostSummaryItem[]; total_cost?: number; total_tokens?: number }) ?? {};
+  const liveCostItems = liveSummary.items ?? [];
+  const liveTotalCost = liveSummary.total_cost ?? 0;
+  const liveTotalTokens = liveSummary.total_tokens ?? 0;
 
   const models = useMemo(() => getModelCostProfiles(), []);
   const cache = useMemo(() => getCacheAnalysis(), []);
   const recommendations = useMemo(() => getCostRecommendations(), []);
   const budgetAlerts = useMemo(() => getBudgetAlerts(), []);
 
-  const totalCost = models.reduce((s, m) => s + m.dailyCost, 0);
+  const totalCost = liveTotalCost > 0 ? liveTotalCost : models.reduce((s, m) => s + m.dailyCost, 0);
   const totalSavings = recommendations.reduce((s, r) => s + r.estimatedSaving, 0);
   const activeBudgetAlerts = budgetAlerts.filter((b) => b.enabled).length;
 

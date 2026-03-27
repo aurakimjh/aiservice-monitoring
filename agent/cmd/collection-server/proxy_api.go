@@ -84,6 +84,24 @@ func queryPromScalar(query string) float64 {
 	return val
 }
 
+func toFloat(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case string:
+		f, _ := strconv.ParseFloat(val, 64)
+		return f
+	default:
+		return 0
+	}
+}
+
 // proxyRequest forwards a request to an upstream and copies the response back.
 func proxyRequest(w http.ResponseWriter, r *http.Request, upstreamURL string) {
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, r.Body)
@@ -578,7 +596,7 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 					continue
 				}
 
-				items = append(items, map[string]interface{}{
+				item := map[string]interface{}{
 					"trace_id":       trace.TraceID,
 					"span_id":        span.SpanID,
 					"operation":      span.OperationName,
@@ -594,7 +612,26 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 					"cost_usd":       attrs["gen_ai.cost_usd"],
 					"latency_ms":     attrs["gen_ai.latency_ms"],
 					"attributes":     attrs,
-				})
+				}
+				items = append(items, item)
+				// Record token usage for cost aggregation
+				if serverStore != nil {
+					go func(it map[string]interface{}) {
+						rec := &TokenUsageRecord{
+							TraceID:  fmt.Sprintf("%v", it["trace_id"]),
+							SpanID:   fmt.Sprintf("%v", it["span_id"]),
+							Service:  fmt.Sprintf("%v", it["service"]),
+							Provider: fmt.Sprintf("%v", it["system"]),
+							Model:    fmt.Sprintf("%v", it["model"]),
+							Timestamp: time.Now().UTC().Format(time.RFC3339),
+						}
+						if v := it["input_tokens"]; v != nil { rec.InputTokens = int(toFloat(v)) }
+						if v := it["output_tokens"]; v != nil { rec.OutputTokens = int(toFloat(v)) }
+						if v := it["duration_ms"]; v != nil { rec.LatencyMS = toFloat(v) }
+						rec.CostUSD = serverStore.CalcCost(rec.Provider, rec.Model, rec.InputTokens, rec.OutputTokens)
+						serverStore.InsertTokenUsage(rec)
+					}(item)
+				}
 			}
 		}
 
@@ -602,6 +639,60 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 			"items": items,
 			"total": len(items),
 		})
+	})
+
+	// ── Token Cost APIs ──────────────────────────────────────────
+
+	// GET /api/v1/genai/cost-summary — 모델별 토큰 비용 집계
+	mux.HandleFunc("GET /api/v1/genai/cost-summary", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}, "total": 0})
+			return
+		}
+		summaries, err := serverStore.GetTokenUsageSummary()
+		if err != nil || summaries == nil {
+			summaries = []TokenUsageSummary{}
+		}
+		totalCost := 0.0
+		totalTokens := 0
+		for _, s := range summaries {
+			totalCost += s.TotalCost
+			totalTokens += s.TotalInput + s.TotalOutput
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items":        summaries,
+			"total":        len(summaries),
+			"total_cost":   totalCost,
+			"total_tokens": totalTokens,
+		})
+	})
+
+	// GET /api/v1/genai/model-prices — 모델 가격 목록
+	mux.HandleFunc("GET /api/v1/genai/model-prices", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}})
+			return
+		}
+		prices, _ := serverStore.ListModelPrices()
+		if prices == nil {
+			prices = []ModelPrice{}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": prices, "total": len(prices)})
+	})
+
+	// PUT /api/v1/genai/model-prices — 모델 가격 업데이트
+	mux.HandleFunc("PUT /api/v1/genai/model-prices", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"})
+			return
+		}
+		var body ModelPrice
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+		serverStore.UpsertModelPrice(&body)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	})
 
 	// ── Service Auto-Discovery + CRUD ─────────────────────────────
