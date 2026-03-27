@@ -513,6 +513,97 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		})
 	})
 
+	// ── GenAI Span Query (LLM call tracing) ──────────────────────
+
+	// GET /api/v1/genai/spans — LLM 호출 span 목록 (Jaeger에서 gen_ai.* 태그 필터)
+	mux.HandleFunc("GET /api/v1/genai/spans", func(w http.ResponseWriter, r *http.Request) {
+		service := r.URL.Query().Get("service")
+		limit := r.URL.Query().Get("limit")
+		if limit == "" {
+			limit = "50"
+		}
+		if service == "" {
+			service = "rag-service"
+		}
+
+		// Query Jaeger for traces with gen_ai tags
+		jaegerQ := fmt.Sprintf("%s/api/traces?service=%s&tags={\"gen_ai.system\":\"\"}&limit=%s", jaegerURL, service, limit)
+		resp, err := proxyClient.Get(jaegerQ)
+		if err != nil {
+			// Fallback: query without tag filter
+			jaegerQ = fmt.Sprintf("%s/api/traces?service=%s&limit=%s", jaegerURL, service, limit)
+			resp, err = proxyClient.Get(jaegerQ)
+			if err != nil {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"items": []interface{}{}, "total": 0})
+				return
+			}
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		// Parse Jaeger response and extract GenAI spans
+		var jaegerResp struct {
+			Data []struct {
+				TraceID string `json:"traceID"`
+				Spans   []struct {
+					SpanID        string `json:"spanID"`
+					OperationName string `json:"operationName"`
+					StartTime     int64  `json:"startTime"` // microseconds
+					Duration      int64  `json:"duration"`   // microseconds
+					Tags          []struct {
+						Key   string      `json:"key"`
+						Value interface{} `json:"value"`
+					} `json:"tags"`
+					Process struct {
+						ServiceName string `json:"serviceName"`
+					} `json:"process"`
+				} `json:"spans"`
+			} `json:"data"`
+		}
+		json.Unmarshal(body, &jaegerResp)
+
+		items := make([]map[string]interface{}, 0)
+		for _, trace := range jaegerResp.Data {
+			for _, span := range trace.Spans {
+				// Check if span has gen_ai attributes
+				attrs := map[string]interface{}{}
+				isGenAI := false
+				for _, tag := range span.Tags {
+					if strings.HasPrefix(tag.Key, "gen_ai.") {
+						attrs[tag.Key] = tag.Value
+						isGenAI = true
+					}
+				}
+				if !isGenAI && !strings.Contains(span.OperationName, "gen_ai") && !strings.Contains(span.OperationName, "llm") {
+					continue
+				}
+
+				items = append(items, map[string]interface{}{
+					"trace_id":       trace.TraceID,
+					"span_id":        span.SpanID,
+					"operation":      span.OperationName,
+					"service":        span.Process.ServiceName,
+					"start_time":     span.StartTime / 1000, // ms
+					"duration_ms":    span.Duration / 1000,
+					"model":          attrs["gen_ai.request.model"],
+					"system":         attrs["gen_ai.system"],
+					"input_tokens":   attrs["gen_ai.usage.input_tokens"],
+					"output_tokens":  attrs["gen_ai.usage.output_tokens"],
+					"total_tokens":   attrs["gen_ai.usage.total_tokens"],
+					"finish_reason":  attrs["gen_ai.response.finish_reason"],
+					"cost_usd":       attrs["gen_ai.cost_usd"],
+					"latency_ms":     attrs["gen_ai.latency_ms"],
+					"attributes":     attrs,
+				})
+			}
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": items,
+			"total": len(items),
+		})
+	})
+
 	// ── Service Auto-Discovery + CRUD ─────────────────────────────
 
 	// syncServicesFromJaeger discovers services from Jaeger and upserts into SQLite.

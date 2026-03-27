@@ -539,6 +539,7 @@ func main() {
 		"/api/v1/services",
 		"/api/v1/service-groups",
 		"/api/v1/instances",
+		"/api/v1/genai/",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
