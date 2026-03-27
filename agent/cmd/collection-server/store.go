@@ -104,6 +104,21 @@ func (s *Store) migrate() error {
 			updated_at     TEXT DEFAULT (datetime('now')),
 			FOREIGN KEY (project_id) REFERENCES projects(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS instances (
+			id          TEXT PRIMARY KEY,
+			service_id  TEXT NOT NULL,
+			host_id     TEXT DEFAULT '',
+			hostname    TEXT DEFAULT '',
+			endpoint    TEXT DEFAULT '',
+			pid         INTEGER DEFAULT 0,
+			status      TEXT DEFAULT 'running',
+			started_at  TEXT DEFAULT '',
+			updated_at  TEXT DEFAULT (datetime('now')),
+			cpu_pct     REAL DEFAULT 0,
+			mem_mb      REAL DEFAULT 0,
+			FOREIGN KEY (service_id) REFERENCES services(id)
+		);
 	`)
 	return err
 }
@@ -196,8 +211,71 @@ func (s *Store) UpdateService(id string, updates map[string]string) error {
 }
 
 func (s *Store) DeleteService(id string) error {
+	s.db.Exec(`DELETE FROM instances WHERE service_id=?`, id)
 	_, err := s.db.Exec(`DELETE FROM services WHERE id=?`, id)
 	return err
+}
+
+// ── Instance ──
+
+// InstanceRecord represents a service instance (process/pod on a host).
+type InstanceRecord struct {
+	ID        string  `json:"id"`
+	ServiceID string  `json:"service_id"`
+	HostID    string  `json:"host_id"`
+	Hostname  string  `json:"hostname"`
+	Endpoint  string  `json:"endpoint"` // host:port
+	PID       int     `json:"pid,omitempty"`
+	Status    string  `json:"status"` // running / stopped / error
+	StartedAt string  `json:"started_at,omitempty"`
+	UpdatedAt string  `json:"updated_at"`
+	CPUPct    float64 `json:"cpu_pct"`
+	MemMB     float64 `json:"mem_mb"`
+}
+
+func (s *Store) UpsertInstance(inst *InstanceRecord) error {
+	if inst.ID == "" {
+		inst.ID = fmt.Sprintf("inst-%s-%s", inst.ServiceID, inst.HostID)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`
+		INSERT INTO instances (id, service_id, host_id, hostname, endpoint, pid, status, started_at, updated_at, cpu_pct, mem_mb)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			endpoint=excluded.endpoint, pid=excluded.pid, status=excluded.status,
+			updated_at=excluded.updated_at, cpu_pct=excluded.cpu_pct, mem_mb=excluded.mem_mb
+	`, inst.ID, inst.ServiceID, inst.HostID, inst.Hostname, inst.Endpoint,
+		inst.PID, inst.Status, inst.StartedAt, now, inst.CPUPct, inst.MemMB)
+	return err
+}
+
+func (s *Store) ListInstances(serviceID string) ([]InstanceRecord, error) {
+	query := `SELECT id, service_id, host_id, hostname, endpoint, pid, status, started_at, updated_at, cpu_pct, mem_mb FROM instances`
+	args := []interface{}{}
+	if serviceID != "" {
+		query += ` WHERE service_id = ?`
+		args = append(args, serviceID)
+	}
+	query += ` ORDER BY hostname, endpoint`
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var instances []InstanceRecord
+	for rows.Next() {
+		var inst InstanceRecord
+		rows.Scan(&inst.ID, &inst.ServiceID, &inst.HostID, &inst.Hostname, &inst.Endpoint,
+			&inst.PID, &inst.Status, &inst.StartedAt, &inst.UpdatedAt, &inst.CPUPct, &inst.MemMB)
+		instances = append(instances, inst)
+	}
+	return instances, nil
+}
+
+func (s *Store) CountInstances(serviceID string) int {
+	var count int
+	s.db.QueryRow(`SELECT COUNT(*) FROM instances WHERE service_id=? AND status='running'`, serviceID).Scan(&count)
+	return count
 }
 
 // ── Project CRUD ──

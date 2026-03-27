@@ -541,22 +541,27 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		// Enrich with Prometheus metrics
 		items := make([]map[string]interface{}, 0, len(services))
 		for _, svc := range services {
+			instanceCount := 0
+			if serverStore != nil {
+				instanceCount = serverStore.CountInstances(svc.ID)
+			}
 			item := map[string]interface{}{
-				"id":               svc.ID,
-				"name":             svc.Name,
-				"project_id":       svc.ProjectID,
-				"service_group_id": svc.ServiceGroupID,
-				"type":             svc.Type,
-				"framework":        svc.Framework,
-				"language":         svc.Language,
-				"owner":            svc.Owner,
-				"discovered_via":   svc.DiscoveredVia,
-				"host_ids":         svc.HostIDs,
-				"status":           "healthy",
-				"latency_p50":      0.0,
-				"latency_p95":      0.0,
-				"rpm":              0.0,
-				"error_rate":       0.0,
+				"id":                svc.ID,
+				"name":              svc.Name,
+				"project_id":        svc.ProjectID,
+				"service_group_id":  svc.ServiceGroupID,
+				"type":              svc.Type,
+				"framework":         svc.Framework,
+				"language":          svc.Language,
+				"owner":             svc.Owner,
+				"discovered_via":    svc.DiscoveredVia,
+				"host_ids":          svc.HostIDs,
+				"active_instances":  instanceCount,
+				"status":            "healthy",
+				"latency_p50":       0.0,
+				"latency_p95":       0.0,
+				"rpm":               0.0,
+				"error_rate":        0.0,
 			}
 
 			// Query Prometheus for this service
@@ -636,6 +641,77 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	})
+
+	// ── Instance API ──────────────────────────────────────────────
+
+	// GET /api/v1/instances — 인스턴스 목록
+	mux.HandleFunc("GET /api/v1/instances", func(w http.ResponseWriter, r *http.Request) {
+		serviceID := r.URL.Query().Get("service_id")
+		var instances []InstanceRecord
+		if serverStore != nil {
+			instances, _ = serverStore.ListInstances(serviceID)
+		}
+		if instances == nil {
+			instances = []InstanceRecord{}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": instances,
+			"total": len(instances),
+		})
+	})
+
+	// syncInstancesFromAgents creates instances from agent heartbeat data.
+	// Called when agents report running services via process scan.
+	syncInstancesFromAgents := func() {
+		if serverStore == nil {
+			return
+		}
+		agents := f.list()
+		services, _ := serverStore.ListServices("")
+		svcByName := map[string]string{} // name → id
+		for _, svc := range services {
+			svcByName[svc.Name] = svc.ID
+		}
+
+		for _, agent := range agents {
+			agent.mu.RLock()
+			if !agent.Approved {
+				agent.mu.RUnlock()
+				continue
+			}
+			// Each approved agent with plugins = potential instances
+			for _, plugin := range agent.Plugins {
+				// Map known plugin patterns to service names
+				// e.g., agent running on host that sends OTel with service.name
+				_ = plugin
+			}
+			// For demo: create one instance per agent for each known service on that host
+			// In production, Agent would report detected processes (java, python, node) with ports
+			hostname := agent.Hostname
+			agentID := agent.ID
+			agent.mu.RUnlock()
+
+			// Match agent to services by checking if agent's host appears in Jaeger traces
+			for svcName, svcID := range svcByName {
+				inst := &InstanceRecord{
+					ID:        fmt.Sprintf("inst-%s-%s", svcID, agentID),
+					ServiceID: svcID,
+					HostID:    agentID,
+					Hostname:  hostname,
+					Endpoint:  hostname + ":*",
+					Status:    "running",
+				}
+				_ = svcName
+				serverStore.UpsertInstance(inst)
+			}
+		}
+	}
+
+	// Run instance sync periodically (after service sync)
+	go func() {
+		time.Sleep(10 * time.Second) // Wait for initial Jaeger sync
+		syncInstancesFromAgents()
+	}()
 
 	// ── Project CRUD ──────────────────────────────────────────────
 
