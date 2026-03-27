@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, Tabs, SearchInput, Select, Button, Badge } from '@/components/ui';
+import { Card, Tabs, SearchInput, Select, Button, Badge, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard, HexagonMap, type HexCell } from '@/components/monitoring';
 import { useProjectStore } from '@/stores/project-store';
 import { getProjectHosts } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
+import type { Host, Status } from '@/types/monitoring';
 import { Server, Table2, Hexagon, Plus } from 'lucide-react';
 
 const VIEW_TABS = [
@@ -29,9 +31,61 @@ const SIZE_METRIC_OPTIONS = [
   { label: 'Disk %', value: 'disk' },
 ];
 
+// Transform API /realdata/hosts response → Host[]
+function transformHosts(raw: unknown): Host[] {
+  const resp = raw as { items?: Array<Record<string, unknown>> };
+  if (!resp.items?.length) return [];
+  return resp.items.map((item) => ({
+    id: String(item.id ?? item.hostname),
+    hostname: String(item.hostname ?? 'unknown'),
+    os: `${item.os_type ?? 'Linux'} ${item.os_version ?? ''}`.trim(),
+    cpuCores: 0,
+    memoryGB: 0,
+    status: mapAgentStatus(String(item.status ?? 'offline')),
+    cpuPercent: Math.round(Number(item.cpu_percent ?? 0)),
+    memPercent: item.memory_mb ? Math.round(Number(item.memory_mb) / 1024 / 32 * 100) : 0,
+    diskPercent: 0,
+    netIO: '-',
+    middlewares: [],
+    agent: {
+      id: String(item.id),
+      hostId: String(item.id),
+      version: String(item.agent_version ?? '0.0.0'),
+      status: mapAgentStatus(String(item.status ?? 'offline')) === 'healthy' ? 'healthy' : 'degraded',
+      plugins: Array.isArray(item.collectors)
+        ? (item.collectors as Array<Record<string, string>>).map((c) => ({
+            id: c.plugin_id, name: c.plugin_id, version: c.version ?? '1.0.0',
+            status: c.status === 'active' ? 'active' as const : 'inactive' as const,
+            itemsCovered: [],
+          }))
+        : [],
+      lastHeartbeat: String(item.last_heartbeat ?? new Date().toISOString()),
+      lastCollection: String(item.last_heartbeat ?? new Date().toISOString()),
+      mode: 'full' as const,
+    },
+  }));
+}
+
+function mapAgentStatus(s: string): Status {
+  if (s === 'online' || s === 'healthy' || s === 'approved') return 'healthy';
+  if (s === 'degraded') return 'warning';
+  return 'critical';
+}
+
 export default function InfraPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
+  const demoFallback = useCallback(
+    () => getProjectHosts(currentProjectId ?? 'proj-ai-prod'),
+    [currentProjectId],
+  );
+
+  const { data: hosts, source } = useDataSource<Host[]>(
+    '/realdata/hosts',
+    demoFallback,
+    { refreshInterval: 30_000, transform: transformHosts },
+  );
+
+  const hostList = hosts ?? [];
 
   const [view, setView] = useState('table');
   const [search, setSearch] = useState('');
@@ -41,7 +95,7 @@ export default function InfraPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const filtered = useMemo(() => {
-    const result = hosts.filter((h) => {
+    const result = hostList.filter((h) => {
       if (search && !h.hostname.toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter !== 'all' && h.status !== statusFilter) return false;
       return true;
@@ -55,7 +109,7 @@ export default function InfraPage() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [hosts, search, statusFilter, sortBy, sortDir]);
+  }, [hostList, search, statusFilter, sortBy, sortDir]);
 
   const handleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -66,12 +120,12 @@ export default function InfraPage() {
     sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   // KPI
-  const total = hosts.length;
-  const healthy = hosts.filter((h) => h.status === 'healthy').length;
-  const warning = hosts.filter((h) => h.status === 'warning').length;
-  const critical = hosts.filter((h) => h.status === 'critical' || h.status === 'offline').length;
-  const avgCpu = total > 0 ? Math.round(hosts.reduce((s, h) => s + h.cpuPercent, 0) / total) : 0;
-  const gpuCount = hosts.reduce((s, h) => s + (h.gpus?.length ?? 0), 0);
+  const total = hostList.length;
+  const healthy = hostList.filter((h) => h.status === 'healthy').length;
+  const warning = hostList.filter((h) => h.status === 'warning').length;
+  const critical = hostList.filter((h) => h.status === 'critical' || h.status === 'offline').length;
+  const avgCpu = total > 0 ? Math.round(hostList.reduce((s, h) => s + h.cpuPercent, 0) / total) : 0;
+  const gpuCount = hostList.reduce((s, h) => s + (h.gpus?.length ?? 0), 0);
 
   // Hexagon data
   const hexCells = useMemo<HexCell[]>(() => {
@@ -93,7 +147,10 @@ export default function InfraPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Infrastructure</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Infrastructure</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <Button variant="secondary" size="md"><Plus size={14} /> Add Host</Button>
       </div>
 
@@ -104,7 +161,7 @@ export default function InfraPage() {
         <KPICard title="Warning" value={warning} status={warning > 0 ? 'warning' : 'healthy'} />
         <KPICard title="Critical / Offline" value={critical} status={critical > 0 ? 'critical' : 'healthy'} />
         <KPICard title="Avg CPU" value={avgCpu} unit="%" status={avgCpu > 80 ? 'warning' : 'healthy'} />
-        <KPICard title="GPUs" value={gpuCount} subtitle={`${hosts.filter((h) => h.gpus).length} hosts`} />
+        <KPICard title="GPUs" value={gpuCount} subtitle={`${hostList.filter((h) => h.gpus).length} hosts`} />
       </div>
 
       {/* Filters + View Toggle */}

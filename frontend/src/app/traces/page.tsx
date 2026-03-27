@@ -4,9 +4,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { EChartsWrapper } from '@/components/charts';
 import { generateTransactions } from '@/lib/demo-data';
+import { useDataSource, type DataSource } from '@/hooks/use-data-source';
 import { formatDuration } from '@/lib/utils';
 import type { Transaction, TransactionStatus } from '@/types/monitoring';
 import { TimeRangePicker } from '@/components/monitoring/time-range-picker';
@@ -41,6 +42,77 @@ const DEMO_SERVERS: ServerOption[] = [
   { id: 'staging-api-01', label: 'staging-api-01' },
   { id: 'staging-gpu-01', label: 'staging-gpu-01' },
 ];
+
+// ── Jaeger → Transaction transform ──
+
+function classifyStatus(elapsed: number, statusCode: number): TransactionStatus {
+  if (statusCode >= 500) return 'error';
+  if (elapsed >= 3000) return 'very_slow';
+  if (elapsed >= 1000) return 'slow';
+  return 'normal';
+}
+
+function transformJaegerServices(raw: unknown): ServerOption[] {
+  const resp = raw as { data?: string[] };
+  if (!resp.data?.length) return [];
+  return resp.data.map((name) => ({ id: name, label: name }));
+}
+
+interface JaegerSpan {
+  traceID: string;
+  spanID: string;
+  operationName: string;
+  startTime: number; // microseconds
+  duration: number; // microseconds
+  references?: Array<{ refType: string; traceID: string; spanID: string }>;
+  tags?: Array<{ key: string; type: string; value: unknown }>;
+  process?: { serviceName: string };
+}
+
+interface JaegerTrace {
+  traceID: string;
+  spans: JaegerSpan[];
+}
+
+function transformJaegerTraces(raw: unknown): Transaction[] {
+  const resp = raw as { data?: JaegerTrace[] };
+  if (!resp.data?.length) return [];
+
+  return resp.data.map((trace) => {
+    // Find root span (no parent reference)
+    const rootSpan = trace.spans.find((s) =>
+      !s.references?.some((r) => r.refType === 'CHILD_OF'),
+    ) ?? trace.spans[0];
+
+    const elapsed = Math.round(rootSpan.duration / 1000); // μs → ms
+    const timestamp = Math.round(rootSpan.startTime / 1000); // μs → ms
+    const httpStatus = rootSpan.tags?.find((t) => t.key === 'http.status_code');
+    const statusCode = httpStatus ? Number(httpStatus.value) : 200;
+
+    return {
+      traceId: trace.traceID,
+      rootSpanId: rootSpan.spanID,
+      timestamp,
+      elapsed,
+      service: rootSpan.process?.serviceName ?? 'unknown',
+      endpoint: rootSpan.operationName,
+      status: classifyStatus(elapsed, statusCode),
+      statusCode,
+      metrics: { ttft_ms: 0, tps: 0, tokens_generated: 0, guardrail_action: 'PASS' as const },
+      spans: trace.spans.map((s) => ({
+        spanId: s.spanID,
+        parentId: s.references?.find((r) => r.refType === 'CHILD_OF')?.spanID ?? '',
+        name: `${s.process?.serviceName ?? ''}: ${s.operationName}`,
+        startOffset: Math.round((s.startTime - rootSpan.startTime) / 1000),
+        duration: Math.round(s.duration / 1000),
+        status: (s.tags?.some((t) => t.key === 'error' && t.value === true) ? 'error' : 'ok') as 'ok' | 'error',
+        attributes: Object.fromEntries(
+          (s.tags ?? []).map((t) => [t.key, t.value as string | number]),
+        ),
+      })),
+    };
+  });
+}
 
 const VIEW_TABS = [
   { id: 'xlog', label: 'XLog', icon: <Activity size={12} /> },
@@ -96,6 +168,16 @@ export default function TracesPage() {
   const [isLive, setIsLive] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
 
+  // ── Jaeger services (real data) ──
+  const demoServicesFallback = useCallback(() => DEMO_SERVERS, []);
+  const { data: jaegerServices, source: svcSource } = useDataSource<ServerOption[]>(
+    '/proxy/jaeger/services',
+    demoServicesFallback,
+    { refreshInterval: 60_000, transform: transformJaegerServices },
+  );
+  const availableServers = jaegerServices ?? DEMO_SERVERS;
+  const dataSource: DataSource = svcSource;
+
   // ── Server selection ──
   const [selectedServers, setSelectedServers] = useState<string[]>([
     'prod-api-01',
@@ -148,19 +230,42 @@ export default function TracesPage() {
   // ── Server color map ──
   const serverColors = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
-    DEMO_SERVERS.forEach((srv, idx) => {
+    availableServers.forEach((srv, idx) => {
       map[srv.id] = SERVER_PALETTE[idx % SERVER_PALETTE.length];
     });
     return map;
-  }, []);
+  }, [availableServers]);
 
-  // ── Transaction generation (time-range aware) ──
+  // ── Jaeger traces (real data with demo fallback) ──
+  const jaegerQuery = selectedServers.length > 0 ? selectedServers[0] : '';
+  const lookbackMs = range.to - range.from;
+  const lookbackStr = `${Math.round(lookbackMs / 60_000)}m`;
+  const jaegerApiPath = jaegerQuery
+    ? `/proxy/jaeger/traces?service=${encodeURIComponent(jaegerQuery)}&limit=200&lookback=${lookbackStr}`
+    : '';
+
+  const demoTxnFallback = useCallback(() => [] as Transaction[], []);
+  const { data: jaegerTxns, source: txnSource } = useDataSource<Transaction[]>(
+    jaegerApiPath || '/proxy/jaeger/traces?limit=0',
+    demoTxnFallback,
+    { transform: transformJaegerTraces },
+  );
+
+  // ── Transaction generation (real data or demo) ──
   const allTransactions = useMemo<TxnWithServer[]>(() => {
+    // Use Jaeger real data if available
+    if (txnSource === 'live' && jaegerTxns && jaegerTxns.length > 0) {
+      return jaegerTxns.map((t) => ({
+        ...t,
+        serverId: t.service,
+      }));
+    }
+
+    // Demo fallback: generate transactions and rescale into selected range
     const rangeMs = range.to - range.from;
     const count = Math.max(100, Math.min(600, Math.round(rangeMs / 3_000)));
     const raw = generateTransactions(count);
 
-    // Rescale timestamps into the selected range
     const minTs = Math.min(...raw.map((t) => t.timestamp));
     const maxTs = Math.max(...raw.map((t) => t.timestamp));
     const span = (maxTs - minTs) || 1;
@@ -172,7 +277,7 @@ export default function TracesPage() {
         ? selectedServers[i % selectedServers.length]
         : DEMO_SERVERS[i % DEMO_SERVERS.length].id,
     }));
-  }, [range.from, range.to, selectedServers]);
+  }, [range.from, range.to, selectedServers, jaegerTxns, txnSource]);
 
   const filteredTransactions = useMemo<TxnWithServer[]>(() => {
     if (statusFilter === 'all') return allTransactions;
@@ -618,7 +723,10 @@ export default function TracesPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">XLog / HeatMap</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">XLog / HeatMap</h1>
+          <DataSourceBadge source={dataSource} />
+        </div>
         <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
           <span>Total: <strong className="text-[var(--text-primary)]">{stats.total}</strong></span>
           <span>Avg: <strong className="text-[var(--text-primary)]">{formatDuration(stats.avgElapsed)}</strong></span>
@@ -632,7 +740,7 @@ export default function TracesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Server multi-selector */}
           <ServerMultiSelector
-            servers={DEMO_SERVERS}
+            servers={availableServers}
             selected={selectedServers}
             serverColors={serverColors}
             onChange={(s) => { setSelectedServers(s); clearSelection(); }}

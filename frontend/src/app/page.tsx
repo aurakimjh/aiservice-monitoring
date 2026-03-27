@@ -1,13 +1,16 @@
 'use client';
 
+import { useCallback } from 'react';
 import { KPICard } from '@/components/monitoring';
 import { ServiceHealthGrid } from '@/components/monitoring';
 import { AlertBanner } from '@/components/monitoring';
-import { Card, CardHeader, CardTitle } from '@/components/ui';
+import { Card, CardHeader, CardTitle, DataSourceBadge } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts';
+import { useDataSource } from '@/hooks/use-data-source';
 import type { Status } from '@/types/monitoring';
 
-// Demo data
+// ── Demo fallback data ──
+
 const DEMO_SPARKDATA = [45, 52, 48, 61, 55, 67, 62, 58, 71, 65, 60, 55];
 const DEMO_HEALTH_CELLS: { id: string; label: string; status: Status; detail?: string }[] = [
   { id: '1', label: 'api-gw-01', status: 'healthy' },
@@ -32,9 +35,47 @@ function generateTimeSeries(base: number, variance: number, points: number): [nu
   ] as [number, number]);
 }
 
+interface OverviewData {
+  agents: { total: number; online: number; offline: number };
+  system: { avg_cpu_percent: string; total_memory_mb: string };
+  backends: { prometheus: string; jaeger: string };
+}
+
+function demoOverview(): OverviewData {
+  return {
+    agents: { total: 12, online: 10, offline: 2 },
+    system: { avg_cpu_percent: '42.3', total_memory_mb: '85120' },
+    backends: { prometheus: 'demo', jaeger: 'demo' },
+  };
+}
+
 export default function HomePage() {
+  const demoFallback = useCallback(() => demoOverview(), []);
+
+  const { data: overview, source, loading } = useDataSource<OverviewData>(
+    '/realdata/overview',
+    demoFallback,
+    { refreshInterval: 30_000 },
+  );
+
+  const totalAgents = overview?.agents.total ?? 12;
+  const onlineAgents = overview?.agents.online ?? 10;
+  const avgCpu = overview?.system.avg_cpu_percent ?? '42.3';
+  const promStatus = overview?.backends.prometheus ?? 'demo';
+  const jaegerStatus = overview?.backends.jaeger ?? 'demo';
+
+  // Charts still use generated time series (Prometheus range queries will be added in Phase 43)
   const latencyData = generateTimeSeries(245, 50, 60);
   const rpmData = generateTimeSeries(1200, 200, 60);
+
+  // Derive health cells: live → from agents, demo → hardcoded
+  const healthCells = source === 'live'
+    ? Array.from({ length: totalAgents }, (_, i) => ({
+        id: String(i + 1),
+        label: `agent-${i + 1}`,
+        status: (i < onlineAgents ? 'healthy' : 'critical') as Status,
+      }))
+    : DEMO_HEALTH_CELLS;
 
   return (
     <div className="space-y-4">
@@ -52,10 +93,11 @@ export default function HomePage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KPICard
           title="Services"
-          value={8}
-          subtitle="8 healthy"
-          status="healthy"
+          value={totalAgents}
+          subtitle={`${onlineAgents} online`}
+          status={onlineAgents === totalAgents ? 'healthy' : 'warning'}
           sparkData={DEMO_SPARKDATA}
+          badge={<DataSourceBadge source={source} />}
         />
         <KPICard
           title="Error Rate"
@@ -73,18 +115,17 @@ export default function HomePage() {
           sparkData={[280, 265, 270, 255, 248, 260, 252, 245]}
         />
         <KPICard
-          title="Throughput"
-          value="1.2K"
-          unit="/s"
-          trend={{ direction: 'up', value: '200/s', positive: true }}
-          status="healthy"
+          title="Avg CPU"
+          value={avgCpu}
+          unit="%"
+          status={parseFloat(avgCpu) > 80 ? 'warning' : 'healthy'}
+          badge={<DataSourceBadge source={source} />}
         />
         <KPICard
-          title="SLO Compliance"
-          value="99.7"
-          unit="%"
-          subtitle="Target: 99.5%"
-          status="healthy"
+          title="Backends"
+          value={promStatus === 'connected' && jaegerStatus === 'connected' ? 'OK' : 'Partial'}
+          subtitle={`Prom: ${promStatus} · Jaeger: ${jaegerStatus}`}
+          status={promStatus === 'connected' ? 'healthy' : 'warning'}
         />
       </div>
 
@@ -123,11 +164,14 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
           <CardHeader>
-            <CardTitle>Service Health Map</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>Service Health Map</CardTitle>
+              <DataSourceBadge source={source} />
+            </div>
           </CardHeader>
           <ServiceHealthGrid
             title="All hosts"
-            cells={DEMO_HEALTH_CELLS}
+            cells={healthCells}
             columns={6}
           />
         </Card>

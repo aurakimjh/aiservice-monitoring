@@ -14,6 +14,7 @@ interface KPICardProps {
   trend?: { direction: TrendDirection; value: string; positive?: boolean };
   sparkData?: number[];
   status?: 'healthy' | 'warning' | 'critical';
+  badge?: React.ReactNode;
   className?: string;
 }
 
@@ -31,6 +32,7 @@ export function KPICard({
   trend,
   sparkData,
   status,
+  badge,
   className,
 }: KPICardProps) {
   const TrendIcon =
@@ -56,7 +58,10 @@ export function KPICard({
         className,
       )}
     >
-      <div className="text-xs text-[var(--text-secondary)] font-medium">{title}</div>
+      <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] font-medium">
+        {title}
+        {badge}
+      </div>
 
       <div className="flex items-end justify-between gap-2">
         <div className="flex items-baseline gap-1">
