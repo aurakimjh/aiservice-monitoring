@@ -642,6 +642,128 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	})
 
+	// ── Service Group (AI Pipeline) CRUD ──────────────────────────
+
+	// POST /api/v1/service-groups — 파이프라인 그룹 생성
+	mux.HandleFunc("POST /api/v1/service-groups", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"})
+			return
+		}
+		var body ServiceGroupRecord
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name required"})
+			return
+		}
+		if body.Type == "" {
+			body.Type = "rag"
+		}
+		if err := serverStore.CreateServiceGroup(&body); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, body)
+	})
+
+	// GET /api/v1/service-groups — 그룹 목록
+	mux.HandleFunc("GET /api/v1/service-groups", func(w http.ResponseWriter, r *http.Request) {
+		projectID := r.URL.Query().Get("project_id")
+		var groups []ServiceGroupRecord
+		if serverStore != nil {
+			groups, _ = serverStore.ListServiceGroups(projectID)
+		}
+		if groups == nil {
+			groups = []ServiceGroupRecord{}
+		}
+
+		// Enrich with aggregated metrics from member services
+		items := make([]map[string]interface{}, 0, len(groups))
+		for _, sg := range groups {
+			totalRPM := 0.0
+			maxP95 := 0.0
+			totalErr := 0.0
+			svcCount := len(sg.ServiceIDs)
+
+			for _, svcName := range sg.ServiceIDs {
+				rpmQ := fmt.Sprintf(`sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s"}[5m]))*60`, svcName)
+				if val := queryPromScalar(rpmQ); val > 0 {
+					totalRPM += val
+				}
+				p95Q := fmt.Sprintf(`histogram_quantile(0.95,sum(rate(demo_http_server_duration_milliseconds_bucket{exported_job="%s"}[5m]))by(le))`, svcName)
+				if val := queryPromScalar(p95Q); val > maxP95 {
+					maxP95 = val
+				}
+			}
+
+			items = append(items, map[string]interface{}{
+				"id":            sg.ID,
+				"name":          sg.Name,
+				"project_id":    sg.ProjectID,
+				"type":          sg.Type,
+				"description":   sg.Description,
+				"service_ids":   sg.ServiceIDs,
+				"service_count": svcCount,
+				"total_rpm":     totalRPM,
+				"max_p95":       maxP95,
+				"error_rate":    totalErr,
+				"created_at":    sg.CreatedAt,
+				"updated_at":    sg.UpdatedAt,
+			})
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": items,
+			"total": len(items),
+		})
+	})
+
+	// GET /api/v1/service-groups/{id} — 그룹 상세
+	mux.HandleFunc("GET /api/v1/service-groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/service-groups/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		sg, err := serverStore.GetServiceGroup(id)
+		if err != nil || sg == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "group not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, sg)
+	})
+
+	// PUT /api/v1/service-groups/{id} — 그룹 수정
+	mux.HandleFunc("PUT /api/v1/service-groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/service-groups/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		var body struct {
+			Name        string   `json:"name"`
+			Description string   `json:"description"`
+			Type        string   `json:"type"`
+			ServiceIDs  []string `json:"service_ids"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if err := serverStore.UpdateServiceGroup(id, body.Name, body.Description, body.Type, body.ServiceIDs); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	})
+
+	// DELETE /api/v1/service-groups/{id} — 그룹 삭제
+	mux.HandleFunc("DELETE /api/v1/service-groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/service-groups/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		serverStore.DeleteServiceGroup(id)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	})
+
 	// ── Instance API ──────────────────────────────────────────────
 
 	// GET /api/v1/instances — 인스턴스 목록

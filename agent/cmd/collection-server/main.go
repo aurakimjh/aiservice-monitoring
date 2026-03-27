@@ -537,6 +537,7 @@ func main() {
 		"/api/v1/realdata/",
 		"/api/v1/projects",
 		"/api/v1/services",
+		"/api/v1/service-groups",
 		"/api/v1/instances",
 	})
 

@@ -105,6 +105,18 @@ func (s *Store) migrate() error {
 			FOREIGN KEY (project_id) REFERENCES projects(id)
 		);
 
+		CREATE TABLE IF NOT EXISTS service_groups (
+			id           TEXT PRIMARY KEY,
+			name         TEXT NOT NULL,
+			project_id   TEXT DEFAULT '',
+			type         TEXT DEFAULT 'rag',
+			description  TEXT DEFAULT '',
+			service_ids  TEXT DEFAULT '[]',
+			created_at   TEXT DEFAULT (datetime('now')),
+			updated_at   TEXT DEFAULT (datetime('now')),
+			FOREIGN KEY (project_id) REFERENCES projects(id)
+		);
+
 		CREATE TABLE IF NOT EXISTS instances (
 			id          TEXT PRIMARY KEY,
 			service_id  TEXT NOT NULL,
@@ -276,6 +288,82 @@ func (s *Store) CountInstances(serviceID string) int {
 	var count int
 	s.db.QueryRow(`SELECT COUNT(*) FROM instances WHERE service_id=? AND status='running'`, serviceID).Scan(&count)
 	return count
+}
+
+// ── Service Group (AI Pipeline) ──
+
+// ServiceGroupRecord represents a group of services forming a pipeline.
+type ServiceGroupRecord struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	ProjectID   string   `json:"project_id"`
+	Type        string   `json:"type"` // rag, agent, training, inference
+	Description string   `json:"description"`
+	ServiceIDs  []string `json:"service_ids"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
+}
+
+func (s *Store) CreateServiceGroup(sg *ServiceGroupRecord) error {
+	if sg.ID == "" {
+		sg.ID = fmt.Sprintf("sg-%d", time.Now().UnixMilli())
+	}
+	svcJSON, _ := json.Marshal(sg.ServiceIDs)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`
+		INSERT INTO service_groups (id, name, project_id, type, description, service_ids, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, sg.ID, sg.Name, sg.ProjectID, sg.Type, sg.Description, string(svcJSON), now, now)
+	return err
+}
+
+func (s *Store) ListServiceGroups(projectID string) ([]ServiceGroupRecord, error) {
+	query := `SELECT id, name, project_id, type, description, service_ids, created_at, updated_at FROM service_groups`
+	args := []interface{}{}
+	if projectID != "" {
+		query += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY name`
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var groups []ServiceGroupRecord
+	for rows.Next() {
+		var sg ServiceGroupRecord
+		var svcJSON string
+		rows.Scan(&sg.ID, &sg.Name, &sg.ProjectID, &sg.Type, &sg.Description, &svcJSON, &sg.CreatedAt, &sg.UpdatedAt)
+		json.Unmarshal([]byte(svcJSON), &sg.ServiceIDs)
+		groups = append(groups, sg)
+	}
+	return groups, nil
+}
+
+func (s *Store) GetServiceGroup(id string) (*ServiceGroupRecord, error) {
+	var sg ServiceGroupRecord
+	var svcJSON string
+	err := s.db.QueryRow(`SELECT id, name, project_id, type, description, service_ids, created_at, updated_at FROM service_groups WHERE id = ?`, id).
+		Scan(&sg.ID, &sg.Name, &sg.ProjectID, &sg.Type, &sg.Description, &svcJSON, &sg.CreatedAt, &sg.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal([]byte(svcJSON), &sg.ServiceIDs)
+	return &sg, nil
+}
+
+func (s *Store) UpdateServiceGroup(id string, name, description, sgType string, serviceIDs []string) error {
+	svcJSON, _ := json.Marshal(serviceIDs)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`UPDATE service_groups SET name=?, description=?, type=?, service_ids=?, updated_at=? WHERE id=?`,
+		name, description, sgType, string(svcJSON), now, id)
+	return err
+}
+
+func (s *Store) DeleteServiceGroup(id string) error {
+	_, err := s.db.Exec(`DELETE FROM service_groups WHERE id=?`, id)
+	return err
 }
 
 // ── Project CRUD ──
