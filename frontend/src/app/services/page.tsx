@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, SearchInput, Select, Button, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, SearchInput, Select, Button, Badge, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard, ServiceMap } from '@/components/monitoring';
 import { useProjectStore } from '@/stores/project-store';
 import { getProjectServices, getServiceTopology, LAYER_CONFIG, type ServiceLayer } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { formatDuration } from '@/lib/utils';
+import type { Service } from '@/types/monitoring';
 import { Network, List, GitBranch, Plus } from 'lucide-react';
 
 const VIEW_TABS = [
@@ -28,10 +30,49 @@ const LAYER_OPTIONS: { label: string; value: string }[] = [
   ...Object.entries(LAYER_CONFIG).map(([k, v]) => ({ label: v.label, value: k })),
 ];
 
+// Transform Jaeger services → Service[] with basic metrics
+function transformJaegerToServices(raw: unknown): Service[] {
+  const resp = raw as { data?: string[] };
+  if (!resp.data?.length) return [];
+  return resp.data.map((name, i) => ({
+    id: `svc-${i}`,
+    name,
+    framework: '-',
+    language: '-',
+    hostIds: [],
+    latencyP50: 0,
+    latencyP95: 0,
+    latencyP99: 0,
+    rpm: 0,
+    errorRate: 0,
+    status: 'healthy' as const,
+  }));
+}
+
 export default function ServicesPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const services = getProjectServices(currentProjectId ?? 'proj-ai-prod');
-  const topology = getServiceTopology(currentProjectId ?? 'proj-ai-prod');
+  const demoServices = useCallback(
+    () => getProjectServices(currentProjectId ?? 'proj-ai-prod'),
+    [currentProjectId],
+  );
+  const demoTopology = useCallback(
+    () => getServiceTopology(currentProjectId ?? 'proj-ai-prod'),
+    [currentProjectId],
+  );
+
+  const { data: services, source } = useDataSource<Service[]>(
+    '/proxy/jaeger/services',
+    demoServices,
+    { refreshInterval: 30_000, transform: transformJaegerToServices },
+  );
+  const { data: topology } = useDataSource(
+    '/proxy/jaeger/dependencies',
+    demoTopology,
+    { refreshInterval: 60_000 },
+  );
+
+  const serviceList = services ?? [];
+  const topoData = topology ?? { nodes: [], edges: [] };
 
   const [view, setView] = useState('list');
   const [search, setSearch] = useState('');
@@ -41,7 +82,7 @@ export default function ServicesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const filtered = useMemo(() => {
-    const result = services.filter((s) => {
+    const result = serviceList.filter((s) => {
       if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter !== 'all' && s.status !== statusFilter) return false;
       return true;
@@ -55,7 +96,7 @@ export default function ServicesPage() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [services, search, statusFilter, sortBy, sortDir]);
+  }, [serviceList, search, statusFilter, sortBy, sortDir]);
 
   const handleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -67,11 +108,11 @@ export default function ServicesPage() {
     layerFilter === 'all' ? undefined : [layerFilter as ServiceLayer];
 
   // KPI
-  const total = services.length;
-  const healthy = services.filter((s) => s.status === 'healthy').length;
-  const avgP95 = total > 0 ? Math.round(services.reduce((s, sv) => s + sv.latencyP95, 0) / total) : 0;
-  const totalRpm = services.reduce((s, sv) => s + sv.rpm, 0);
-  const avgError = total > 0 ? (services.reduce((s, sv) => s + sv.errorRate, 0) / total) : 0;
+  const total = serviceList.length;
+  const healthy = serviceList.filter((s) => s.status === 'healthy').length;
+  const avgP95 = total > 0 ? Math.round(serviceList.reduce((s, sv) => s + sv.latencyP95, 0) / total) : 0;
+  const totalRpm = serviceList.reduce((s, sv) => s + sv.rpm, 0);
+  const avgError = total > 0 ? (serviceList.reduce((s, sv) => s + sv.errorRate, 0) / total) : 0;
 
   return (
     <div className="space-y-4">
@@ -81,7 +122,10 @@ export default function ServicesPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Services</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Services</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <Button variant="secondary" size="md"><Plus size={14} /> Register Service</Button>
       </div>
 
@@ -91,7 +135,7 @@ export default function ServicesPage() {
         <KPICard title="Avg P95 Latency" value={avgP95} unit="ms" status={avgP95 > 1000 ? 'warning' : 'healthy'} />
         <KPICard title="Total Throughput" value={totalRpm.toLocaleString()} unit="rpm" status="healthy" />
         <KPICard title="Avg Error Rate" value={avgError.toFixed(2)} unit="%" status={avgError > 0.5 ? 'warning' : 'healthy'} />
-        <KPICard title="Dependencies" value={topology.edges.length} subtitle="call relationships" />
+        <KPICard title="Dependencies" value={topoData.edges?.length ?? 0} subtitle="call relationships" />
       </div>
 
       {/* Filters + View Toggle */}
@@ -169,11 +213,11 @@ export default function ServicesPage() {
             </div>
           </CardHeader>
           <ServiceMap
-            nodes={topology.nodes}
-            edges={topology.edges}
+            nodes={topoData.nodes ?? []}
+            edges={topoData.edges ?? []}
             layerFilter={activeLayerFilter}
             onNodeClick={(id) => {
-              const svc = services.find((s) => s.id === id || s.name === topology.nodes.find((n) => n.id === id)?.name);
+              const svc = serviceList.find((s) => s.id === id || s.name === (topoData.nodes ?? []).find((n: { id: string; name?: string }) => n.id === id)?.name);
               if (svc) window.location.href = `/services/${svc.id}`;
             }}
           />

@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { ServiceMap } from '@/components/monitoring/service-map';
 import { ProtocolBadge } from '@/components/topology';
 import { getDiscoveredTopology, getTopologyChanges } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getRelativeTime } from '@/lib/utils';
 import type { TopologyNode, TopologyEdge } from '@/lib/demo-data';
 import {
@@ -52,8 +53,19 @@ const CHANGE_TYPE_CONFIG: Record<
 };
 
 export default function TopologyPage() {
-  const topology = useMemo(() => getDiscoveredTopology(), []);
-  const changes = useMemo(() => getTopologyChanges(), []);
+  const demoTopology = useCallback(() => getDiscoveredTopology(), []);
+  const demoChanges = useCallback(() => getTopologyChanges(), []);
+
+  const { data: topology, source } = useDataSource(
+    '/proxy/jaeger/dependencies',
+    demoTopology,
+    { refreshInterval: 60_000 },
+  );
+  const { data: changes } = useDataSource(
+    '/topology/changes',
+    demoChanges,
+    { refreshInterval: 60_000 },
+  );
 
   // Map discovered topology nodes/edges to ServiceMap-compatible types
   const nodes: TopologyNode[] = useMemo(
@@ -99,9 +111,12 @@ export default function TopologyPage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          Topology Auto-Discovery
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+            Topology Auto-Discovery
+          </h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Automatic service dependency mapping via eBPF and traffic analysis
         </p>

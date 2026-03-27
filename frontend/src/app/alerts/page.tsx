@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
 import { getAlertPolicies, getIncidents, getNotificationChannels } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { formatDuration, getRelativeTime } from '@/lib/utils';
-import type { Severity, IncidentDetail } from '@/types/monitoring';
+import type { Severity, IncidentDetail, AlertPolicy, NotificationChannel } from '@/types/monitoring';
 import {
   Bell,
   ShieldCheck,
@@ -48,11 +49,32 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
 
 export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState('policies');
+
+  // Real-data hooks with demo fallback
+  const demoPolicies = useCallback(() => getAlertPolicies(), []);
+  const demoIncidents = useCallback(() => getIncidents(), []);
+  const demoChannels = useCallback(() => getNotificationChannels(), []);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
-  const policies = useMemo(() => getAlertPolicies(), []);
-  const incidents = useMemo(() => getIncidents(), []);
-  const channels = useMemo(() => getNotificationChannels(), []);
+  const { data: policiesData, source } = useDataSource<AlertPolicy[]>(
+    '/alerts/policies',
+    demoPolicies,
+    { refreshInterval: 30_000, transform: (raw) => (raw as { items?: AlertPolicy[] }).items ?? raw as AlertPolicy[] },
+  );
+  const { data: incidentsData } = useDataSource<IncidentDetail[]>(
+    '/alerts/incidents',
+    demoIncidents,
+    { refreshInterval: 15_000, transform: (raw) => (raw as { items?: IncidentDetail[] }).items ?? raw as IncidentDetail[] },
+  );
+  const { data: channelsData } = useDataSource<NotificationChannel[]>(
+    '/alerts/channels',
+    demoChannels,
+    { refreshInterval: 60_000, transform: (raw) => (raw as { items?: NotificationChannel[] }).items ?? raw as NotificationChannel[] },
+  );
+
+  const policies = policiesData ?? [];
+  const incidents = incidentsData ?? [];
+  const channels = channelsData ?? [];
 
   const openIncidents = incidents.filter((i) => i.status !== 'resolved').length;
   const selectedIncident = incidents.find((i) => i.id === selectedIncidentId);
@@ -64,7 +86,10 @@ export default function AlertsPage() {
         { label: 'Alerts', icon: <Bell size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Alerts & Incidents</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Alerts & Incidents</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

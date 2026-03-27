@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, SearchInput, Select, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, SearchInput, Select, Badge, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { generateLogEntries, getLogPatterns } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { formatDuration, getRelativeTime } from '@/lib/utils';
-import type { LogEntry, LogLevel } from '@/types/monitoring';
+import type { LogEntry, LogLevel, LogPattern } from '@/types/monitoring';
 import {
   FileText,
   Search,
@@ -71,7 +72,16 @@ export default function LogsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
 
-  const logs = useMemo(
+  // Build API query path with filters
+  const logApiPath = useMemo(() => {
+    const params = new URLSearchParams({ limit: '300' });
+    if (serviceFilter !== 'all') params.set('service', serviceFilter);
+    if (levelFilter !== 'all') params.set('level', levelFilter);
+    if (searchQuery) params.set('query', searchQuery);
+    return `/logs?${params.toString()}`;
+  }, [serviceFilter, levelFilter, searchQuery]);
+
+  const demoLogsFallback = useCallback(
     () => generateLogEntries(300, {
       service: serviceFilter !== 'all' ? serviceFilter : undefined,
       level: levelFilter !== 'all' ? levelFilter : undefined,
@@ -80,28 +90,42 @@ export default function LogsPage() {
     [serviceFilter, levelFilter, searchQuery],
   );
 
-  const sortedLogs = useMemo(() => {
-    if (sortDir === 'asc') return [...logs].reverse();
-    return logs;
-  }, [logs, sortDir]);
+  const { data: logs, source } = useDataSource<LogEntry[]>(
+    logApiPath,
+    demoLogsFallback,
+    { refreshInterval: 15_000, transform: (raw) => (raw as { items?: LogEntry[] }).items ?? raw as LogEntry[] },
+  );
 
-  const patterns = useMemo(() => getLogPatterns(), []);
+  const logList = logs ?? [];
+
+  const sortedLogs = useMemo(() => {
+    if (sortDir === 'asc') return [...logList].reverse();
+    return logList;
+  }, [logList, sortDir]);
+
+  const demoPatterns = useCallback(() => getLogPatterns(), []);
+  const { data: patterns } = useDataSource<LogPattern[]>(
+    '/logs/patterns',
+    demoPatterns,
+    { refreshInterval: 60_000, transform: (raw) => (raw as { items?: LogPattern[] }).items ?? raw as LogPattern[] },
+  );
+  const patternList = patterns ?? [];
 
   // Stats
   const stats = useMemo(() => {
-    const total = logs.length;
-    const errors = logs.filter((l) => l.level === 'ERROR' || l.level === 'FATAL').length;
-    const warns = logs.filter((l) => l.level === 'WARN').length;
-    const withTrace = logs.filter((l) => l.traceId).length;
+    const total = logList.length;
+    const errors = logList.filter((l) => l.level === 'ERROR' || l.level === 'FATAL').length;
+    const warns = logList.filter((l) => l.level === 'WARN').length;
+    const withTrace = logList.filter((l) => l.traceId).length;
     return { total, errors, warns, withTrace };
-  }, [logs]);
+  }, [logList]);
 
   // Volume chart — log count per time bucket
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const volumeOption = useMemo<any>(() => {
-    if (logs.length === 0) return { series: [] };
-    const minT = Math.min(...logs.map((l) => l.timestamp));
-    const maxT = Math.max(...logs.map((l) => l.timestamp));
+    if (logList.length === 0) return { series: [] };
+    const minT = Math.min(...logList.map((l) => l.timestamp));
+    const maxT = Math.max(...logList.map((l) => l.timestamp));
     const buckets = 40;
     const width = (maxT - minT) / buckets || 1;
 
@@ -112,7 +136,7 @@ export default function LogsPage() {
     for (let i = 0; i < buckets; i++) {
       const t = minT + i * width;
       const tEnd = t + width;
-      const inBucket = logs.filter((l) => l.timestamp >= t && l.timestamp < tEnd);
+      const inBucket = logList.filter((l) => l.timestamp >= t && l.timestamp < tEnd);
       infoCounts.push([t, inBucket.filter((l) => l.level === 'INFO' || l.level === 'DEBUG').length]);
       warnCounts.push([t, inBucket.filter((l) => l.level === 'WARN').length]);
       errorCounts.push([t, inBucket.filter((l) => l.level === 'ERROR' || l.level === 'FATAL').length]);
@@ -131,7 +155,7 @@ export default function LogsPage() {
       legend: { show: true, bottom: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 10 } },
       grid: { left: 48, right: 16, top: 16, bottom: 36 },
     };
-  }, [logs]);
+  }, [logList]);
 
   const copyId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -152,7 +176,10 @@ export default function LogsPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Log Explorer</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Log Explorer</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
           <span>Total: <strong className="text-[var(--text-primary)]">{stats.total}</strong></span>
           <span>Errors: <strong className="text-[var(--status-critical)]">{stats.errors}</strong></span>
@@ -335,14 +362,14 @@ export default function LogsPage() {
         <Card padding="none">
           <div className="px-4 py-2.5 border-b border-[var(--border-default)]">
             <span className="text-xs font-medium text-[var(--text-primary)]">
-              Log Patterns ({patterns.length} patterns detected)
+              Log Patterns ({patternList.length} patterns detected)
             </span>
             <span className="ml-2 text-[10px] text-[var(--text-muted)]">
               Auto-grouped by message similarity
             </span>
           </div>
           <div className="divide-y divide-[var(--border-muted)]">
-            {patterns.map((p) => (
+            {patternList.map((p) => (
               <div key={p.id} className="px-4 py-3 hover:bg-[var(--bg-tertiary)] transition-colors">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">

@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, SearchInput, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, SearchInput, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { METRIC_CATALOG, executeMetricQuery, generateTimeSeries } from '@/lib/demo-data';
+import { useDataSource, type DataSource } from '@/hooks/use-data-source';
 import { formatDuration } from '@/lib/utils';
 import type { MetricDefinition, MetricType } from '@/types/monitoring';
+import { useUIStore } from '@/stores/ui-store';
 import {
   BarChart3,
   Search,
@@ -65,9 +67,49 @@ interface QueryPanel {
   chartType: 'line' | 'area' | 'bar';
 }
 
+// ── Prometheus query helper ──
+
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
+  : 'http://localhost:8080/api/v1';
+
+async function queryPrometheus(
+  promql: string,
+  points: number,
+): Promise<{ data: [number, number][]; label: string }[] | null> {
+  try {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - points * 60;
+    const step = 60;
+    const url = `${API_BASE}/proxy/prometheus/query_range?query=${encodeURIComponent(promql)}&start=${start}&end=${end}&step=${step}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.status !== 'success' || !json.data?.result?.length) return null;
+
+    return json.data.result.map((r: { metric: Record<string, string>; values: [number, string][] }) => {
+      const label = Object.entries(r.metric).map(([k, v]) => `${k}=${v}`).join(', ') || promql;
+      return {
+        label,
+        data: r.values.map(([ts, val]: [number, string]) => [ts * 1000, parseFloat(val)] as [number, number]),
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 // ── Page ──
 
 export default function MetricsPage() {
+  const mode = useUIStore((s) => s.dataSourceMode);
+  const demoPromStatus = useCallback(() => ({ status: 'demo' }), []);
+  const { data: promStatus, source: promSource } = useDataSource<{ status: string }>(
+    '/proxy/prometheus/status',
+    demoPromStatus,
+    { refreshInterval: 60_000 },
+  );
+
   const [viewMode, setViewMode] = useState('explore');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState('all');
@@ -131,7 +173,10 @@ export default function MetricsPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Metrics Explorer</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Metrics Explorer</h1>
+          <DataSourceBadge source={promSource} />
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-[var(--text-muted)]">{METRIC_CATALOG.length} metrics available</span>
           <Tabs tabs={VIEW_TABS} activeTab={viewMode} onChange={setViewMode} variant="pill" />
@@ -323,8 +368,24 @@ function MetricPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [queryInput, setQueryInput] = useState(panel.query);
 
+  const mode = useUIStore((s) => s.dataSourceMode);
   const metric = METRIC_CATALOG.find((m) => m.name === panel.metric);
-  const seriesData = useMemo(() => executeMetricQuery(panel.metric, 60), [panel.metric]);
+  const [liveData, setLiveData] = useState<{ data: [number, number][]; label: string }[] | null>(null);
+  const [panelSource, setPanelSource] = useState<DataSource>('demo');
+
+  // Try Prometheus query, fallback to demo
+  useEffect(() => {
+    if (mode === 'demo') { setPanelSource('demo'); return; }
+    let cancelled = false;
+    queryPrometheus(panel.query, 60).then((result) => {
+      if (cancelled) return;
+      if (result && result.length > 0) { setLiveData(result); setPanelSource('live'); }
+      else { setLiveData(null); setPanelSource('demo'); }
+    });
+    return () => { cancelled = true; };
+  }, [panel.query, mode]);
+
+  const seriesData = liveData ?? executeMetricQuery(panel.metric, 60);
 
   const handleSubmitQuery = () => {
     onUpdate({ query: queryInput });
