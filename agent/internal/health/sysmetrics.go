@@ -25,11 +25,9 @@ func CollectOSMetrics() *models.OSMetrics {
 	m := &models.OSMetrics{}
 	m.CPU = collectCPUBreakdown()
 	m.Memory = collectMemoryBreakdown()
-	if runtime.GOOS == "linux" {
-		m.Disks = collectDiskMetrics()
-		m.Network = collectNetMetrics()
-		m.TopProc = collectTopProcesses()
-	}
+	m.Disks = collectDiskMetrics()
+	m.Network = collectNetMetrics()
+	m.TopProc = collectTopProcesses()
 	return m
 }
 
@@ -48,8 +46,10 @@ func syswideCPUPercent() float64 {
 }
 
 func collectCPUBreakdown() models.CPUMetrics {
+	if runtime.GOOS == "windows" {
+		return collectCPUBreakdownWindows()
+	}
 	if runtime.GOOS != "linux" {
-		// Windows fallback
 		pct := float64(runtime.NumGoroutine()) * 0.3
 		return models.CPUMetrics{UserPct: pct * 0.7, SystemPct: pct * 0.3, IdlePct: 100 - pct, TotalPct: pct}
 	}
@@ -100,6 +100,9 @@ func syswideUsedMemMB() float64 {
 }
 
 func collectMemoryBreakdown() models.MemoryMetrics {
+	if runtime.GOOS == "windows" {
+		return collectMemoryBreakdownWindows()
+	}
 	if runtime.GOOS != "linux" {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
@@ -135,6 +138,9 @@ func collectMemoryBreakdown() models.MemoryMetrics {
 // ── Disk ───────────────────────────────────────────────────
 
 func collectDiskMetrics() []models.DiskMetrics {
+	if runtime.GOOS == "windows" {
+		return collectDiskMetricsWindows()
+	}
 	data, err := os.ReadFile("/proc/mounts")
 	if err != nil {
 		return nil
@@ -199,6 +205,9 @@ var (
 )
 
 func collectNetMetrics() []models.NetMetrics {
+	if runtime.GOOS == "windows" {
+		return collectNetMetricsWindows()
+	}
 	data, err := os.ReadFile("/proc/net/dev")
 	if err != nil {
 		return nil
@@ -248,6 +257,9 @@ func collectNetMetrics() []models.NetMetrics {
 // ── Top Processes ──────────────────────────────────────────
 
 func collectTopProcesses() []models.ProcessInfo {
+	if runtime.GOOS == "windows" {
+		return collectTopProcessesWindows()
+	}
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil
