@@ -346,6 +346,15 @@ export default function DashboardBuilderPage() {
                         </select>
                       </div>
                       <div>
+                        <label className="block text-[10px] text-[var(--text-muted)] mb-1">Service (인스턴스별 메트릭용)</label>
+                        <input type="text" placeholder="e.g. nodejs-demo-app"
+                          value={editWidget.serviceId ?? ''}
+                          onChange={(e) => store.updateWidget(editWidget.id, { serviceId: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                        />
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">SUM/Individual 전환 시 인스턴스별 분리 표시</div>
+                      </div>
+                      <div>
                         <label className="block text-[10px] text-[var(--text-muted)] mb-1">PromQL (optional)</label>
                         <input type="text" placeholder="e.g. rate(http_requests_total[5m])"
                           value={editWidget.query ?? ''}
@@ -478,17 +487,35 @@ function WidgetRenderer({ widget, promMode }: { widget: WidgetConfig; promMode: 
   const [liveData, setLiveData] = useState<{ label: string; data: [number, number][] }[] | null>(null);
   const [source, setSource] = useState<'live' | 'demo'>('demo');
 
-  // Try Prometheus if PromQL query exists and mode is not demo
+  // Try Prometheus — serviceId + individual mode → per-instance query
   useEffect(() => {
-    if (!promMode || !widget.query) { setLiveData(null); setSource('demo'); return; }
+    if (!promMode) { setLiveData(null); setSource('demo'); return; }
     let cancelled = false;
-    queryPrometheus(widget.query, 30).then((result) => {
-      if (cancelled) return;
-      if (result) { setLiveData(result); setSource('live'); }
-      else { setLiveData(null); setSource('demo'); }
-    });
+
+    const fetchData = async () => {
+      // 1. serviceId + individual: per-instance (by instance label)
+      if (widget.serviceId && widget.viewMode === 'individual') {
+        const q = widget.query || `rate(demo_http_server_duration_milliseconds_count{exported_job="${widget.serviceId}"}[5m])`;
+        const result = await queryPrometheus(q, 30);
+        if (!cancelled && result && result.length > 0) { setLiveData(result); setSource('live'); return; }
+      }
+      // 2. Explicit PromQL
+      if (widget.query) {
+        const result = await queryPrometheus(widget.query, 30);
+        if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
+      }
+      // 3. serviceId SUM: aggregate
+      if (widget.serviceId) {
+        const q = `sum(rate(demo_http_server_duration_milliseconds_count{exported_job="${widget.serviceId}"}[5m]))`;
+        const result = await queryPrometheus(q, 30);
+        if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
+      }
+      if (!cancelled) { setLiveData(null); setSource('demo'); }
+    };
+
+    fetchData();
     return () => { cancelled = true; };
-  }, [widget.query, promMode]);
+  }, [widget.query, widget.serviceId, widget.viewMode, promMode]);
 
   const demoData = useMemo(() => {
     if (!widget.metric) return [];
