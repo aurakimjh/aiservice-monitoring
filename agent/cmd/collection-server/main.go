@@ -328,6 +328,7 @@ type agentRecord struct {
 	PrivReport    *models.PrivilegeReport `json:"privilege_report,omitempty"`
 	AIDetected    bool                    `json:"ai_detected"`
 	SDKLangs      []string                `json:"sdk_langs,omitempty"`
+	Approved      bool                    `json:"approved"`
 }
 
 // fleet is the in-memory agent registry.

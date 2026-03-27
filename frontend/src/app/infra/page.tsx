@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, Tabs, SearchInput, Select, Button, Badge, DataSourceBadge } from '@/components/ui';
+import { Card, Tabs, SearchInput, Select, Button, Badge, DataSourceBadge, Modal } from '@/components/ui';
 import { StatusIndicator, KPICard, HexagonMap, type HexCell } from '@/components/monitoring';
 import { useProjectStore } from '@/stores/project-store';
 import { getProjectHosts } from '@/lib/demo-data';
 import { useDataSource } from '@/hooks/use-data-source';
 import type { Host, Status } from '@/types/monitoring';
-import { Server, Table2, Hexagon, Plus } from 'lucide-react';
+import { Server, Table2, Hexagon, Plus, Check, AlertCircle } from 'lucide-react';
 
 const VIEW_TABS = [
   { id: 'table', label: 'Table', icon: <Table2 size={13} /> },
@@ -31,7 +31,11 @@ const SIZE_METRIC_OPTIONS = [
   { label: 'Disk %', value: 'disk' },
 ];
 
-// Transform API /realdata/hosts response → Host[]
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
+  : 'http://localhost:8080/api/v1';
+
+// Transform API → Host[]
 function transformHosts(raw: unknown): Host[] {
   const resp = raw as { items?: Array<Record<string, unknown>> };
   if (!resp.items?.length) return [];
@@ -40,7 +44,7 @@ function transformHosts(raw: unknown): Host[] {
     hostname: String(item.hostname ?? 'unknown'),
     os: `${item.os_type ?? 'Linux'} ${item.os_version ?? ''}`.trim(),
     cpuCores: 0,
-    memoryGB: 0,
+    memoryGB: Math.round(Number(item.memory_mb ?? 0) / 1024),
     status: mapAgentStatus(String(item.status ?? 'offline')),
     cpuPercent: Math.round(Number(item.cpu_percent ?? 0)),
     memPercent: item.memory_mb ? Math.round(Number(item.memory_mb) / 1024 / 32 * 100) : 0,
@@ -72,6 +76,21 @@ function mapAgentStatus(s: string): Status {
   return 'critical';
 }
 
+// Pending agent type
+interface PendingAgent {
+  id: string;
+  hostname: string;
+  os_type: string;
+  os_version: string;
+  agent_version: string;
+  status: string;
+  cpu_percent: number;
+  memory_mb: number;
+  last_heartbeat: string;
+  ai_detected: boolean;
+  sdk_langs?: string[];
+}
+
 export default function InfraPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const demoFallback = useCallback(
@@ -79,14 +98,80 @@ export default function InfraPage() {
     [currentProjectId],
   );
 
-  const { data: hosts, source } = useDataSource<Host[]>(
+  const { data: hosts, source, refetch } = useDataSource<Host[]>(
     '/realdata/hosts',
     demoFallback,
-    { refreshInterval: 30_000, transform: transformHosts },
+    { refreshInterval: 15_000, transform: transformHosts },
   );
 
   const hostList = hosts ?? [];
 
+  // ── Pending agents (미승인) ──
+  const [pendingAgents, setPendingAgents] = useState<PendingAgent[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedPending, setSelectedPending] = useState<Set<string>>(new Set());
+  const [approving, setApproving] = useState(false);
+
+  // Poll pending agents
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/realdata/pending-agents`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPendingAgents(data.items ?? []);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Approve selected agents
+  const handleApprove = async () => {
+    if (selectedPending.size === 0) return;
+    setApproving(true);
+    try {
+      await fetch(`${API_BASE}/realdata/approve-agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_ids: Array.from(selectedPending) }),
+      });
+      setSelectedPending(new Set());
+      setShowAddModal(false);
+      // Refresh hosts + pending
+      refetch();
+      const res = await fetch(`${API_BASE}/realdata/pending-agents`);
+      if (res.ok) {
+        const data = await res.json();
+        setPendingAgents(data.items ?? []);
+      }
+    } catch { /* ignore */ }
+    setApproving(false);
+  };
+
+  const togglePending = (id: string) => {
+    setSelectedPending((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllPending = () => {
+    if (selectedPending.size === pendingAgents.length) {
+      setSelectedPending(new Set());
+    } else {
+      setSelectedPending(new Set(pendingAgents.map((a) => a.id)));
+    }
+  };
+
+  const hasPending = pendingAgents.length > 0;
+
+  // ── Table state ──
   const [view, setView] = useState('table');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -115,9 +200,7 @@ export default function InfraPage() {
     if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortBy(col); setSortDir('asc'); }
   };
-
-  const sortIcon = (col: typeof sortBy) =>
-    sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const sortIcon = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   // KPI
   const total = hostList.length;
@@ -151,7 +234,21 @@ export default function InfraPage() {
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">Infrastructure</h1>
           <DataSourceBadge source={source} />
         </div>
-        <Button variant="secondary" size="md"><Plus size={14} /> Add Host</Button>
+        <Button
+          variant={hasPending ? 'primary' : 'secondary'}
+          size="md"
+          onClick={() => setShowAddModal(true)}
+          className={cn(hasPending && 'animate-pulse')}
+        >
+          {hasPending ? (
+            <>
+              <AlertCircle size={14} />
+              {pendingAgents.length} New Agent{pendingAgents.length > 1 ? 's' : ''} Detected
+            </>
+          ) : (
+            <><Plus size={14} /> Add Host</>
+          )}
+        </Button>
       </div>
 
       {/* KPI Row */}
@@ -161,7 +258,7 @@ export default function InfraPage() {
         <KPICard title="Warning" value={warning} status={warning > 0 ? 'warning' : 'healthy'} />
         <KPICard title="Critical / Offline" value={critical} status={critical > 0 ? 'critical' : 'healthy'} />
         <KPICard title="Avg CPU" value={avgCpu} unit="%" status={avgCpu > 80 ? 'warning' : 'healthy'} />
-        <KPICard title="GPUs" value={gpuCount} subtitle={`${hostList.filter((h) => h.gpus).length} hosts`} />
+        <KPICard title="Pending" value={pendingAgents.length} status={hasPending ? 'warning' : 'healthy'} subtitle={hasPending ? 'Needs approval' : 'None'} />
       </div>
 
       {/* Filters + View Toggle */}
@@ -187,9 +284,7 @@ export default function InfraPage() {
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium">OS</th>
                   <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('cpu')}>CPU{sortIcon('cpu')}</th>
-                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('mem')}>MEM{sortIcon('mem')}</th>
-                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('disk')}>Disk{sortIcon('disk')}</th>
-                  <th className="px-4 py-2.5 font-medium">Net I/O</th>
+                  <th className="px-4 py-2.5 font-medium text-right cursor-pointer select-none hover:text-[var(--text-secondary)]" onClick={() => handleSort('mem')}>Memory{sortIcon('mem')}</th>
                   <th className="px-4 py-2.5 font-medium">Middleware</th>
                   <th className="px-4 py-2.5 font-medium">Agent</th>
                 </tr>
@@ -199,19 +294,16 @@ export default function InfraPage() {
                   <tr key={h.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] transition-colors">
                     <td className="px-4 py-2.5">
                       <Link href={`/infra/${h.hostname}`} className="font-medium text-[var(--accent-primary)] hover:underline">{h.hostname}</Link>
-                      {h.gpus && <span className="ml-1.5 text-[10px] text-[var(--text-muted)]">GPU x{h.gpus.length}</span>}
                     </td>
                     <td className="px-4 py-2.5"><StatusIndicator status={h.status} size="sm" /></td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{h.os}</td>
                     <td className={cn('px-4 py-2.5 text-right tabular-nums', h.cpuPercent > 85 ? 'text-[var(--status-critical)] font-medium' : h.cpuPercent > 70 ? 'text-[var(--status-warning)]' : 'text-[var(--text-secondary)]')}>{h.cpuPercent}%</td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums', h.memPercent > 85 ? 'text-[var(--status-warning)]' : 'text-[var(--text-secondary)]')}>{h.memPercent}%</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{h.diskPercent}%</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{h.netIO}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{h.memoryGB > 0 ? `${h.memoryGB} GB` : '-'}</td>
                     <td className="px-4 py-2.5"><div className="flex gap-1 flex-wrap">{h.middlewares.map((mw) => <Badge key={mw.name}>{mw.name}</Badge>)}</div></td>
                     <td className="px-4 py-2.5">
                       {h.agent
-                        ? <StatusIndicator status={h.agent.status === 'healthy' ? 'healthy' : h.agent.status === 'degraded' ? 'warning' : 'critical'} label={`v${h.agent.version}`} size="sm" />
-                        : <span className="text-[var(--text-muted)]">—</span>
+                        ? <StatusIndicator status={h.agent.status === 'healthy' ? 'healthy' : 'warning'} label={`v${h.agent.version}`} size="sm" />
+                        : <span className="text-[var(--text-muted)]">-</span>
                       }
                     </td>
                   </tr>
@@ -219,7 +311,13 @@ export default function InfraPage() {
               </tbody>
             </table>
           </div>
-          {filtered.length === 0 && <div className="text-center py-12 text-sm text-[var(--text-muted)]">No hosts match your filters.</div>}
+          {filtered.length === 0 && (
+            <div className="text-center py-12 text-sm text-[var(--text-muted)]">
+              {hasPending
+                ? <>{pendingAgents.length} agent(s) detected — click <strong>"Add Host"</strong> to approve</>
+                : 'No hosts registered. Waiting for agents to connect...'}
+            </div>
+          )}
         </Card>
       )}
 
@@ -233,6 +331,98 @@ export default function InfraPage() {
             onCellClick={(hostname) => { window.location.href = `/infra/${hostname}`; }}
           />
         </Card>
+      )}
+
+      {/* ── Add Host Modal (Pending Agents) ── */}
+      {showAddModal && (
+        <Modal onClose={() => setShowAddModal(false)} title="Add Hosts — Detected Agents" size="lg">
+          {pendingAgents.length === 0 ? (
+            <div className="text-center py-8 text-sm text-[var(--text-muted)]">
+              No pending agents detected. Install and start AITOP Agent on target hosts.
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 text-xs text-[var(--text-secondary)]">
+                {pendingAgents.length} agent(s) connected but not yet approved. Select and approve to add them to the infrastructure view.
+              </div>
+              <Card padding="none">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)]">
+                      <th className="px-3 py-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={selectedPending.size === pendingAgents.length && pendingAgents.length > 0}
+                          onChange={selectAllPending}
+                          className="accent-[var(--accent-primary)]"
+                        />
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium">Hostname</th>
+                      <th className="px-3 py-2 text-left font-medium">Agent ID</th>
+                      <th className="px-3 py-2 text-left font-medium">OS</th>
+                      <th className="px-3 py-2 text-left font-medium">Version</th>
+                      <th className="px-3 py-2 text-left font-medium">Status</th>
+                      <th className="px-3 py-2 text-left font-medium">AI Detected</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingAgents.map((a) => (
+                      <tr
+                        key={a.id}
+                        className={cn(
+                          'border-b border-[var(--border-muted)] cursor-pointer transition-colors',
+                          selectedPending.has(a.id) ? 'bg-[var(--accent-primary)]/5' : 'hover:bg-[var(--bg-tertiary)]',
+                        )}
+                        onClick={() => togglePending(a.id)}
+                      >
+                        <td className="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedPending.has(a.id)}
+                            onChange={() => togglePending(a.id)}
+                            className="accent-[var(--accent-primary)]"
+                          />
+                        </td>
+                        <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{a.hostname}</td>
+                        <td className="px-3 py-2 font-mono text-[var(--text-muted)]">{a.id}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{a.os_type} {a.os_version}</td>
+                        <td className="px-3 py-2 text-[var(--text-secondary)]">{a.agent_version}</td>
+                        <td className="px-3 py-2">
+                          <span className={cn('inline-flex items-center gap-1',
+                            a.status === 'online' ? 'text-[var(--status-healthy)]' : 'text-[var(--text-muted)]')}>
+                            <span className={cn('w-1.5 h-1.5 rounded-full',
+                              a.status === 'online' ? 'bg-[var(--status-healthy)]' : 'bg-[var(--text-muted)]')} />
+                            {a.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {a.ai_detected ? <Badge>AI</Badge> : <span className="text-[var(--text-muted)]">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-xs text-[var(--text-muted)]">
+                  {selectedPending.size} of {pendingAgents.length} selected
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="md" onClick={() => setShowAddModal(false)}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleApprove}
+                    disabled={selectedPending.size === 0 || approving}
+                  >
+                    <Check size={14} />
+                    {approving ? 'Approving...' : `Approve ${selectedPending.size} Host${selectedPending.size > 1 ? 's' : ''}`}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </Modal>
       )}
     </div>
   );

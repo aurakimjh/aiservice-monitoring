@@ -29,6 +29,7 @@ package main
 //   GET  /api/v1/realdata/hosts/{id}/metrics    → 특정 호스트의 시계열 메트릭
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -240,37 +241,87 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 	})
 
 	// GET /api/v1/realdata/hosts — Agent Heartbeat 기반 실시간 호스트 목록
+	// agentToMap converts an agentRecord to a JSON-friendly map.
+	agentToMap := func(a *agentRecord) map[string]interface{} {
+		status := "online"
+		if time.Since(a.LastHeartbeat) > 90*time.Second {
+			status = "offline"
+		}
+		return map[string]interface{}{
+			"id":             a.ID,
+			"hostname":       a.Hostname,
+			"os_type":        a.OSType,
+			"os_version":     a.OSVersion,
+			"agent_version":  a.AgentVersion,
+			"status":         status,
+			"cpu_percent":    a.CPUPercent,
+			"memory_mb":      a.MemoryMB,
+			"last_heartbeat": a.LastHeartbeat,
+			"registered_at":  a.RegisteredAt,
+			"collectors":     a.Plugins,
+			"ai_detected":    a.AIDetected,
+			"sdk_langs":      a.SDKLangs,
+			"approved":       a.Approved,
+			"source":         "live",
+		}
+	}
+
+	// GET /api/v1/realdata/hosts — 승인된(approved) 호스트만 반환
 	mux.HandleFunc("GET /api/v1/realdata/hosts", func(w http.ResponseWriter, r *http.Request) {
 		agents := f.list()
-		hosts := make([]map[string]interface{}, 0, len(agents))
+		hosts := make([]map[string]interface{}, 0)
 		for _, a := range agents {
 			a.mu.RLock()
-			status := "online"
-			if time.Since(a.LastHeartbeat) > 90*time.Second {
-				status = "offline"
+			if a.Approved {
+				hosts = append(hosts, agentToMap(a))
 			}
-			hosts = append(hosts, map[string]interface{}{
-				"id":             a.ID,
-				"hostname":       a.Hostname,
-				"os_type":        a.OSType,
-				"os_version":     a.OSVersion,
-				"agent_version":  a.AgentVersion,
-				"status":         status,
-				"cpu_percent":    a.CPUPercent,
-				"memory_mb":      a.MemoryMB,
-				"last_heartbeat": a.LastHeartbeat,
-				"registered_at":  a.RegisteredAt,
-				"collectors":     a.Plugins,
-				"ai_detected":    a.AIDetected,
-				"sdk_langs":      a.SDKLangs,
-				"source":         "live",
-			})
 			a.mu.RUnlock()
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"items":  hosts,
 			"total":  len(hosts),
 			"source": "live",
+		})
+	})
+
+	// GET /api/v1/realdata/pending-agents — 미승인(pending) Agent 목록
+	mux.HandleFunc("GET /api/v1/realdata/pending-agents", func(w http.ResponseWriter, r *http.Request) {
+		agents := f.list()
+		pending := make([]map[string]interface{}, 0)
+		for _, a := range agents {
+			a.mu.RLock()
+			if !a.Approved {
+				pending = append(pending, agentToMap(a))
+			}
+			a.mu.RUnlock()
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items": pending,
+			"total": len(pending),
+		})
+	})
+
+	// POST /api/v1/realdata/approve-agents — Agent 승인 (호스트 등록)
+	mux.HandleFunc("POST /api/v1/realdata/approve-agents", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			AgentIDs []string `json:"agent_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+		approved := 0
+		for _, id := range body.AgentIDs {
+			if rec, ok := f.get(id); ok {
+				rec.mu.Lock()
+				rec.Approved = true
+				rec.mu.Unlock()
+				approved++
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"approved": approved,
+			"total":    len(body.AgentIDs),
 		})
 	})
 
