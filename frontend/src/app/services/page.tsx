@@ -30,16 +30,16 @@ const LAYER_OPTIONS: { label: string; value: string }[] = [
   ...Object.entries(LAYER_CONFIG).map(([k, v]) => ({ label: v.label, value: k })),
 ];
 
-// Transform /realdata/services API → Service[]
+// Transform /services API → Service[]
 function transformServices(raw: unknown): Service[] {
   const resp = raw as { items?: Array<Record<string, unknown>> };
   if (!resp.items?.length) return [];
   return resp.items.map((item) => ({
     id: String(item.id ?? item.name),
     name: String(item.name ?? ''),
-    framework: String(item.framework ?? '-'),
-    language: String(item.language ?? '-'),
-    hostIds: [],
+    framework: String(item.framework || '-'),
+    language: String(item.language || '-'),
+    hostIds: Array.isArray(item.host_ids) ? item.host_ids as string[] : [],
     latencyP50: Math.round(Number(item.latency_p50 ?? 0)),
     latencyP95: Math.round(Number(item.latency_p95 ?? 0)),
     latencyP99: Math.round(Number(item.latency_p99 ?? 0)),
@@ -61,7 +61,7 @@ export default function ServicesPage() {
   );
 
   const { data: services, source } = useDataSource<Service[]>(
-    '/realdata/services',
+    '/services',
     demoServices,
     { refreshInterval: 30_000, transform: transformServices },
   );

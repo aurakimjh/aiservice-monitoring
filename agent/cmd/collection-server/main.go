@@ -536,6 +536,7 @@ func main() {
 		"/api/v1/proxy/",
 		"/api/v1/realdata/",
 		"/api/v1/projects",
+		"/api/v1/services",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))

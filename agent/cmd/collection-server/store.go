@@ -88,7 +88,115 @@ func (s *Store) migrate() error {
 			last_heartbeat TEXT DEFAULT (datetime('now')),
 			FOREIGN KEY (project_id) REFERENCES projects(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS services (
+			id             TEXT PRIMARY KEY,
+			name           TEXT NOT NULL UNIQUE,
+			project_id     TEXT DEFAULT '',
+			service_group_id TEXT DEFAULT '',
+			type           TEXT DEFAULT 'api',
+			framework      TEXT DEFAULT '',
+			language       TEXT DEFAULT '',
+			owner          TEXT DEFAULT '',
+			discovered_via TEXT DEFAULT 'manual',
+			host_ids       TEXT DEFAULT '[]',
+			created_at     TEXT DEFAULT (datetime('now')),
+			updated_at     TEXT DEFAULT (datetime('now')),
+			FOREIGN KEY (project_id) REFERENCES projects(id)
+		);
 	`)
+	return err
+}
+
+// ── Service ──
+
+// ServiceRecord represents a service row.
+type ServiceRecord struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	ProjectID      string   `json:"project_id"`
+	ServiceGroupID string   `json:"service_group_id"`
+	Type           string   `json:"type"`
+	Framework      string   `json:"framework"`
+	Language       string   `json:"language"`
+	Owner          string   `json:"owner"`
+	DiscoveredVia  string   `json:"discovered_via"` // "jaeger", "agent", "manual"
+	HostIDs        []string `json:"host_ids"`
+	CreatedAt      string   `json:"created_at"`
+	UpdatedAt      string   `json:"updated_at"`
+}
+
+// UpsertService inserts or updates a service (auto-discovery or manual).
+func (s *Store) UpsertService(svc *ServiceRecord) error {
+	if svc.ID == "" {
+		svc.ID = fmt.Sprintf("svc-%d", time.Now().UnixMilli())
+	}
+	hostJSON, _ := json.Marshal(svc.HostIDs)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`
+		INSERT INTO services (id, name, project_id, service_group_id, type, framework, language, owner, discovered_via, host_ids, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET
+			project_id=CASE WHEN excluded.project_id!='' THEN excluded.project_id ELSE services.project_id END,
+			type=CASE WHEN excluded.type!='' AND excluded.type!='api' THEN excluded.type ELSE services.type END,
+			framework=CASE WHEN excluded.framework!='' THEN excluded.framework ELSE services.framework END,
+			language=CASE WHEN excluded.language!='' THEN excluded.language ELSE services.language END,
+			discovered_via=excluded.discovered_via,
+			host_ids=excluded.host_ids,
+			updated_at=excluded.updated_at
+	`, svc.ID, svc.Name, svc.ProjectID, svc.ServiceGroupID, svc.Type, svc.Framework,
+		svc.Language, svc.Owner, svc.DiscoveredVia, string(hostJSON), now, now)
+	return err
+}
+
+func (s *Store) ListServices(projectID string) ([]ServiceRecord, error) {
+	query := `SELECT id, name, project_id, service_group_id, type, framework, language, owner, discovered_via, host_ids, created_at, updated_at FROM services`
+	args := []interface{}{}
+	if projectID != "" {
+		query += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY name`
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var services []ServiceRecord
+	for rows.Next() {
+		var sr ServiceRecord
+		var hostJSON string
+		rows.Scan(&sr.ID, &sr.Name, &sr.ProjectID, &sr.ServiceGroupID, &sr.Type, &sr.Framework,
+			&sr.Language, &sr.Owner, &sr.DiscoveredVia, &hostJSON, &sr.CreatedAt, &sr.UpdatedAt)
+		json.Unmarshal([]byte(hostJSON), &sr.HostIDs)
+		services = append(services, sr)
+	}
+	return services, nil
+}
+
+func (s *Store) GetService(id string) (*ServiceRecord, error) {
+	var sr ServiceRecord
+	var hostJSON string
+	err := s.db.QueryRow(`SELECT id, name, project_id, service_group_id, type, framework, language, owner, discovered_via, host_ids, created_at, updated_at FROM services WHERE id = ? OR name = ?`, id, id).
+		Scan(&sr.ID, &sr.Name, &sr.ProjectID, &sr.ServiceGroupID, &sr.Type, &sr.Framework,
+			&sr.Language, &sr.Owner, &sr.DiscoveredVia, &hostJSON, &sr.CreatedAt, &sr.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal([]byte(hostJSON), &sr.HostIDs)
+	return &sr, nil
+}
+
+func (s *Store) UpdateService(id string, updates map[string]string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	for k, v := range updates {
+		s.db.Exec(fmt.Sprintf(`UPDATE services SET %s=?, updated_at=? WHERE id=?`, k), v, now, id)
+	}
+	return nil
+}
+
+func (s *Store) DeleteService(id string) error {
+	_, err := s.db.Exec(`DELETE FROM services WHERE id=?`, id)
 	return err
 }
 

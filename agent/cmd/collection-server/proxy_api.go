@@ -490,6 +490,153 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		})
 	})
 
+	// ── Service Auto-Discovery + CRUD ─────────────────────────────
+
+	// syncServicesFromJaeger discovers services from Jaeger and upserts into SQLite.
+	syncServicesFromJaeger := func() {
+		if serverStore == nil {
+			return
+		}
+		resp, err := proxyClient.Get(jaegerURL + "/api/services")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var jaegerResp struct {
+			Data []string `json:"data"`
+		}
+		json.Unmarshal(body, &jaegerResp)
+
+		for _, svcName := range jaegerResp.Data {
+			if svcName == "jaeger-all-in-one" {
+				continue
+			}
+			svc := &ServiceRecord{
+				Name:          svcName,
+				DiscoveredVia: "jaeger",
+				Type:          "api",
+			}
+			serverStore.UpsertService(svc)
+		}
+	}
+
+	// Run initial sync
+	go syncServicesFromJaeger()
+
+	// GET /api/v1/services — 서비스 목록 (auto-discovered + manual, Prometheus 메트릭 포함)
+	mux.HandleFunc("GET /api/v1/services", func(w http.ResponseWriter, r *http.Request) {
+		// Sync from Jaeger on each request (lightweight)
+		go syncServicesFromJaeger()
+
+		projectID := r.URL.Query().Get("project_id")
+		var services []ServiceRecord
+		if serverStore != nil {
+			services, _ = serverStore.ListServices(projectID)
+		}
+		if services == nil {
+			services = []ServiceRecord{}
+		}
+
+		// Enrich with Prometheus metrics
+		items := make([]map[string]interface{}, 0, len(services))
+		for _, svc := range services {
+			item := map[string]interface{}{
+				"id":               svc.ID,
+				"name":             svc.Name,
+				"project_id":       svc.ProjectID,
+				"service_group_id": svc.ServiceGroupID,
+				"type":             svc.Type,
+				"framework":        svc.Framework,
+				"language":         svc.Language,
+				"owner":            svc.Owner,
+				"discovered_via":   svc.DiscoveredVia,
+				"host_ids":         svc.HostIDs,
+				"status":           "healthy",
+				"latency_p50":      0.0,
+				"latency_p95":      0.0,
+				"rpm":              0.0,
+				"error_rate":       0.0,
+			}
+
+			// Query Prometheus for this service
+			rpmQ := fmt.Sprintf(`sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s"}[5m]))*60`, svc.Name)
+			if val := queryPromScalar(rpmQ); val > 0 {
+				item["rpm"] = val
+			}
+			p95Q := fmt.Sprintf(`histogram_quantile(0.95,sum(rate(demo_http_server_duration_milliseconds_bucket{exported_job="%s"}[5m]))by(le))`, svc.Name)
+			if val := queryPromScalar(p95Q); val > 0 {
+				item["latency_p95"] = val
+			}
+			p50Q := fmt.Sprintf(`histogram_quantile(0.50,sum(rate(demo_http_server_duration_milliseconds_bucket{exported_job="%s"}[5m]))by(le))`, svc.Name)
+			if val := queryPromScalar(p50Q); val > 0 {
+				item["latency_p50"] = val
+			}
+			errQ := fmt.Sprintf(`sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s",http_status_code=~"5.."}[5m]))/sum(rate(demo_http_server_duration_milliseconds_count{exported_job="%s"}[5m]))*100`, svc.Name, svc.Name)
+			if val := queryPromScalar(errQ); val > 0 {
+				item["error_rate"] = val
+			}
+
+			items = append(items, item)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items":  items,
+			"total":  len(items),
+			"source": "live",
+		})
+	})
+
+	// POST /api/v1/services — 수동 서비스 등록
+	mux.HandleFunc("POST /api/v1/services", func(w http.ResponseWriter, r *http.Request) {
+		if serverStore == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store not available"})
+			return
+		}
+		var body ServiceRecord
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name required"})
+			return
+		}
+		body.DiscoveredVia = "manual"
+		if err := serverStore.UpsertService(&body); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, body)
+	})
+
+	// GET /api/v1/services/{id} — 서비스 상세
+	mux.HandleFunc("GET /api/v1/services/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/services/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		svc, err := serverStore.GetService(id)
+		if err != nil || svc == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "service not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, svc)
+	})
+
+	// PUT /api/v1/services/{id} — 서비스 메타데이터 수정
+	mux.HandleFunc("PUT /api/v1/services/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/services/"):]
+		if id == "" || serverStore == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		var body map[string]string
+		json.NewDecoder(r.Body).Decode(&body)
+		if err := serverStore.UpdateService(id, body); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	})
+
 	// ── Project CRUD ──────────────────────────────────────────────
 
 	// POST /api/v1/projects — 프로젝트 생성
