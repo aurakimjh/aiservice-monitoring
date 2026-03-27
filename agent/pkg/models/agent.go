@@ -83,6 +83,63 @@ type Heartbeat struct {
 	AIDetected        bool             `json:"ai_detected,omitempty"`
 	SDKLangs          []string         `json:"sdk_langs,omitempty"`
 	Diagnostic        *DiagnosticStatus `json:"diagnostic,omitempty"`
+	// Detailed OS metrics (Phase 47+)
+	OSMetrics         *OSMetrics       `json:"os_metrics,omitempty"`
+}
+
+// OSMetrics contains detailed system-level metrics.
+type OSMetrics struct {
+	CPU     CPUMetrics     `json:"cpu"`
+	Memory  MemoryMetrics  `json:"memory"`
+	Disks   []DiskMetrics  `json:"disks,omitempty"`
+	Network []NetMetrics   `json:"network,omitempty"`
+	TopProc []ProcessInfo  `json:"top_processes,omitempty"`
+}
+
+// CPUMetrics — user/system/idle/iowait breakdown.
+type CPUMetrics struct {
+	UserPct   float64 `json:"user_pct"`
+	SystemPct float64 `json:"system_pct"`
+	IdlePct   float64 `json:"idle_pct"`
+	IOWaitPct float64 `json:"iowait_pct"`
+	TotalPct  float64 `json:"total_pct"` // user + system + iowait
+}
+
+// MemoryMetrics — used/cached/available/total.
+type MemoryMetrics struct {
+	TotalMB     float64 `json:"total_mb"`
+	UsedMB      float64 `json:"used_mb"`
+	CachedMB    float64 `json:"cached_mb"`
+	AvailableMB float64 `json:"available_mb"`
+	UsedPct     float64 `json:"used_pct"`
+}
+
+// DiskMetrics per mount point.
+type DiskMetrics struct {
+	Mount    string  `json:"mount"`
+	Device   string  `json:"device"`
+	TotalGB  float64 `json:"total_gb"`
+	UsedGB   float64 `json:"used_gb"`
+	UsedPct  float64 `json:"used_pct"`
+}
+
+// NetMetrics per interface.
+type NetMetrics struct {
+	Interface string  `json:"interface"`
+	RxMBps    float64 `json:"rx_mbps"`
+	TxMBps    float64 `json:"tx_mbps"`
+	RxBytes   uint64  `json:"rx_bytes"`
+	TxBytes   uint64  `json:"tx_bytes"`
+}
+
+// ProcessInfo for top-N process list.
+type ProcessInfo struct {
+	PID     int     `json:"pid"`
+	Name    string  `json:"name"`
+	User    string  `json:"user"`
+	CPUPct  float64 `json:"cpu_pct"`
+	MemMB   float64 `json:"mem_mb"`
+	Status  string  `json:"status"`
 }
 
 // HeartbeatResponse is the server's reply to a heartbeat.

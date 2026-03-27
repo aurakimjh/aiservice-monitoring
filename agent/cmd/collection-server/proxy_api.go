@@ -262,6 +262,7 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 			"ai_detected":    a.AIDetected,
 			"sdk_langs":      a.SDKLangs,
 			"approved":       a.Approved,
+			"os_metrics":     a.OSMetrics,
 			"source":         "live",
 		}
 	}

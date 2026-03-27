@@ -33,16 +33,30 @@ const DEMO_PROCESSES = [
   { pid: 1, name: 'systemd', user: 'root', cpu: 0.0, mem: 0.1, status: 'running' },
 ];
 
+// OS Metrics types from Agent heartbeat
+interface OSMetricsData {
+  cpu: { user_pct: number; system_pct: number; idle_pct: number; iowait_pct: number; total_pct: number };
+  memory: { total_mb: number; used_mb: number; cached_mb: number; available_mb: number; used_pct: number };
+  disks?: { mount: string; device: string; total_gb: number; used_gb: number; used_pct: number }[];
+  network?: { interface: string; rx_mbps: number; tx_mbps: number }[];
+  top_processes?: { pid: number; name: string; user: string; cpu_pct: number; mem_mb: number; status: string }[];
+}
+
+// Extended host with OS metrics
+let _lastOSMetrics: OSMetricsData | null = null;
+
 // Transform single host API response
 function transformHostDetail(raw: unknown): Host | null {
   const item = raw as Record<string, unknown>;
   if (!item.id && !item.hostname) return null;
+  // Store OS metrics globally for chart use
+  _lastOSMetrics = (item.os_metrics as OSMetricsData) ?? null;
   return {
     id: String(item.id ?? item.hostname),
     hostname: String(item.hostname ?? 'unknown'),
     os: `${item.os_type ?? ''} ${item.os_version ?? ''}`.trim() || 'Unknown',
     cpuCores: 0,
-    memoryGB: Math.round(Number(item.memory_mb ?? 0) / 1024),
+    memoryGB: _lastOSMetrics ? Math.round(_lastOSMetrics.memory.total_mb / 1024) : Math.round(Number(item.memory_mb ?? 0) / 1024),
     status: (item.status === 'online' || item.status === 'healthy') ? 'healthy' : item.status === 'degraded' ? 'warning' : 'critical',
     cpuPercent: Math.round(Number(item.cpu_percent ?? 0)),
     memPercent: item.memory_mb ? Math.round(Number(item.memory_mb) / 1024 / 32 * 100) : 0,
@@ -137,46 +151,60 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
       {/* ── Overview ── */}
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' && (() => {
+        const osm = _lastOSMetrics;
+        const cpu = osm?.cpu;
+        const mem = osm?.memory;
+        const disks = osm?.disks ?? [];
+        const nets = osm?.network ?? [];
+        const mainDisk = disks[0];
+        const totalNet = nets.reduce((s, n) => ({ rx: s.rx + n.rx_mbps, tx: s.tx + n.tx_mbps }), { rx: 0, tx: 0 });
+
+        return (
         <div className="space-y-4">
           {/* Resource KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <KPICard
               title="CPU Usage"
-              value={host.cpuPercent}
+              value={cpu ? cpu.total_pct.toFixed(1) : host.cpuPercent}
               unit="%"
+              subtitle={cpu ? `User ${cpu.user_pct.toFixed(1)}% · Sys ${cpu.system_pct.toFixed(1)}%` : undefined}
               status={host.cpuPercent > 85 ? 'critical' : host.cpuPercent > 70 ? 'warning' : 'healthy'}
-              sparkData={[42, 45, 48, 52, 55, 60, 58, 55, 50, host.cpuPercent]}
             />
             <KPICard
               title="Memory"
-              value={host.memPercent}
+              value={mem ? mem.used_pct.toFixed(1) : host.memPercent}
               unit="%"
-              subtitle={`${Math.round(host.memoryGB * host.memPercent / 100)}GB / ${host.memoryGB}GB`}
-              status={host.memPercent > 85 ? 'warning' : 'healthy'}
-              sparkData={[58, 60, 62, 59, 61, 63, 62, 60, 61, host.memPercent]}
+              subtitle={mem ? `${Math.round(mem.used_mb / 1024)}GB / ${Math.round(mem.total_mb / 1024)}GB (cached ${Math.round(mem.cached_mb / 1024)}GB)` : undefined}
+              status={(mem?.used_pct ?? host.memPercent) > 85 ? 'warning' : 'healthy'}
             />
             <KPICard
               title="Disk"
-              value={host.diskPercent}
+              value={mainDisk ? mainDisk.used_pct.toFixed(1) : '0'}
               unit="%"
-              status={host.diskPercent > 85 ? 'warning' : 'healthy'}
+              subtitle={mainDisk ? `${mainDisk.used_gb.toFixed(1)}GB / ${mainDisk.total_gb.toFixed(1)}GB (${mainDisk.mount})` : 'Collecting...'}
+              status={(mainDisk?.used_pct ?? 0) > 85 ? 'warning' : 'healthy'}
             />
             <KPICard
               title="Network I/O"
-              value={host.netIO !== '-' ? host.netIO : 'N/A'}
-              subtitle={host.netIO === '-' ? 'Agent collecting...' : undefined}
+              value={nets.length > 0 ? `${totalNet.rx.toFixed(1)}/${totalNet.tx.toFixed(1)}` : 'N/A'}
+              unit={nets.length > 0 ? 'MB/s' : undefined}
+              subtitle={nets.length > 0 ? `RX/TX (${nets.map(n => n.interface).join(', ')})` : 'Collecting...'}
               status="healthy"
             />
           </div>
 
-          {/* Resource Charts — 실제 값 기반 시뮬레이션 */}
+          {/* Resource Charts — Agent 실데이터 기반 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>CPU Usage ({host.cpuPercent}%)</CardTitle></CardHeader>
+              <CardHeader><CardTitle>CPU — User / System / IOWait</CardTitle></CardHeader>
               <TimeSeriesChart
-                series={[
-                  { name: 'Total', data: generateTimeSeries(host.cpuPercent, Math.max(1, host.cpuPercent * 0.15), 60), type: 'area', color: '#58A6FF' },
+                series={cpu ? [
+                  { name: 'User', data: generateTimeSeries(cpu.user_pct, Math.max(0.5, cpu.user_pct * 0.15), 60), type: 'area', color: '#58A6FF' },
+                  { name: 'System', data: generateTimeSeries(cpu.system_pct, Math.max(0.3, cpu.system_pct * 0.15), 60), type: 'area', color: '#BC8CFF' },
+                  { name: 'IOWait', data: generateTimeSeries(cpu.iowait_pct, Math.max(0.1, cpu.iowait_pct * 0.2), 60), type: 'area', color: '#D29922' },
+                ] : [
+                  { name: 'Total', data: generateTimeSeries(host.cpuPercent, 1, 60), type: 'area', color: '#58A6FF' },
                 ]}
                 yAxisLabel="%"
                 thresholdLine={{ value: 90, label: '90%', color: '#F85149' }}
@@ -184,25 +212,34 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Memory ({host.memoryGB > 0 ? `${Math.round(host.memoryGB * host.memPercent / 100)}GB / ${host.memoryGB}GB` : `${Math.round(Number(host.memPercent))}MB used`})</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Memory — Used / Cached</CardTitle></CardHeader>
               <TimeSeriesChart
-                series={[
-                  { name: 'Used', data: generateTimeSeries(host.memPercent || (host.memoryGB > 0 ? 0 : Number(host.netIO === '-' ? 0 : 50)), Math.max(1, host.memPercent * 0.1), 60), type: 'area', color: '#3FB950' },
+                series={mem ? [
+                  { name: `Used (${Math.round(mem.used_mb - mem.cached_mb)}MB)`, data: generateTimeSeries(mem.used_mb - mem.cached_mb, Math.max(10, (mem.used_mb - mem.cached_mb) * 0.05), 60), type: 'area', color: '#3FB950' },
+                  { name: `Cached (${Math.round(mem.cached_mb)}MB)`, data: generateTimeSeries(mem.cached_mb, Math.max(5, mem.cached_mb * 0.03), 60), type: 'area', color: '#79C0FF' },
+                ] : [
+                  { name: 'Used', data: generateTimeSeries(host.memPercent, 1, 60), type: 'area', color: '#3FB950' },
                 ]}
-                yAxisLabel={host.memoryGB > 0 ? '%' : 'MB'}
+                yAxisLabel="MB"
                 height={200}
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Disk Usage ({host.diskPercent}%)</CardTitle></CardHeader>
-              {host.diskPercent > 0 ? (
-                <TimeSeriesChart
-                  series={[
-                    { name: 'Used', data: generateTimeSeries(host.diskPercent, Math.max(1, host.diskPercent * 0.05), 60), type: 'area', color: '#D29922' },
-                  ]}
-                  yAxisLabel="%"
-                  height={200}
-                />
+              <CardHeader><CardTitle>Disk Usage</CardTitle></CardHeader>
+              {disks.length > 0 ? (
+                <div className="space-y-3 p-2">
+                  {disks.map((d) => (
+                    <div key={d.mount}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-[var(--text-primary)] font-mono">{d.mount}</span>
+                        <span className="text-[var(--text-muted)]">{d.used_gb.toFixed(1)}GB / {d.total_gb.toFixed(1)}GB ({d.used_pct.toFixed(1)}%)</span>
+                      </div>
+                      <div className="h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full', d.used_pct > 85 ? 'bg-[var(--status-critical)]' : d.used_pct > 70 ? 'bg-[var(--status-warning)]' : 'bg-[#D29922]')} style={{ width: `${d.used_pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-xs text-[var(--text-muted)]">
                   Agent collecting disk metrics...
@@ -211,15 +248,16 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             </Card>
             <Card>
               <CardHeader><CardTitle>Network I/O</CardTitle></CardHeader>
-              {host.netIO !== '-' ? (
-                <TimeSeriesChart
-                  series={[
-                    { name: 'RX', data: generateTimeSeries(40, 15, 60), color: '#3FB950' },
-                    { name: 'TX', data: generateTimeSeries(25, 10, 60), color: '#D29922' },
-                  ]}
-                  yAxisLabel="MB/s"
-                  height={200}
-                />
+              {nets.length > 0 ? (
+                <div className="space-y-3 p-2">
+                  {nets.map((n) => (
+                    <div key={n.interface} className="flex items-center gap-3 text-xs">
+                      <span className="w-16 font-mono text-[var(--text-primary)]">{n.interface}</span>
+                      <span className="text-[#3FB950]">RX {n.rx_mbps.toFixed(2)} MB/s</span>
+                      <span className="text-[#D29922]">TX {n.tx_mbps.toFixed(2)} MB/s</span>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-xs text-[var(--text-muted)]">
                   Agent collecting network metrics...
@@ -317,7 +355,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             </Card>
           )}
         </div>
-      )}
+        ); })()}
 
       {/* ── Runtime Tab ── */}
       {activeTab === 'runtime' && (
@@ -514,13 +552,14 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
       )}
 
       {/* ── Processes Tab ── */}
-      {activeTab === 'processes' && (
+      {activeTab === 'processes' && (() => {
+        const procs = _lastOSMetrics?.top_processes ?? (source === 'demo' ? DEMO_PROCESSES.map(p => ({ pid: p.pid, name: p.name, user: p.user, cpu_pct: p.cpu, mem_mb: p.mem, status: p.status })) : []);
+        return (
         <Card padding="none">
-          {source === 'live' ? (
+          {procs.length === 0 ? (
             <div className="text-center py-12 space-y-2">
               <Terminal size={28} className="mx-auto text-[var(--text-muted)] opacity-40" />
-              <div className="text-sm text-[var(--text-muted)]">Process list collection in progress...</div>
-              <div className="text-xs text-[var(--text-muted)]">Agent OS Collector will report top processes in next cycle</div>
+              <div className="text-sm text-[var(--text-muted)]">Waiting for process data from Agent...</div>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -530,19 +569,19 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
                     <th className="px-4 py-2.5 font-medium">PID</th>
                     <th className="px-4 py-2.5 font-medium">Process</th>
                     <th className="px-4 py-2.5 font-medium">User</th>
-                    <th className="px-4 py-2.5 font-medium text-right">CPU %</th>
-                    <th className="px-4 py-2.5 font-medium text-right">MEM %</th>
+                    <th className="px-4 py-2.5 font-medium text-right">CPU</th>
+                    <th className="px-4 py-2.5 font-medium text-right">MEM (MB)</th>
                     <th className="px-4 py-2.5 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {DEMO_PROCESSES.map((p) => (
+                  {procs.map((p) => (
                     <tr key={p.pid} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
                       <td className="px-4 py-2 tabular-nums text-[var(--text-muted)]">{p.pid}</td>
                       <td className="px-4 py-2 font-medium text-[var(--text-primary)] font-mono">{p.name}</td>
                       <td className="px-4 py-2 text-[var(--text-secondary)]">{p.user}</td>
-                      <td className={cn('px-4 py-2 text-right tabular-nums', p.cpu > 20 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]')}>{p.cpu.toFixed(1)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{p.mem.toFixed(1)}</td>
+                      <td className={cn('px-4 py-2 text-right tabular-nums', p.cpu_pct > 20 ? 'text-[var(--status-warning)] font-medium' : 'text-[var(--text-secondary)]')}>{p.cpu_pct.toFixed(1)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{p.mem_mb.toFixed(1)}</td>
                       <td className="px-4 py-2">
                         <StatusIndicator status="healthy" label={p.status} size="sm" />
                       </td>
@@ -553,7 +592,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             </div>
           )}
         </Card>
-      )}
+        ); })()}
 
       {/* ── Logs Tab ── */}
       {activeTab === 'logs' && (

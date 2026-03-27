@@ -329,6 +329,7 @@ type agentRecord struct {
 	AIDetected    bool                    `json:"ai_detected"`
 	SDKLangs      []string                `json:"sdk_langs,omitempty"`
 	Approved      bool                    `json:"approved"`
+	OSMetrics     *models.OSMetrics       `json:"os_metrics,omitempty"`
 }
 
 // fleet is the in-memory agent registry.
@@ -368,6 +369,9 @@ func (f *fleet) upsert(hb *models.Heartbeat) {
 	}
 	if hb.SDKLangs != nil {
 		rec.SDKLangs = hb.SDKLangs
+	}
+	if hb.OSMetrics != nil {
+		rec.OSMetrics = hb.OSMetrics
 	}
 	if hb.PrivilegeReport != nil {
 		rec.PrivReport = hb.PrivilegeReport

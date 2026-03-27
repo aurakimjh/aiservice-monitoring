@@ -78,9 +78,9 @@ func (m *Monitor) sampleCPUPercent() float64 {
 }
 
 // BuildHeartbeat creates a heartbeat message with current agent state.
-// Reports system-wide CPU% and used memory (not just agent process).
+// Includes detailed OS metrics (CPU breakdown, memory breakdown, disk, network, processes).
 func (m *Monitor) BuildHeartbeat(plugins []models.PluginStatus, privReport *models.PrivilegeReport) *models.Heartbeat {
-	sysCPU, sysMem := systemMetrics()
+	osm := CollectOSMetrics()
 
 	return &models.Heartbeat{
 		AgentID:         m.agentID,
@@ -90,9 +90,10 @@ func (m *Monitor) BuildHeartbeat(plugins []models.PluginStatus, privReport *mode
 		AgentVersion:    version.Version,
 		OSType:          runtime.GOOS,
 		OSVersion:       "",
-		CPUPercent:      sysCPU,
-		MemoryMB:        sysMem,
+		CPUPercent:      osm.CPU.TotalPct,
+		MemoryMB:        osm.Memory.UsedMB,
 		Plugins:         plugins,
 		PrivilegeReport: privReport,
+		OSMetrics:       osm,
 	}
 }
