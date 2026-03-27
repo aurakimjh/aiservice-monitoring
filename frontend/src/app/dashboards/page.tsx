@@ -38,6 +38,10 @@ const WIDGET_TYPES: { type: WidgetType; label: string; icon: React.ReactNode; gr
   { type: 'apm-active-status', label: 'Active Status', icon: <BarChart size={14} />, group: 'APM' },
   { type: 'apm-txn-speed', label: 'Txn Speed', icon: <ArrowRightLeft size={14} />, group: 'APM' },
   { type: 'apm-concurrent-users', label: 'Concurrent', icon: <UserCheck size={14} />, group: 'APM' },
+  // AI Pipeline Widgets
+  { type: 'ai-pipeline-waterfall', label: 'Pipeline', icon: <Layers size={14} />, group: 'AI' },
+  { type: 'ai-ttft-trend', label: 'TTFT Trend', icon: <Clock size={14} />, group: 'AI' },
+  { type: 'ai-token-cost', label: 'Token Cost', icon: <Zap size={14} />, group: 'AI' },
 ];
 
 const SIZE_OPTIONS: { value: WidgetSize; label: string }[] = [
@@ -279,11 +283,22 @@ export default function DashboardBuilderPage() {
                 </div>
                 {/* APM widgets */}
                 <div className="text-[10px] text-[var(--text-muted)] font-medium mb-1.5">APM Service</div>
-                <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-3">
                   {WIDGET_TYPES.filter((w) => w.group === 'APM').map((wt) => (
                     <button key={wt.type} onClick={() => { store.addWidget(wt.type); setShowAddPanel(false); }}
                       className="flex flex-col items-center gap-1.5 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
                       <span className="text-[#F778BA]">{wt.icon}</span>
+                      <span className="text-[10px] text-[var(--text-secondary)]">{wt.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* AI Pipeline widgets */}
+                <div className="text-[10px] text-[var(--text-muted)] font-medium mb-1.5">AI Pipeline</div>
+                <div className="grid grid-cols-3 md:grid-cols-3 gap-2">
+                  {WIDGET_TYPES.filter((w) => w.group === 'AI').map((wt) => (
+                    <button key={wt.type} onClick={() => { store.addWidget(wt.type); setShowAddPanel(false); }}
+                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                      <span className="text-[#BC8CFF]">{wt.icon}</span>
                       <span className="text-[10px] text-[var(--text-secondary)]">{wt.label}</span>
                     </button>
                   ))}

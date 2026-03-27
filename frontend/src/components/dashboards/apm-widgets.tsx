@@ -366,6 +366,137 @@ export function ConcurrentUsersWidget({ widget, height }: ApmWidgetProps) {
 // Registry — map WidgetType → Component
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// 9. AI Pipeline Waterfall — stage-by-stage latency
+// ══════════════════════════════════════════════════════════════
+
+const PIPELINE_STAGES = [
+  { name: 'Guardrail (in)', color: '#9B59B6', baseMs: 12 },
+  { name: 'Embedding', color: '#3498DB', baseMs: 45 },
+  { name: 'Vector Search', color: '#2ECC71', baseMs: 85 },
+  { name: 'LLM Inference', color: '#E67E22', baseMs: 820 },
+  { name: 'Guardrail (out)', color: '#9B59B6', baseMs: 8 },
+];
+
+export function PipelineWaterfallWidget({ widget, height }: ApmWidgetProps) {
+  const rng = useMemo(() => seeded(7), []);
+  const stages = useMemo(() =>
+    PIPELINE_STAGES.map((s) => ({
+      ...s,
+      ms: Math.round(s.baseMs + (rng() - 0.5) * s.baseMs * 0.3),
+    })),
+    [rng],
+  );
+  const totalMs = stages.reduce((s, st) => s + st.ms, 0);
+
+  return (
+    <div className="h-full flex flex-col gap-1.5 justify-center">
+      <div className="flex items-baseline gap-1.5 mb-1">
+        <span className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{totalMs}</span>
+        <span className="text-[10px] text-[var(--text-muted)]">ms total</span>
+      </div>
+      {stages.map((stage) => {
+        const pct = totalMs > 0 ? (stage.ms / totalMs) * 100 : 0;
+        return (
+          <div key={stage.name} className="flex items-center gap-2">
+            <span className="w-24 text-[10px] text-[var(--text-muted)] truncate">{stage.name}</span>
+            <div className="flex-1 h-4 bg-[var(--bg-tertiary)] rounded-sm overflow-hidden">
+              <div className="h-full rounded-sm transition-all flex items-center px-1"
+                style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: stage.color }}>
+                <span className="text-[8px] text-white font-bold">{stage.ms}ms</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 10. AI TTFT Trend — Time To First Token over time
+// ══════════════════════════════════════════════════════════════
+
+export function TTFTTrendWidget({ widget, height }: ApmWidgetProps) {
+  const data = useMemo(() => demoTimeSeries(1200, 300, 120, 8), []);
+  const lastVal = data[data.length - 1]?.[1] ?? 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const option: any = {
+    animation: false, grid: GRID, xAxis: X_TIME, yAxis: Y_VALUE('ms'),
+    tooltip: { trigger: 'axis' },
+    series: [{
+      type: 'line', data, smooth: true, symbol: 'none',
+      lineStyle: { color: '#F778BA', width: 1.5 },
+      areaStyle: { color: '#F778BA', ...AREA_STYLE },
+      markLine: {
+        silent: true, symbol: 'none',
+        data: [
+          { yAxis: 2000, lineStyle: { color: '#F85149', type: 'dashed', width: 1 }, label: { formatter: 'SLO: 2s', fontSize: 8, color: '#F85149' } },
+        ],
+      },
+    }],
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-baseline gap-1.5 mb-1">
+        <span className={cn('text-xl font-bold tabular-nums',
+          lastVal > 2000 ? 'text-[#F85149]' : lastVal > 1500 ? 'text-[#D29922]' : 'text-[var(--text-primary)]')}>
+          {Math.round(lastVal)}
+        </span>
+        <span className="text-[10px] text-[var(--text-muted)]">ms TTFT P95</span>
+      </div>
+      <div className="flex-1 min-h-0"><EChartsWrapper option={option} height={height - 32} /></div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 11. AI Token Cost — hourly cost tracker
+// ══════════════════════════════════════════════════════════════
+
+export function TokenCostWidget({ widget, height }: ApmWidgetProps) {
+  const data = useMemo(() => demoTimeSeries(12.5, 4, 120, 9), []);
+  const lastVal = data[data.length - 1]?.[1] ?? 0;
+  const dailyCost = lastVal * 24;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const option: any = {
+    animation: false, grid: GRID, xAxis: X_TIME, yAxis: Y_VALUE('$/h'),
+    tooltip: { trigger: 'axis' },
+    series: [{
+      type: 'line', data, smooth: true, symbol: 'none',
+      lineStyle: { color: '#D29922', width: 1.5 },
+      areaStyle: { color: '#D29922', ...AREA_STYLE },
+      markLine: {
+        silent: true, symbol: 'none',
+        data: [
+          { yAxis: 15, lineStyle: { color: '#F85149', type: 'dashed', width: 1 }, label: { formatter: 'Budget: $15/h', fontSize: 8, color: '#F85149' } },
+        ],
+      },
+    }],
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className={cn('text-xl font-bold tabular-nums',
+          lastVal > 15 ? 'text-[#F85149]' : 'text-[var(--text-primary)]')}>
+          ${lastVal.toFixed(1)}
+        </span>
+        <span className="text-[10px] text-[var(--text-muted)]">/hour</span>
+        <span className="text-[10px] text-[var(--text-muted)]">(~${dailyCost.toFixed(0)}/day)</span>
+      </div>
+      <div className="flex-1 min-h-0"><EChartsWrapper option={option} height={height - 32} /></div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Registry
+// ══════════════════════════════════════════════════════════════
+
 export const APM_WIDGET_MAP: Record<string, React.ComponentType<ApmWidgetProps>> = {
   'apm-tps': TpsWidget,
   'apm-tps-daily': TpsDailyWidget,
@@ -375,4 +506,7 @@ export const APM_WIDGET_MAP: Record<string, React.ComponentType<ApmWidgetProps>>
   'apm-active-status': ActiveStatusWidget,
   'apm-txn-speed': TxnSpeedWidget,
   'apm-concurrent-users': ConcurrentUsersWidget,
+  'ai-pipeline-waterfall': PipelineWaterfallWidget,
+  'ai-ttft-trend': TTFTTrendWidget,
+  'ai-token-cost': TokenCostWidget,
 };

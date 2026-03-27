@@ -393,7 +393,8 @@ export interface ExecutiveSummary {
 export type WidgetType =
   | 'kpi' | 'timeseries' | 'bar' | 'pie' | 'gauge' | 'table' | 'text'
   | 'apm-tps' | 'apm-tps-daily' | 'apm-users-daily' | 'apm-response-time'
-  | 'apm-active-txn' | 'apm-active-status' | 'apm-txn-speed' | 'apm-concurrent-users';
+  | 'apm-active-txn' | 'apm-active-status' | 'apm-txn-speed' | 'apm-concurrent-users'
+  | 'ai-pipeline-waterfall' | 'ai-ttft-trend' | 'ai-token-cost';
 export type WidgetSize = '1x1' | '2x1' | '1x2' | '2x2';
 export type WidgetViewMode = 'sum' | 'individual';
 
