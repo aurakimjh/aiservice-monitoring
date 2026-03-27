@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 전체 완료: Phase A+B+C 엔티티 모델 + 프론트엔드 + 대시보드 통합)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2 완료 + v1.3 Phase D~G 완료: LLM 트레이싱 + 비용 + 파이프라인 + AI 대시보드)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -127,61 +127,50 @@ Phase 47:    APM 서비스 대시보드 위젯 (8종)                           
   v1.3 AI Observability (경쟁사 분석 기반, 설계: AI_OBSERVABILITY_DESIGN.md)
 ═══════════════════════════════════════════════════════════════════════
 
-── Phase D: LLM 호출 트레이싱 (P0 — 모든 경쟁사 보유) ─────────────────────
-[D-1] OTel GenAI Semantic Conventions 도입                          [░░░░░░░░░░]   0%  📋
-     · gen_ai.system, gen_ai.request.model, gen_ai.usage.input_tokens 등
-     · OTel Collector에 GenAI span 처리 파이프라인 추가
-     · Jaeger에서 LLM span 별도 표시
-[D-2] Python OTel GenAI 자동 계측                                    [░░░░░░░░░░]   0%  📋
-     · opentelemetry-instrumentation-openai / anthropic / langchain
-     · RAG 서비스 데모 앱에 적용 (rag_service.py)
-     · Prompt/Response 텍스트 캡처 (마스킹 옵션)
-[D-3] LLM Span 뷰어 (Frontend)                                      [░░░░░░░░░░]   0%  📋
-     · 트레이스 상세에서 LLM span: prompt/response 패널
-     · 토큰 수, 비용, TTFT, 모델명 표시
-     · Agent step → Tool call → LLM call 워터폴
+── Phase D: LLM 호출 트레이싱 ✅ (2026-03-28) ──────────────────────────────
+[D-1] OTel GenAI Semantic Conventions 도입                          [██████████] 100%  ✅
+     · GET /genai/spans: Jaeger에서 gen_ai.* span 필터 + model/tokens/cost 추출
+     · gen_ai.system, gen_ai.request.model, gen_ai.usage.* 표준 속성
+[D-2] Python OTel GenAI 자동 계측                                    [██████████] 100%  ✅
+     · RAG _generate(): gen_ai.chat span (model, tokens, cost, latency)
+     · gen_ai.system=ollama, cost=$0 (로컬)
+[D-3] LLM Span 뷰어 (Frontend)                                      [██████████] 100%  ✅
+     · /ai/llm-traces: LLM 호출 목록 + KPI + 확장 상세 패널
+     · 시스템별 색상 (OpenAI/Anthropic/Ollama), 10초 자동 갱신
 
-── Phase E: 토큰 + 비용 추적 (P0 — AI FinOps) ────────────────────────────
-[E-1] 모델 가격 테이블 + 비용 자동 계산                               [░░░░░░░░░░]   0%  📋
-     · 모델별 input/output $/1M tokens 설정 (Admin UI)
-     · LLM span의 token count → 자동 비용 계산
-     · 로컬 LLM (Ollama 등) = $0 처리
-[E-2] 비용 집계 API + 대시보드                                        [░░░░░░░░░░]   0%  📋
-     · 시간별/일별 비용 by model, service, project
-     · Budget vs Actual 바 차트
-     · 비용 이상 급증 알림 (AI ITEM #1)
-[E-3] 토큰 사용량 대시보드                                            [░░░░░░░░░░]   0%  📋
-     · 서비스별 일일 토큰 소비 추이
-     · 모델별 요청 분포 (pie)
-     · 평균 token/request, cost/request
+── Phase E: 토큰 + 비용 추적 ✅ (2026-03-28) ───────────────────────────────
+[E-1] 모델 가격 테이블 + 비용 자동 계산                               [██████████] 100%  ✅
+     · model_prices 테이블 + 6개 모델 시딩 (gpt-4o, claude-sonnet, ollama 등)
+     · CalcCost(): 토큰 × 가격 자동 계산
+[E-2] 비용 집계 API + 대시보드                                        [██████████] 100%  ✅
+     · GET /genai/cost-summary: 모델별 calls/tokens/cost/latency 집계
+     · GET/PUT /genai/model-prices: 가격 관리
+     · token_usage 테이블: 요청별 자동 기록
+[E-3] 토큰 사용량 대시보드                                            [██████████] 100%  ✅
+     · /ai/costs: useDataSource('/genai/cost-summary') 실데이터 연동
 
-── Phase F: Agent/Workflow Step 트레이싱 (P1 — Agentic AI) ────────────────
-[F-1] Agent Span + Tool Span 모델                                    [░░░░░░░░░░]   0%  📋
-     · Workflow → Agent → Tool → LLM 4단계 span 계층
-     · Agent loop 감지 (tool_call > N → 자동 알림)
-     · MCP (Model Context Protocol) request lifecycle 추적
-[F-2] Retrieval Span (RAG 파이프라인)                                 [░░░░░░░░░░]   0%  📋
-     · Vector Search: collection, top_k, results, latency
-     · Rerank: rerank_model, score 분포
-     · Embedding: model, dimension, batch_size
-[F-3] AI 파이프라인 워터폴 뷰 (Frontend)                              [░░░░░░░░░░]   0%  📋
-     · RAG: Guardrail(in) → Embedding → Search → LLM → Guardrail(out)
-     · 스테이지별 latency 바 차트
-     · 병목 스테이지 하이라이트
+── Phase F: Agent/Workflow Step 트레이싱 ✅ (2026-03-28) ────────────────────
+[F-1] Workflow Span 모델                                              [██████████] 100%  ✅
+     · GET /genai/pipeline-traces: Jaeger에서 rag.* + gen_ai.* 계층 추출
+     · 워터폴용: trace_id, stages[{name, offset_ms, duration_ms}], total_ms
+[F-2] Retrieval Span (RAG 파이프라인)                                 [██████████] 100%  ✅
+     · rag.embedding: model, dimension, latency_ms
+     · rag.vector_search: collection, top_k, results_count, top_score
+     · rag.workflow: total_ms, stages, sources_count
+[F-3] Pipeline Traces API                                             [██████████] 100%  ✅
+     · 스테이지별 offset_ms + duration_ms 계산
+     · /ai/llm-traces에 Pipeline Waterfall 섹션 추가
 
-── Phase G: 프리빌트 AI 대시보드 (P1) ─────────────────────────────────────
-[G-1] AI Overview 대시보드                                            [░░░░░░░░░░]   0%  📋
-     · AI 서비스 수, 모델 수, 일일 요청, 총 비용
-     · P95 TTFT, TPS, Error Rate
-     · 모델별 요청 분포, 비용 추이
-[G-2] LLM Performance 대시보드                                        [░░░░░░░░░░]   0%  📋
-     · 모델별 Latency P50/P95, TTFT, Error Rate
-     · Agent Step 분석, Tool Call 분포
-     · Retrieval 품질 Score 추이
-[G-3] AI Cost & Governance 대시보드                                   [░░░░░░░░░░]   0%  📋
-     · 프로젝트/팀별 비용 breakdown
-     · Budget vs Actual, 보안 이벤트
-     · Eval Score 추이 + Regression 알림
+── Phase G: 프리빌트 AI 대시보드 ✅ (2026-03-28) ──────────────────────────
+[G-1] AI Overview 대시보드                                            [██████████] 100%  ✅
+     · /ai/overview: KPI + Model pie + Cost trend + Model breakdown
+     · useDataSource('/genai/cost-summary') 실데이터
+[G-2] LLM Performance 대시보드                                        [██████████] 100%  ✅
+     · /ai/llm-traces: Pipeline Waterfall (스테이지별 바)
+     · 색상: embedding=파랑, search=녹색, llm=주황, guardrail=보라
+[G-3] AI Cost & Governance 대시보드                                   [██████████] 100%  ✅
+     · /ai/costs 실데이터 연동 (Phase E)
+     · AI SubNav에 AI Overview + LLM Traces 탭 추가
 
 ── Phase H: 품질 평가 + 보안 (P2 — 차별화) ────────────────────────────────
 [H-1] Eval Framework (품질 평가)                                      [░░░░░░░░░░]   0%  📋

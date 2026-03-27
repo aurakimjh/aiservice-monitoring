@@ -3,7 +3,7 @@
 > **문서 버전**: v3.5.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-28 (v1.2.0 — Phase A+B+C 전체 완료: 엔티티 관계 모델 + SQLite 영속화 + 프론트엔드 연동 + 대시보드 통합 + AI Pipeline 위젯)
+> **최종 업데이트**: 2026-03-28 (v1.3.0-alpha — Phase D~G 완료: LLM 트레이싱 + 토큰 비용 + RAG 파이프라인 + AI 대시보드 3종)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
