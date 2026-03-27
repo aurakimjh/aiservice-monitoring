@@ -334,8 +334,7 @@ export default function InfraPage() {
       )}
 
       {/* ── Add Host Modal (Pending Agents) ── */}
-      {showAddModal && (
-        <Modal onClose={() => setShowAddModal(false)} title="Add Hosts — Detected Agents" size="lg">
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add Hosts — Detected Agents" size="lg">
           {pendingAgents.length === 0 ? (
             <div className="text-center py-8 text-sm text-[var(--text-muted)]">
               No pending agents detected. Install and start AITOP Agent on target hosts.
@@ -423,7 +422,6 @@ export default function InfraPage() {
             </>
           )}
         </Modal>
-      )}
     </div>
   );
 }
