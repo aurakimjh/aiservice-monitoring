@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { DagView } from '@/components/pipelines';
 import { getPipelines } from '@/lib/demo-data';
@@ -49,7 +50,9 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function PipelinesPage() {
-  const pipelines = useMemo(() => getPipelines(), []);
+  const demoPipelines = useCallback(() => getPipelines(), []);
+  const { data: pipelinesData, source } = useDataSource('/pipelines', demoPipelines, { refreshInterval: 30_000 });
+  const pipelines = pipelinesData ?? [];
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const activePipelines = pipelines.length;
@@ -84,9 +87,12 @@ export default function PipelinesPage() {
         ]}
       />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-        Data Pipeline Monitoring
-      </h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          Data Pipeline Monitoring
+        </h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

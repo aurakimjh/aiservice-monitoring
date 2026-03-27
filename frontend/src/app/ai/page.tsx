@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, SearchInput, Select, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, SearchInput, Select, Badge, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
 import { AISubNav } from '@/components/ai';
 import { useProjectStore } from '@/stores/project-store';
 import { getProjectAIServices } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { formatDuration, formatCost } from '@/lib/utils';
+import type { AIService } from '@/types/monitoring';
 import { Bot, Brain, Database, Cpu, MessageSquare } from 'lucide-react';
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -43,7 +45,16 @@ const TYPE_OPTIONS = [
 
 export default function AIServicesPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const aiServices = getProjectAIServices(currentProjectId ?? 'proj-ai-prod');
+  const demoFallback = useCallback(
+    () => getProjectAIServices(currentProjectId ?? 'proj-ai-prod'),
+    [currentProjectId],
+  );
+  const { data: aiServicesData, source } = useDataSource<AIService[]>(
+    '/ai/services',
+    demoFallback,
+    { refreshInterval: 30_000, transform: (raw) => (raw as { items?: AIService[] }).items ?? raw as AIService[] },
+  );
+  const aiServices = aiServicesData ?? [];
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -80,7 +91,10 @@ export default function AIServicesPage() {
       <AISubNav />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">AI Services</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">AI Services</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <Link href="/ai/gpu" className="text-xs text-[var(--accent-primary)] hover:underline flex items-center gap-1">
           <Cpu size={12} /> GPU Cluster View
         </Link>

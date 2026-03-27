@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, useCallback, Fragment } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { getAnomalies, getDynamicThresholds } from '@/lib/demo-data';
 import { AnomalyChart } from '@/components/monitoring/anomaly-chart';
@@ -27,8 +28,12 @@ const STATUS_BADGE: Record<string, { status: 'critical' | 'warning' | 'healthy';
 };
 
 export default function AnomaliesPage() {
-  const anomalies = useMemo(() => getAnomalies(), []);
-  const thresholds = useMemo(() => getDynamicThresholds(), []);
+  const demoAnomalies = useCallback(() => getAnomalies(), []);
+  const demoThresholds = useCallback(() => getDynamicThresholds(), []);
+  const { data: anomaliesData, source } = useDataSource('/anomalies', demoAnomalies, { refreshInterval: 30_000 });
+  const { data: thresholdsData } = useDataSource('/anomalies/thresholds', demoThresholds, { refreshInterval: 30_000 });
+  const anomalies = anomaliesData ?? [];
+  const thresholds = thresholdsData ?? [];
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const activeCount = anomalies.filter((a) => a.status === 'active').length;
@@ -44,7 +49,10 @@ export default function AnomaliesPage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Anomaly Detection</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Anomaly Detection</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           ML-based dynamic threshold monitoring
         </p>

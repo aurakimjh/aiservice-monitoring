@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card } from '@/components/ui';
+import { Card, DataSourceBadge } from '@/components/ui';
 import { Blocks, ChevronRight } from 'lucide-react';
 
 const RUNTIMES = [
@@ -43,7 +43,10 @@ export default function RuntimePage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Runtime Monitor</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Runtime Monitor</h1>
+          <DataSourceBadge source="demo" />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           언어별 런타임 메트릭 모니터링 — GIL/Free-Thread, ThreadPool, Scheduler Latency
         </p>

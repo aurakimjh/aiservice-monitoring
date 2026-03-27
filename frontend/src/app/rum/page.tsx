@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import type { RUMSession, RUMPageMetrics, RUMGeoMetrics } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -192,7 +192,10 @@ export default function RUMPage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Real User Monitoring</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Real User Monitoring</h1>
+          <DataSourceBadge source="demo" />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Core Web Vitals, page performance, and user experience metrics from real browser sessions
         </p>

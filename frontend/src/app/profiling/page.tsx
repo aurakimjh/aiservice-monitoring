@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, SearchInput } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, SearchInput, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { FlameGraph } from '@/components/charts/flame-graph';
 import { FlameGraphDiff } from '@/components/charts/flame-graph-diff';
 import { getProfilingProfiles, getFlameGraphData, getFlameGraphDiffData } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getRelativeTime } from '@/lib/utils';
 import type { ProfileMetadata } from '@/types/monitoring';
 import {
@@ -35,7 +36,9 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 export default function ProfilingPage() {
-  const profiles = useMemo(() => getProfilingProfiles(), []);
+  const demoProfiles = useCallback(() => getProfilingProfiles(), []);
+  const { data: profilesData, source } = useDataSource('/profiling/profiles', demoProfiles, { refreshInterval: 30_000 });
+  const profiles = profilesData ?? [];
   const [activeTab, setActiveTab] = useState<'profiles' | 'compare'>('profiles');
   const [search, setSearch] = useState('');
   const [langFilter, setLangFilter] = useState('');

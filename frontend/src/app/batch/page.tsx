@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, SearchInput, Select } from '@/components/ui';
+import { Card, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { getBatchJobs, getBatchExecutions } from '@/lib/demo-data';
 import { getRelativeTime, formatDuration } from '@/lib/utils';
@@ -52,8 +53,12 @@ const LANG_BADGE: Record<string, { color: string; label: string }> = {
 };
 
 export default function BatchPage() {
-  const jobs = useMemo(() => getBatchJobs(), []);
-  const recentExecs = useMemo(() => getBatchExecutions().slice(0, 20), []);
+  const demoJobs = useCallback(() => getBatchJobs(), []);
+  const demoExecs = useCallback(() => getBatchExecutions(), []);
+  const { data: jobsData, source } = useDataSource('/batch/jobs', demoJobs, { refreshInterval: 30_000 });
+  const { data: execsData } = useDataSource('/batch/executions', demoExecs, { refreshInterval: 30_000 });
+  const jobs = jobsData ?? [];
+  const recentExecs = (execsData ?? []).slice(0, 20);
   const [search, setSearch] = useState('');
   const [langFilter, setLangFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -124,7 +129,10 @@ export default function BatchPage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Batch Monitoring</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Batch Monitoring</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Batch job execution tracking, performance analysis, and SLA management
         </p>

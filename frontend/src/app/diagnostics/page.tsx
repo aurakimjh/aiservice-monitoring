@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
 import { getDiagnosticRuns, getDiagnosticItems, getReportTemplates, getGeneratedReports } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getRelativeTime } from '@/lib/utils';
 import type { DiagnosticItem } from '@/types/monitoring';
 import {
@@ -47,7 +48,9 @@ const REPORT_TYPE_COLORS: Record<string, string> = {
 };
 
 export default function DiagnosticsPage() {
-  const runs = useMemo(() => getDiagnosticRuns(), []);
+  const demoRuns = useCallback(() => getDiagnosticRuns(), []);
+  const { data: runsData, source } = useDataSource('/diagnostics/runs', demoRuns, { refreshInterval: 30_000 });
+  const runs = runsData ?? [];
   const [activeTab, setActiveTab] = useState<string>('diagnostics');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(runs[0]?.id ?? null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);

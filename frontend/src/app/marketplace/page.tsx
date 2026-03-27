@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, SearchInput, Tabs } from '@/components/ui';
+import { Card, CardHeader, CardTitle, SearchInput, Tabs, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { KPICard } from '@/components/monitoring';
@@ -118,7 +119,9 @@ export default function MarketplacePage() {
   const [publishType, setPublishType] = useState('dashboard');
   const [publishTags, setPublishTags] = useState('');
 
-  const items = useMemo(() => getMarketplaceItems(), []);
+  const demoItems = useCallback(() => getMarketplaceItems(), []);
+  const { data: itemsData, source } = useDataSource('/marketplace/items', demoItems, { refreshInterval: 30_000 });
+  const items = itemsData ?? [];
 
   const filteredItems = useMemo(() => {
     let result = items;
@@ -150,7 +153,10 @@ export default function MarketplacePage() {
         { label: 'Marketplace', icon: <Store size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Global Marketplace</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Global Marketplace</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

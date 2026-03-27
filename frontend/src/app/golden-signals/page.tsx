@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, SearchInput, Select } from '@/components/ui';
+import { Card, CardHeader, CardTitle, SearchInput, Select, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import type { GoldenSignalService, GoldenSignalTimeSeries } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -318,7 +318,10 @@ export default function GoldenSignalsPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">SRE Golden Signals</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">SRE Golden Signals</h1>
+          <DataSourceBadge source="demo" />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Real-time overview of Latency, Traffic, Errors, and Saturation across all services
         </p>

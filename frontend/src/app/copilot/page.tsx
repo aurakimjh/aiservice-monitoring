@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle } from '@/components/ui';
+import { Card, CardHeader, CardTitle, DataSourceBadge } from '@/components/ui';
 import { Badge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { TimeSeriesChart } from '@/components/charts/time-series-chart';
 import { useCopilotStore } from '@/stores/copilot-store';
 import { getCopilotSuggestions } from '@/lib/demo-data';
@@ -112,7 +113,9 @@ function MessageBubble({ message }: { message: CopilotMessage }) {
 
 export default function CopilotPage() {
   const { messages, isProcessing, sendMessage, clearMessages } = useCopilotStore();
-  const suggestions = useMemo(() => getCopilotSuggestions(), []);
+  const demoSuggestions = useCallback(() => getCopilotSuggestions(), []);
+  const { data: suggestionsData, source } = useDataSource('/copilot/suggestions', demoSuggestions, { refreshInterval: 30_000 });
+  const suggestions = suggestionsData ?? [];
   const [inputText, setInputText] = useState('');
   const [contextOpen, setContextOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -173,7 +176,10 @@ export default function CopilotPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">AI Copilot</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-[var(--text-primary)]">AI Copilot</h1>
+            <DataSourceBadge source={source} />
+          </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             Ask about metrics, alerts, and service analysis in natural language
           </p>

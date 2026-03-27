@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn, getRelativeTime } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { getSLODefinitions, generateTimeSeries, getSyntheticProbes } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { Target, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Radio, Wifi, WifiOff } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -34,9 +35,13 @@ const PROBE_TYPE_COLORS: Record<string, string> = {
 };
 
 export default function SLOPage() {
-  const slos = useMemo(() => getSLODefinitions(), []);
+  const demoSLOs = useCallback(() => getSLODefinitions(), []);
+  const demoProbes = useCallback(() => getSyntheticProbes(), []);
+  const { data: slosData, source } = useDataSource('/slo/definitions', demoSLOs, { refreshInterval: 30_000 });
+  const { data: probesData } = useDataSource('/slo/probes', demoProbes, { refreshInterval: 30_000 });
+  const slos = slosData ?? [];
   const [activeTab, setActiveTab] = useState<string>('slo');
-  const probes = useMemo(() => getSyntheticProbes(), []);
+  const probes = probesData ?? [];
 
   const stats = useMemo(() => {
     const met = slos.filter((s) => s.status === 'met').length;

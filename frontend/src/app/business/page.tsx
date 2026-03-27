@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Tabs } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Tabs, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { getBusinessKPIs, getCorrelationData, getROIData } from '@/lib/demo-data';
 import {
@@ -30,9 +31,15 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function BusinessKPIPage() {
   const [activeTab, setActiveTab] = useState('correlation');
-  const kpis = useMemo(() => getBusinessKPIs(), []);
-  const correlationData = useMemo(() => getCorrelationData(), []);
-  const roiData = useMemo(() => getROIData(), []);
+  const demoKPIs = useCallback(() => getBusinessKPIs(), []);
+  const demoCorrelation = useCallback(() => getCorrelationData(), []);
+  const demoROI = useCallback(() => getROIData(), []);
+  const { data: kpisData, source } = useDataSource('/business/kpis', demoKPIs, { refreshInterval: 30_000 });
+  const { data: correlationResult } = useDataSource('/business/correlation', demoCorrelation, { refreshInterval: 30_000 });
+  const { data: roiResult } = useDataSource('/business/roi', demoROI, { refreshInterval: 30_000 });
+  const kpis = kpisData ?? [];
+  const correlationData = correlationResult ?? [];
+  const roiData = roiResult ?? [];
 
   const topKPIs = kpis.slice(0, 4);
 
@@ -51,7 +58,10 @@ export default function BusinessKPIPage() {
         { label: 'Business KPI', icon: <TrendingUp size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Business KPI Integration</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Business KPI Integration</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

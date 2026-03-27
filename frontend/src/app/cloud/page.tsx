@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Tabs } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Tabs, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts/time-series-chart';
 import { getCloudCostSummaries, getCloudResources, generateTimeSeries } from '@/lib/demo-data';
@@ -23,8 +24,12 @@ const PROVIDER_LABELS: Record<string, string> = {
 export default function CloudPage() {
   const [activeTab, setActiveTab] = useState('overview');
 
-  const summaries = useMemo(() => getCloudCostSummaries(), []);
-  const resources = useMemo(() => getCloudResources(), []);
+  const demoCosts = useCallback(() => getCloudCostSummaries(), []);
+  const demoResources = useCallback(() => getCloudResources(), []);
+  const { data: summariesData, source } = useDataSource('/cloud/costs', demoCosts, { refreshInterval: 30_000 });
+  const { data: resourcesData } = useDataSource('/cloud/resources', demoResources, { refreshInterval: 30_000 });
+  const summaries = summariesData ?? [];
+  const resources = resourcesData ?? [];
 
   const totalCost = useMemo(
     () => summaries.reduce((sum, s) => sum + s.totalCost, 0),
@@ -57,7 +62,10 @@ export default function CloudPage() {
         ]}
       />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Multi-Cloud Integration</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Multi-Cloud Integration</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
