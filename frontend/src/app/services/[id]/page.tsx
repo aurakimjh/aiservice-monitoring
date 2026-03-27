@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { StatusIndicator, KPICard } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
+import { useDataSource } from '@/hooks/use-data-source';
 import {
   getProjectServices,
   getProjectHosts,
@@ -36,8 +37,29 @@ import {
   Search,
 } from 'lucide-react';
 
+import { Server, Layers } from 'lucide-react';
+
+// Instance type from API
+interface InstanceItem {
+  id: string;
+  service_id: string;
+  host_id: string;
+  hostname: string;
+  endpoint: string;
+  pid: number;
+  status: string;
+  cpu_pct: number;
+  mem_mb: number;
+  updated_at: string;
+}
+
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
+  : 'http://localhost:8080/api/v1';
+
 const SERVICE_TABS = [
   { id: 'overview', label: 'Overview', icon: <Activity size={13} /> },
+  { id: 'instances', label: 'Instances', icon: <Server size={13} /> },
   { id: 'endpoints', label: 'Endpoints', icon: <Globe size={13} /> },
   { id: 'xlog', label: 'XLog', icon: <Search size={13} /> },
   { id: 'traces', label: 'Traces', icon: <GitBranch size={13} /> },
@@ -66,8 +88,41 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const projectId = currentProjectId ?? 'proj-ai-prod';
-  const services = getProjectServices(projectId);
-  const service = services.find((s) => s.id === id);
+
+  // Try live API first, fallback to demo
+  const demoService = useCallback(() => {
+    const services = getProjectServices(projectId);
+    return services.find((s) => s.id === id || s.name === id) ?? null;
+  }, [projectId, id]);
+
+  const { data: liveService, source } = useDataSource(
+    `/services/${id}`,
+    demoService,
+  );
+
+  // Map API response to Service type
+  const service = liveService ? (typeof liveService === 'object' && 'latencyP50' in liveService
+    ? liveService
+    : {
+        id: String((liveService as Record<string, unknown>).id ?? id),
+        name: String((liveService as Record<string, unknown>).name ?? id),
+        framework: String((liveService as Record<string, unknown>).framework ?? '-'),
+        language: String((liveService as Record<string, unknown>).language ?? '-'),
+        hostIds: ((liveService as Record<string, unknown>).host_ids as string[]) ?? [],
+        latencyP50: 0, latencyP95: 0, latencyP99: 0, rpm: 0, errorRate: 0,
+        status: 'healthy' as const,
+      }
+  ) : null;
+
+  // Instances from API
+  const [instances, setInstances] = useState<InstanceItem[]>([]);
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${API_BASE}/instances?service_id=${id}`, { signal: AbortSignal.timeout(5000) })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.items) setInstances(d.items); })
+      .catch(() => {});
+  }, [id]);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [epSortBy, setEpSortBy] = useState<'rpm' | 'p95' | 'error'>('rpm');
@@ -189,6 +244,10 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           <div className="flex items-center gap-2">
             <StatusIndicator status={service.status} size="lg" pulse={service.status === 'critical'} />
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">{service.name}</h1>
+            <DataSourceBadge source={source} />
+            {instances.length > 0 && (
+              <Badge>{instances.length} instance{instances.length > 1 ? 's' : ''}</Badge>
+            )}
             <Badge variant="status" status={service.status}>{service.status}</Badge>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
@@ -533,6 +592,65 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             )}
           </Card>
         </div>
+      )}
+
+      {/* ── Instances Tab ── */}
+      {activeTab === 'instances' && (
+        <Card padding="none">
+          {instances.length === 0 ? (
+            <div className="text-center py-12 space-y-2">
+              <Server size={28} className="mx-auto text-[var(--text-muted)] opacity-40" />
+              <div className="text-sm text-[var(--text-muted)]">
+                {source === 'live' ? 'No instances detected yet — Agent sync in progress' : 'Instance data available in Live mode'}
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                    <th className="px-4 py-2.5 font-medium">Host</th>
+                    <th className="px-4 py-2.5 font-medium">Endpoint</th>
+                    <th className="px-4 py-2.5 font-medium">PID</th>
+                    <th className="px-4 py-2.5 font-medium text-right">CPU %</th>
+                    <th className="px-4 py-2.5 font-medium text-right">MEM (MB)</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
+                    <th className="px-4 py-2.5 font-medium">Last Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {instances.map((inst) => (
+                    <tr key={inst.id} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                      <td className="px-4 py-2.5">
+                        <Link href={`/infra/${inst.hostname}`} className="text-[var(--accent-primary)] hover:underline font-medium">
+                          {inst.hostname}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{inst.endpoint}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--text-muted)]">{inst.pid || '-'}</td>
+                      <td className={cn('px-4 py-2.5 text-right tabular-nums', inst.cpu_pct > 80 ? 'text-[var(--status-critical)]' : 'text-[var(--text-secondary)]')}>
+                        {inst.cpu_pct > 0 ? inst.cpu_pct.toFixed(1) : '-'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">
+                        {inst.mem_mb > 0 ? inst.mem_mb.toFixed(1) : '-'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <StatusIndicator
+                          status={inst.status === 'running' ? 'healthy' : inst.status === 'error' ? 'critical' : 'offline'}
+                          label={inst.status}
+                          size="sm"
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)]">
+                        {inst.updated_at ? new Date(inst.updated_at).toLocaleTimeString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* ── Deployments Tab ── */}
