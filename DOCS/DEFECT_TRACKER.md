@@ -1,7 +1,7 @@
 # AITOP 결함 목록 및 진행 상황
 
 > **최종 업데이트**: 2026-03-27 (Session 53)
-> **총 건수**: 18건 (해결 14 / 진행중 2 / 접수 2)
+> **총 건수**: 19건 (해결 15 / 진행중 2 / 접수 2)
 
 ---
 
@@ -42,6 +42,7 @@
 | D-014 | Minor | 호스트 상세 Overview 차트가 실데이터와 불일치 | ✅ 해결 | `generateTimeSeries` 하드코딩 값 사용 | `os_metrics` 기반 CPU(User/Sys/IOWait), Memory(Used/Cached) 차트 | `8e71c52` |
 | D-015 | Minor | 호스트 상세 Runtime/Processes/Logs 탭 — 항상 데모 데이터 | ✅ 해결 | Live 모드 분기 없음 | Live: 실데이터 또는 "수집 대기 중" / Demo: 기존 데모 | `5c5f9fe` |
 | D-016 | Minor | /projects 페이지 — Live 모드에서도 데모 프로젝트 표시 | ✅ 해결 | `useProjectStore.projects`가 항상 데모 로드 | `dataSourceMode === 'live'` 시 빈 배열 | `7b4ddfa` |
+| D-017 | Major | Services(APM) 페이지 — 실데이터 미표시 (메트릭 0) | ✅ 해결 | Jaeger 서비스명만 가져오고 Prometheus 메트릭 미결합 | `/realdata/services` API — Jaeger + Prometheus RPM/P95/ErrorRate 결합 | `6f9ba7d` |
 
 ---
 
