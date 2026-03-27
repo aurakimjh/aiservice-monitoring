@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Bot, FlaskConical, BookOpen, DollarSign, Cpu } from 'lucide-react';
+import { Bot, FlaskConical, BookOpen, DollarSign, Cpu, Brain, BarChart3 } from 'lucide-react';
 
 const AI_TABS = [
   { label: 'AI Services', href: '/ai', icon: Bot },
+  { label: 'AI Overview', href: '/ai/overview', icon: BarChart3 },
+  { label: 'LLM Traces', href: '/ai/llm-traces', icon: Brain },
   { label: 'Evaluation', href: '/ai/evaluation', icon: FlaskConical },
   { label: 'Prompt Hub', href: '/ai/prompts', icon: BookOpen },
   { label: 'Cost Optimization', href: '/ai/costs', icon: DollarSign },

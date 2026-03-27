@@ -6,7 +6,22 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { useDataSource } from '@/hooks/use-data-source';
-import { Bot, Brain, Zap, Clock, DollarSign, ChevronDown, ChevronUp, Hash } from 'lucide-react';
+import { Bot, Brain, Zap, Clock, DollarSign, ChevronDown, ChevronUp, Hash, Layers } from 'lucide-react';
+
+interface PipelineTrace {
+  trace_id: string;
+  total_ms: number;
+  stages: { name: string; offset_ms: number; duration_ms: number; attributes: Record<string, unknown> }[];
+}
+
+const STAGE_COLORS: Record<string, string> = {
+  'rag.workflow': '#58A6FF',
+  'rag.embedding': '#3498DB',
+  'rag.vector_search': '#2ECC71',
+  'gen_ai.chat': '#E67E22',
+  'rag.guardrail_input': '#9B59B6',
+  'rag.guardrail_output': '#9B59B6',
+};
 
 interface LLMSpan {
   trace_id: string;
@@ -95,6 +110,9 @@ export default function LLMTracesPage() {
           ))}
         </div>
       )}
+
+      {/* Pipeline Waterfall */}
+      <PipelineWaterfall />
 
       {/* LLM Span List */}
       <Card padding="none">
@@ -201,5 +219,72 @@ export default function LLMTracesPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+// ── Pipeline Waterfall Component ──
+
+function PipelineWaterfall() {
+  const API_BASE = typeof window !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
+    : 'http://localhost:8080/api/v1';
+
+  const demoPipelines = useCallback(() => [] as PipelineTrace[], []);
+  const { data } = useDataSource<PipelineTrace[]>(
+    '/genai/pipeline-traces?limit=5',
+    demoPipelines,
+    { refreshInterval: 15_000, transform: (raw) => (raw as { items?: PipelineTrace[] }).items ?? [] },
+  );
+  const pipelines = data ?? [];
+
+  if (pipelines.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Layers size={14} className="text-[var(--text-muted)]" />
+          <CardTitle>Pipeline Waterfall (Recent)</CardTitle>
+        </div>
+      </CardHeader>
+      <div className="space-y-3">
+        {pipelines.slice(0, 3).map((p) => (
+          <div key={p.trace_id} className="space-y-1">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-mono text-[var(--text-muted)]">{p.trace_id.slice(0, 16)}...</span>
+              <span className="font-medium text-[var(--text-primary)] tabular-nums">{p.total_ms}ms total</span>
+            </div>
+            <div className="relative h-6 bg-[var(--bg-tertiary)] rounded overflow-hidden">
+              {p.stages.map((stage, i) => {
+                const left = p.total_ms > 0 ? (stage.offset_ms / p.total_ms) * 100 : 0;
+                const width = p.total_ms > 0 ? Math.max((stage.duration_ms / p.total_ms) * 100, 2) : 0;
+                const color = STAGE_COLORS[stage.name] ?? '#8B949E';
+                return (
+                  <div
+                    key={i}
+                    className="absolute top-0 h-full rounded-sm flex items-center px-1 overflow-hidden"
+                    style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color }}
+                    title={`${stage.name}: ${stage.duration_ms}ms`}
+                  >
+                    <span className="text-[7px] text-white font-bold truncate">
+                      {stage.name.replace('rag.', '').replace('gen_ai.', '')} {stage.duration_ms}ms
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {/* Legend */}
+        <div className="flex items-center gap-3 text-[9px] text-[var(--text-muted)] pt-1">
+          {Object.entries(STAGE_COLORS).map(([name, color]) => (
+            <span key={name} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: color }} />
+              {name.replace('rag.', '').replace('gen_ai.', '')}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Card>
   );
 }
