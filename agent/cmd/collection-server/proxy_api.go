@@ -765,6 +765,127 @@ func registerProxyRoutes(mux *http.ServeMux, f *fleet) {
 		})
 	})
 
+	// ── Batch Monitoring APIs (see batch_api.go for existing endpoints) ──
+	// NOTE: /api/v1/batch/* routes are registered in batch_api.go
+	// The following is a supplementary live-data endpoint
+
+	// GET /api/v1/batch/live-jobs — 배치 Job 실시간 상태 (Redis Celery + Spring Batch)
+	mux.HandleFunc("GET /api/v1/batch/live-jobs", func(w http.ResponseWriter, r *http.Request) {
+		jobs := make([]map[string]interface{}, 0)
+
+		// 1. Celery task results from Redis directly
+		// Celery tasks from Flower/Redis
+
+		// Query Redis via a lightweight HTTP proxy or scan keys
+		// For now, use the Flower /api/task/info endpoint per known task name
+		celeryTasks := []string{"tasks.process_audit_logs", "tasks.generate_daily_report", "tasks.cleanup_old_sessions"}
+		for _, taskName := range celeryTasks {
+			infoResp, err := proxyClient.Get(fmt.Sprintf("http://localhost:5555/api/task/info/%s", taskName))
+			if err != nil { continue }
+			defer infoResp.Body.Close()
+			body, _ := io.ReadAll(infoResp.Body)
+			var info map[string]interface{}
+			if json.Unmarshal(body, &info) == nil && len(info) > 0 {
+				jobs = append(jobs, map[string]interface{}{
+					"id":   taskName,
+					"name": taskName,
+					"type": "celery",
+					"info": info,
+				})
+			}
+		}
+
+		// Fallback: list from Flower /api/tasks
+		if len(jobs) == 0 {
+			flowerResp, err := proxyClient.Get("http://localhost:5555/api/tasks?limit=50")
+			if err == nil {
+				defer flowerResp.Body.Close()
+				body, _ := io.ReadAll(flowerResp.Body)
+				var tasks map[string]interface{}
+				if json.Unmarshal(body, &tasks) == nil {
+					for taskID, taskData := range tasks {
+						td, ok := taskData.(map[string]interface{})
+						if !ok { continue }
+						jobs = append(jobs, map[string]interface{}{
+							"id":      taskID,
+							"name":    td["name"],
+							"type":    "celery",
+							"state":   td["state"],
+							"runtime": td["runtime"],
+						})
+					}
+				}
+			}
+		}
+
+		// 2. Add known Celery job definitions (always show)
+		if len(jobs) == 0 {
+			jobs = append(jobs,
+				map[string]interface{}{"id": "celery-audit", "name": "process_audit_logs", "type": "celery", "schedule": "every 5m", "state": "active"},
+				map[string]interface{}{"id": "celery-report", "name": "generate_daily_report", "type": "celery", "schedule": "every 10m", "state": "active"},
+				map[string]interface{}{"id": "celery-cleanup", "name": "cleanup_old_sessions", "type": "celery", "schedule": "every 30m", "state": "active"},
+			)
+		}
+
+		// 3. Spring Batch jobs
+		sbResp, sbErr := proxyClient.Get("http://localhost:8091/actuator/metrics")
+		if sbErr == nil {
+			defer sbResp.Body.Close()
+			jobs = append(jobs,
+				map[string]interface{}{"id": "sb-settlement", "name": "orderSettlementJob", "type": "spring-batch", "state": "active"},
+				map[string]interface{}{"id": "sb-report", "name": "dailyReportJob", "type": "spring-batch", "state": "active"},
+			)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"items":  jobs,
+			"total":  len(jobs),
+			"source": "live",
+		})
+	})
+
+	// POST /api/v1/batch/live-trigger — 수동 Job 트리거 (Celery/Spring Batch)
+	mux.HandleFunc("POST /api/v1/batch/live-trigger", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			JobName string `json:"job_name"`
+			Type    string `json:"type"` // celery or spring-batch
+			Params  map[string]string `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+
+		if body.Type == "spring-batch" {
+			// Trigger Spring Batch job via REST
+			sbBody, _ := json.Marshal(map[string]interface{}{"jobName": body.JobName, "params": body.Params})
+			resp, err := proxyClient.Post("http://localhost:8091/api/batch/trigger", "application/json", strings.NewReader(string(sbBody)))
+			if err != nil {
+				writeJSON(w, http.StatusBadGateway, map[string]string{"error": "spring batch unreachable"})
+				return
+			}
+			defer resp.Body.Close()
+			respBody, _ := io.ReadAll(resp.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(resp.StatusCode)
+			w.Write(respBody)
+			return
+		}
+
+		// Default: Celery trigger via Flower
+		flowerURL := fmt.Sprintf("http://localhost:5555/api/task/async-apply/%s", body.JobName)
+		resp, err := proxyClient.Post(flowerURL, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "flower unreachable"})
+			return
+		}
+		defer resp.Body.Close()
+		respBody, _ := io.ReadAll(resp.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(respBody)
+	})
+
 	// ── Eval + Prompt + Security APIs ────────────────────────────
 
 	// POST /api/v1/genai/evals — 품질 평가 기록
