@@ -3,7 +3,7 @@
 > **문서 버전**: v3.5.0
 > **기반 스펙**: OTel Collector Contrib v0.91.0+ | OpenTelemetry Specification v1.31
 > **관점**: SRE — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-28 (v1.3.0 — Phase D~I 전체 완료: LLM 트레이싱 + 토큰 비용 + RAG 파이프라인 + AI 대시보드 + 품질 평가 + 보안 + AI 진단 5종)
+> **최종 업데이트**: 2026-03-28 (v1.3.1 — Phase L1+L2 Live 전환 57/67페이지, 배치 인프라, 트레이스 Jaeger 연동)
 >
 > **관련 문서**:
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의, 수식, 계측 코드
