@@ -178,11 +178,15 @@ export default function TracesPage() {
   const availableServers = jaegerServices ?? DEMO_SERVERS;
   const dataSource: DataSource = svcSource;
 
-  // ── Server selection ──
-  const [selectedServers, setSelectedServers] = useState<string[]>([
-    'prod-api-01',
-    'prod-api-02',
-  ]);
+  // Auto-select first server when available
+  useEffect(() => {
+    if (selectedServers.length === 0 && availableServers.length > 0) {
+      setSelectedServers([availableServers[0].id]);
+    }
+  }, [availableServers]);
+
+  // ── Server selection (empty = use first from availableServers) ──
+  const [selectedServers, setSelectedServers] = useState<string[]>([]);
 
   // ── View + filter state ──
   const [viewMode, setViewMode] = useState<ViewMode>('xlog');
@@ -253,15 +257,15 @@ export default function TracesPage() {
 
   // ── Transaction generation (real data or demo) ──
   const allTransactions = useMemo<TxnWithServer[]>(() => {
-    // Use Jaeger real data if available
-    if (txnSource === 'live' && jaegerTxns && jaegerTxns.length > 0) {
+    // Use Jaeger real data if available and non-empty
+    if (jaegerTxns && jaegerTxns.length > 0) {
       return jaegerTxns.map((t) => ({
         ...t,
         serverId: t.service,
       }));
     }
 
-    // Demo fallback: generate transactions and rescale into selected range
+    // Demo fallback: always generate transactions when Jaeger has no data
     const rangeMs = range.to - range.from;
     const count = Math.max(100, Math.min(600, Math.round(rangeMs / 3_000)));
     const raw = generateTransactions(count);
