@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"log/slog"
 	"net/http"
 	"os"
@@ -1373,7 +1374,38 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 
 	// ── AI Services API (/api/v1/ai/*) ───────────────────────────────────────
 
-	demoAIServices := func() []map[string]interface{} {
+	// liveAIServices queries Prometheus for real GenAI metrics.
+	// Falls back to demo data when Prometheus has no AI metrics.
+	liveAIServices := func() []map[string]interface{} {
+		// Check if real GenAI metrics exist in Prometheus
+		reqCount := queryPromScalar(`sum(demo_gen_ai_client_operation_total)`)
+		if reqCount > 0 {
+			// Real data path — query actual metrics
+			tokenInput := queryPromScalar(`sum(demo_gen_ai_client_token_usage_total{type="input"})`)
+			tokenOutput := queryPromScalar(`sum(demo_gen_ai_client_token_usage_total{type="output"})`)
+			avgDuration := queryPromScalar(`avg(demo_gen_ai_client_operation_duration_sum / demo_gen_ai_client_operation_duration_count)`)
+			p95Duration := queryPromScalar(`histogram_quantile(0.95, sum(rate(demo_gen_ai_client_operation_duration_bucket[5m])) by (le))`)
+
+			model := "gemma3:4b"
+			tps := float64(0)
+			if avgDuration > 0 {
+				tps = tokenOutput / (avgDuration / 1000.0) // tokens per second
+			}
+
+			return []map[string]interface{}{
+				{
+					"id": "rag-service", "name": "RAG Q&A Service", "type": "rag",
+					"status": "healthy", "model": model, "provider": "ollama",
+					"ttft_p50_ms": int(avgDuration), "ttft_p95_ms": int(p95Duration),
+					"tps": math.Round(tps*10) / 10,
+					"token_usage_24h": int(tokenInput + tokenOutput),
+					"cost_24h_usd": 0.0, // Ollama = local, free
+					"error_rate": 0.0, "request_count_24h": int(reqCount),
+				},
+			}
+		}
+
+		// Fallback: demo data when no real AI metrics
 		return []map[string]interface{}{
 			{
 				"id": "test-rag-service", "name": "RAG Q&A Service", "type": "rag",
@@ -1400,7 +1432,7 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	}
 
 	mux.HandleFunc("GET /api/v1/ai/services", func(w http.ResponseWriter, r *http.Request) {
-		items := demoAIServices()
+		items := liveAIServices()
 		writeJSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": len(items)})
 	})
 
@@ -1418,7 +1450,7 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 
 		// Find the service
 		var svc map[string]interface{}
-		for _, s := range demoAIServices() {
+		for _, s := range liveAIServices() {
 			if s["id"] == svcID {
 				svc = s
 				break
