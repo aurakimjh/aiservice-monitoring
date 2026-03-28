@@ -3,6 +3,7 @@ package batch
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -47,8 +48,8 @@ func NewProcessCollector() *ProcessCollector {
 	}
 }
 
-// CollectMetrics reads metrics for a given PID from /proc.
-// On non-Linux platforms, returns a stub with TODO.
+// CollectMetrics reads metrics for a given PID.
+// Linux: reads from /proc filesystem. Windows: uses wmic process queries.
 func (pc *ProcessCollector) CollectMetrics(pid int) (ProcessMetrics, error) {
 	if runtime.GOOS == "windows" {
 		return pc.collectMetricsWindows(pid)
@@ -182,12 +183,100 @@ func (pc *ProcessCollector) CleanupPID(pid int) {
 	pc.mu.Unlock()
 }
 
-// collectMetricsWindows is a stub for Windows process metrics collection.
+// collectMetricsWindows collects per-process metrics on Windows using wmic.
 func (pc *ProcessCollector) collectMetricsWindows(pid int) (ProcessMetrics, error) {
-	// TODO: implement Windows process metrics collection via WMI.
-	// Win32_PerfFormattedData_PerfProc_Process for CPU, memory, I/O.
-	return ProcessMetrics{
-		PID:       pid,
-		Timestamp: time.Now(),
-	}, fmt.Errorf("windows process metrics collection not yet implemented")
+	now := time.Now()
+	m := ProcessMetrics{PID: pid, Timestamp: now}
+
+	// Query process properties via wmic
+	out, err := exec.Command("wmic", "process", "where",
+		fmt.Sprintf("ProcessId=%d", pid), "get",
+		"WorkingSetSize,VirtualSize,ThreadCount,ReadTransferCount,WriteTransferCount,ReadOperationCount,WriteOperationCount,KernelModeTime,UserModeTime",
+		"/FORMAT:LIST").Output()
+	if err != nil {
+		return m, fmt.Errorf("wmic query failed for PID %d: %w", pid, err)
+	}
+
+	props := parseWmicList(string(out))
+	if len(props) == 0 {
+		return m, fmt.Errorf("process %d not found", pid)
+	}
+
+	// Memory
+	if v, ok := props["WorkingSetSize"]; ok {
+		m.MemoryRSS, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := props["VirtualSize"]; ok {
+		m.MemoryVMS, _ = strconv.ParseInt(v, 10, 64)
+	}
+	m.MemoryPeak = m.MemoryRSS // WMI doesn't expose peak easily; use current as approximation
+
+	// Threads
+	if v, ok := props["ThreadCount"]; ok {
+		m.ThreadCount, _ = strconv.Atoi(v)
+	}
+
+	// I/O
+	if v, ok := props["ReadTransferCount"]; ok {
+		m.IOReadBytes, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := props["WriteTransferCount"]; ok {
+		m.IOWriteBytes, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := props["ReadOperationCount"]; ok {
+		m.IOReadOps, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := props["WriteOperationCount"]; ok {
+		m.IOWriteOps, _ = strconv.ParseInt(v, 10, 64)
+	}
+
+	// CPU — delta calculation from KernelModeTime + UserModeTime (100ns units)
+	var kernelTime, userTime uint64
+	if v, ok := props["KernelModeTime"]; ok {
+		kernelTime, _ = strconv.ParseUint(v, 10, 64)
+	}
+	if v, ok := props["UserModeTime"]; ok {
+		userTime, _ = strconv.ParseUint(v, 10, 64)
+	}
+	// Convert 100ns units to clock ticks equivalent for delta calculation
+	utime := userTime / 100000   // 100ns → ~ticks (10ms units)
+	stime := kernelTime / 100000
+
+	pc.mu.Lock()
+	prev, hasPrev := pc.prevCPU[pid]
+	pc.prevCPU[pid] = cpuSample{utime: utime, stime: stime, timestamp: now}
+	pc.mu.Unlock()
+
+	if hasPrev {
+		dticks := float64((utime - prev.utime) + (stime - prev.stime))
+		dt := now.Sub(prev.timestamp).Seconds()
+		if dt > 0 {
+			// ticks are in 10ms units → convert to seconds, then percentage
+			cpuSeconds := dticks * 0.01
+			m.CPUPercent = (cpuSeconds / dt) * 100.0 / float64(pc.numCPU)
+		}
+	}
+
+	return m, nil
+}
+
+// parseWmicList parses wmic /FORMAT:LIST output into key-value pairs.
+func parseWmicList(output string) map[string]string {
+	props := make(map[string]string)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		idx := strings.Index(line, "=")
+		if idx < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+		if key != "" {
+			props[key] = val
+		}
+	}
+	return props
 }

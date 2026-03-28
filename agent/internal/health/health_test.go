@@ -135,7 +135,6 @@ func TestSelfMetrics_CPUPercent_Field(t *testing.T) {
 	metrics := m.GetSelfMetrics()
 
 	// Verify the CPUPercent field exists and is populated
-	// (it was previously hardcoded to 0 in the TODO)
 	if metrics.CPUPercent < 0 {
 		t.Errorf("CPUPercent in SelfMetrics should be >= 0, got %f", metrics.CPUPercent)
 	}

@@ -10,6 +10,7 @@ package batch
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -48,8 +49,7 @@ type ManualBatchConfig struct {
 // and manual tags.
 func DetectBatchProcesses(cfg DetectorConfig) []BatchProcess {
 	if runtime.GOOS == "windows" {
-		// TODO: implement Windows batch detection via WMI
-		return detectManualBatches(cfg.ManualBatches)
+		return detectBatchProcessesWindows(cfg)
 	}
 
 	var results []BatchProcess
@@ -58,7 +58,7 @@ func DetectBatchProcesses(cfg DetectorConfig) []BatchProcess {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		// Fall back to manual batches only
-		return detectManualBatches(cfg.ManualBatches)
+		return nil
 	}
 
 	type procInfo struct {
@@ -277,13 +277,141 @@ func matchManualTag(pid, ppid int, cmdline string, startAt time.Time, manuals []
 	return BatchProcess{}, false
 }
 
-// detectManualBatches is a fallback that returns an empty slice for platforms
-// where /proc scanning is not available (Windows).
-func detectManualBatches(manuals []ManualBatchConfig) []BatchProcess {
-	// On non-Linux platforms, manual batch detection would query the OS
-	// process list via platform-specific APIs. For now, return nil.
-	// TODO: implement Windows WMI process scanning for manual pattern matching.
-	return nil
+// detectBatchProcessesWindows scans Windows processes using wmic and applies
+// the same detection rules (framework pattern, scheduler child, manual tags).
+func detectBatchProcessesWindows(cfg DetectorConfig) []BatchProcess {
+	procs := listWindowsProcesses()
+	if len(procs) == 0 {
+		return nil
+	}
+
+	// Build PID → cmdline map for parent lookups
+	pidCmd := make(map[int]string, len(procs))
+	for _, p := range procs {
+		pidCmd[p.pid] = p.cmdline
+	}
+
+	var results []BatchProcess
+	seen := make(map[int]bool)
+
+	// Rule 1: Scheduler child processes
+	for _, p := range procs {
+		if bp, ok := detectSchedulerChild(p.pid, p.ppid, p.cmdline, p.startAt, pidCmd); ok {
+			if !seen[p.pid] {
+				results = append(results, bp)
+				seen[p.pid] = true
+			}
+		}
+	}
+
+	// Rule 2: Framework pattern detection
+	for _, p := range procs {
+		if seen[p.pid] {
+			continue
+		}
+		if bp, ok := detectFrameworkPattern(p.pid, p.ppid, p.cmdline, p.startAt); ok {
+			results = append(results, bp)
+			seen[p.pid] = true
+		}
+	}
+
+	// Rule 3: Manual tags from config
+	for _, p := range procs {
+		if seen[p.pid] {
+			continue
+		}
+		if bp, ok := matchManualTag(p.pid, p.ppid, p.cmdline, p.startAt, cfg.ManualBatches); ok {
+			results = append(results, bp)
+			seen[p.pid] = true
+		}
+	}
+
+	return results
+}
+
+// winProcInfo holds parsed process info from wmic output.
+type winProcInfo struct {
+	pid     int
+	ppid    int
+	cmdline string
+	startAt time.Time
+}
+
+// listWindowsProcesses retrieves the process list on Windows using wmic.
+func listWindowsProcesses() []winProcInfo {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+
+	out, err := exec.Command("wmic", "process", "get",
+		"ProcessId,ParentProcessId,CommandLine,CreationDate",
+		"/FORMAT:CSV").Output()
+	if err != nil {
+		return nil
+	}
+
+	var procs []winProcInfo
+	lines := strings.Split(string(out), "\n")
+	// CSV header: Node,CommandLine,CreationDate,ParentProcessId,ProcessId
+	var cmdIdx, dateIdx, ppidIdx, pidIdx int
+	headerParsed := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+
+		if !headerParsed {
+			// Parse header to find column indices
+			for i, f := range fields {
+				switch strings.TrimSpace(f) {
+				case "CommandLine":
+					cmdIdx = i
+				case "CreationDate":
+					dateIdx = i
+				case "ParentProcessId":
+					ppidIdx = i
+				case "ProcessId":
+					pidIdx = i
+				}
+			}
+			headerParsed = true
+			continue
+		}
+
+		if len(fields) <= pidIdx || len(fields) <= cmdIdx {
+			continue
+		}
+
+		pid, _ := strconv.Atoi(strings.TrimSpace(fields[pidIdx]))
+		ppid, _ := strconv.Atoi(strings.TrimSpace(fields[ppidIdx]))
+		cmdline := strings.TrimSpace(fields[cmdIdx])
+		startAt := parseWmicDateTime(strings.TrimSpace(fields[dateIdx]))
+
+		if pid <= 4 || cmdline == "" { // skip System/Idle
+			continue
+		}
+
+		procs = append(procs, winProcInfo{
+			pid: pid, ppid: ppid, cmdline: cmdline, startAt: startAt,
+		})
+	}
+	return procs
+}
+
+// parseWmicDateTime parses a WMI datetime string (yyyyMMddHHmmss.ffffff+ZZZ).
+func parseWmicDateTime(s string) time.Time {
+	if len(s) < 14 {
+		return time.Time{}
+	}
+	// Format: 20260328143000.000000+540
+	t, err := time.Parse("20060102150405", s[:14])
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // ── Helper functions ────────────────────────────────────────────────────────
