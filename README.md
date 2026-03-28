@@ -1,10 +1,11 @@
 # AITOP — AI Service Monitoring Platform
 
-> **OpenTelemetry + AITOP Agent 기반 통합 AI 서비스 성능 모니터링 솔루션**
+> **v0.9.0-rc.1** | OpenTelemetry + AITOP Agent 기반 통합 AI 서비스 성능 모니터링 솔루션
 >
 > **대상 독자**: SRE, Platform Engineer, MLOps Engineer, AI Engineer
 > **기반 표준**: OpenTelemetry Specification v1.31 | OTel Collector v0.104+
-> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 릴리스 승인 — RUM·Golden Signals·런타임 모니터링·DB 모니터링·K8s 배포·SLO 튜닝)
+> **라이선스**: Apache-2.0 (AGPL-free 상용 배포 가능)
+> **최종 업데이트**: 2026-03-28 (Phase P 상용 패키징 완료 — E2E 49/49 ALL PASS)
 
 ---
 
@@ -16,7 +17,7 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 
 | 기능 | 설명 |
 |------|------|
-| **통합 모니터링 UI** | Next.js 기반 44개 화면 — APM + AI + 인프라 + 에이전트 + 프로파일링 + 토폴로지를 단일 대시보드에서 통합 |
+| **통합 모니터링 UI** | Next.js 16 기반 67개 화면 — APM + AI + 인프라 + 에이전트 + 프로파일링 + 토폴로지 + 커스텀 대시보드를 단일 플랫폼에서 통합 |
 | **AITOP Agent** | Go 기반 경량 에이전트 — 12개 Collector (OS/WEB/WAS/DB/GPU/LLM/VectorDB/Serving/OTel/Cache/MQ/Profiling) |
 | **AI Copilot** | 자연어 → PromQL 변환 (NL→PromQL), AI 기반 장애 분석 및 쿼리 자동 생성 |
 | **Continuous Profiling** | FlameGraph 기반 CPU/메모리/Lock 프로파일링 — Go/Java/.NET 지원 |
@@ -43,6 +44,30 @@ AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이
 | **SLO 기반 알림** | 6개 SLO + 2계층 Burn Rate Alert (page/ticket) + Error Budget 추적 |
 | **멀티테넌트** | 프로젝트 기반 리소스 격리, White-label, RBAC |
 | **국제화** | 한국어/영어/일본어 3개 언어 지원 |
+
+---
+
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/aurakimjh/aiservice-monitoring.git
+cd aiservice-monitoring
+
+# Production stack (AGPL-free, ~2min)
+docker compose -f docker-compose.production.yaml up -d
+
+# Open UI → http://localhost:3000
+# API     → http://localhost:8080
+# Jaeger  → http://localhost:16686
+```
+
+Kubernetes:
+```bash
+helm install aitop ./helm/aiservice-monitoring \
+  --namespace aitop-monitoring --create-namespace \
+  -f helm/aiservice-monitoring/values-prod.yaml
+```
 
 ---
 
