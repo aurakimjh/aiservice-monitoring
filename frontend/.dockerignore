@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+.env*
+.vscode
+coverage
+playwright-report
+test-results
+scripts
+e2e
+__tests__
+vitest.config.*
+playwright.config.*
+tsconfig.tsbuildinfo

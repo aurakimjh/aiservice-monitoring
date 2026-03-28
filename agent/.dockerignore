@@ -1,0 +1,11 @@
+bin
+dist
+*.exe
+*.test
+coverage.*
+.git
+.gitignore
+*.md
+.vscode
+configs/
+deploy/

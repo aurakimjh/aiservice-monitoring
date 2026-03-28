@@ -1,6 +1,6 @@
 # AITOP 설치 가이드
 
-> **문서 버전**: v1.3.0
+> **문서 버전**: v0.9.0-rc.1
 > **최종 업데이트**: 2026-03-28
 > **대상 독자**: 시스템 관리자, DevOps 엔지니어, SRE
 > **관련 문서**: OPERATIONS_GUIDE.md, DEVELOPER_GUIDE.md
@@ -73,7 +73,7 @@ AITOP은 세 가지 주요 구성 요소로 이루어집니다.
 │  Collection      │  Frontend         │  AITOP Agent        │
 │  Server          │  (Next.js UI)     │  (Go 바이너리)       │
 │                  │                   │                     │
-│  - gRPC 수신     │  - 44개 화면 UI   │  - 12개 Collector   │
+│  - gRPC 수신     │  - 67개 화면 UI   │  - 12개 Collector   │
 │  - REST API      │  - 대시보드       │  - OS/WEB/WAS/DB    │
 │  - Fleet 관리    │  - AI 분석        │  - GPU/LLM/VectorDB │
 │  - PostgreSQL    │  - 알림           │  - 프로파일링       │
@@ -192,10 +192,13 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/your-org/aiservice-monitoring.git
+git clone https://github.com/aurakimjh/aiservice-monitoring.git
 cd aiservice-monitoring
 
-# 2. 환경 변수 파일 생성
+# 2. 상용 스택 기동 (AGPL-free)
+docker compose -f docker-compose.production.yaml up -d
+
+# 또는 환경 변수 커스터마이징이 필요한 경우:
 cp infra/docker/.env.example infra/docker/.env
 vi infra/docker/.env
 ```
@@ -255,10 +258,8 @@ kubectl create secret generic aitop-secrets \
 # 3. Helm 차트 설치
 helm install aitop ./helm/aiservice-monitoring \
   --namespace aitop-monitoring \
-  --set collectionServer.replicaCount=2 \
-  --set collectionServer.resources.requests.memory=4Gi \
-  --set postgres.persistence.size=100Gi \
-  --set prometheus.retention=30d
+  --create-namespace \
+  -f helm/aiservice-monitoring/values-prod.yaml
 
 # 4. 설치 확인
 kubectl get pods -n aitop-monitoring

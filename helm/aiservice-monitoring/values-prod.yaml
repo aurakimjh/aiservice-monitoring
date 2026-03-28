@@ -220,7 +220,7 @@ jaeger:
 collectionServer:
   replicaCount: 3
   image:
-    tag: "1.0.0"
+    tag: "0.9.0-rc.1"
   resources:
     requests:
       cpu: 500m
@@ -261,7 +261,7 @@ collectionServer:
 frontend:
   replicaCount: 3
   image:
-    tag: "1.0.0"
+    tag: "0.9.0-rc.1"
   apiUrl: "http://aitop-collection-server:8080/api/v1"
   resources:
     requests:

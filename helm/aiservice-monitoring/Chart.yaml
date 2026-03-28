@@ -6,8 +6,8 @@ description: |
   벡터 DB 캐시 히트율, 외부 API 레이턴시를 통합 계측합니다.
 
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+version: 0.9.0
+appVersion: "0.9.0-rc.1"
 
 keywords:
   - ai
@@ -18,9 +18,9 @@ keywords:
   - grafana
   - prometheus
 
-home: https://github.com/your-org/aiservice-monitoring
+home: https://github.com/aurakimjh/aiservice-monitoring
 sources:
-  - https://github.com/your-org/aiservice-monitoring
+  - https://github.com/aurakimjh/aiservice-monitoring
 
 maintainers:
   - name: Aura Kim

@@ -2,7 +2,7 @@
 # AITOP Collection Server — multi-stage build
 #
 # Build context: ../../agent  (i.e., the agent/ directory)
-# docker build -f ../infra/docker/Dockerfile.collection-server -t aitop-collection-server .
+# docker build -f ../infra/docker/Dockerfile.collection-server -t aitop/collection-server:0.9.0-rc.1 .
 
 # ── Stage 1: build ──────────────────────────────────────────────────────────
 FROM golang:1.25-alpine AS builder
@@ -34,5 +34,10 @@ EXPOSE 8080 50051
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
+
+LABEL org.opencontainers.image.title="AITOP Collection Server" \
+      org.opencontainers.image.description="AI Service Monitoring Platform — Go Collection Server" \
+      org.opencontainers.image.vendor="AITOP" \
+      org.opencontainers.image.version="0.9.0-rc.1"
 
 ENTRYPOINT ["./collection-server"]

@@ -1,7 +1,7 @@
 # Dockerfile — AITOP Frontend (Next.js 16 standalone)
 #
-# Build: docker build -t aitop-frontend ./frontend
-# Run:   docker run -p 3000:3000 -e NEXT_PUBLIC_API_URL=http://collection-server:8080/api/v1 aitop-frontend
+# Build: docker build -t aitop/frontend:0.9.0-rc.1 ./frontend
+# Run:   docker run -p 3000:3000 -e NEXT_PUBLIC_API_URL=http://collection-server:8080/api/v1 aitop/frontend:0.9.0-rc.1
 
 # ── Stage 1: deps ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS deps
@@ -40,5 +40,10 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+LABEL org.opencontainers.image.title="AITOP Frontend" \
+      org.opencontainers.image.description="AI Service Monitoring Platform — Next.js UI" \
+      org.opencontainers.image.vendor="AITOP" \
+      org.opencontainers.image.version="0.9.0-rc.1"
 
 CMD ["node", "server.js"]
