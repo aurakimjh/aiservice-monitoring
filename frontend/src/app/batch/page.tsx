@@ -57,8 +57,8 @@ export default function BatchPage() {
   const demoExecs = useCallback(() => getBatchExecutions(), []);
   const { data: jobsData, source } = useDataSource('/batch/jobs', demoJobs, { refreshInterval: 30_000 });
   const { data: execsData } = useDataSource('/batch/executions', demoExecs, { refreshInterval: 30_000 });
-  const jobs = jobsData ?? [];
-  const recentExecs = (execsData ?? []).slice(0, 20);
+  const jobs = Array.isArray(jobsData) ? jobsData : (jobsData as any)?.items ?? (jobsData as any)?.jobs ?? [];
+  const recentExecs = (Array.isArray(execsData) ? execsData : (execsData as any)?.items ?? []).slice(0, 20);
   const [search, setSearch] = useState('');
   const [langFilter, setLangFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
