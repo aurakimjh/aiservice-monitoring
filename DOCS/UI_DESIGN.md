@@ -1,6 +1,6 @@
 # 통합 모니터링 대시보드 UI 설계서
 
-> **문서 버전**: v2.6.0
+> **문서 버전**: v0.9.0-rc.1
 > **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-28 (v1.3 AI Observability 반영 — AI Overview·LLM Traces·AI Diagnostics·AI Cost 4개 신규 페이지)
 > **관점**: 상용 솔루션 수준 UI/UX — Datadog, New Relic, Dynatrace 참조
 > **대상**: 프론트엔드 개발팀, UX 디자이너, 제품 기획

@@ -1,11 +1,11 @@
 ================================================================
-  AITOP — AI Service Monitoring v{{ .Chart.Version }}
+  AITOP — AI Service Monitoring v{{ .Chart.AppVersion }}
 ================================================================
 
 설치가 완료되었습니다.
 
 {{- if .Values.frontend.enabled }}
-1. AITOP Frontend 접속:
+1. AITOP Frontend (67개 화면 모니터링 UI):
    {{- if .Values.ingress.enabled }}
    URL: http://{{ (index .Values.ingress.hosts 0).host }}
    {{- else }}
@@ -24,30 +24,19 @@
    {{- end }}
 {{- end }}
 
-3. Grafana 접속:
-   {{- if .Values.prometheus.grafana.ingress.enabled }}
-   URL: https://{{ (index .Values.prometheus.grafana.ingress.hosts 0) }}
-   {{- else }}
-   kubectl port-forward svc/{{ .Release.Name }}-grafana 3001:80 -n {{ .Release.Namespace }}
-   URL: http://localhost:3001
-   {{- end }}
-
-4. Prometheus 접속:
+3. Prometheus 접속:
    kubectl port-forward svc/{{ .Release.Name }}-kube-prometheus-stack-prometheus 9090:9090 -n {{ .Release.Namespace }}
    URL: http://localhost:9090
 
-5. Jaeger UI 접속:
+4. Jaeger UI 접속:
    kubectl port-forward svc/{{ .Release.Name }}-jaeger-query 16686:16686 -n {{ .Release.Namespace }}
    URL: http://localhost:16686
 
-6. OTel Collector 엔드포인트:
+5. OTel Collector 엔드포인트:
    - gRPC: {{ .Release.Name }}-otel-agent:4317
    - HTTP: {{ .Release.Name }}-otel-agent:4318
 
-7. 대시보드:
-   Grafana > AI Service 폴더에 5개 대시보드가 자동 프로비저닝됩니다.
-
-8. Alert 확인:
+6. Alert 확인:
    kubectl get prometheusrules -n {{ .Release.Namespace }}
 
 ================================================================

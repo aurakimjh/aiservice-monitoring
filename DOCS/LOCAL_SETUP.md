@@ -10,7 +10,7 @@
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처 설계
 > - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Go)
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 지표 정의 및 수집 방안
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (67개 화면)
 
 이 문서를 순서대로 따라 하면, **환경 설정에 소요되는 시간 없이** 첫날부터 코드를 작성하고 로컬에서 메트릭·트레이스를 확인할 수 있습니다.
 
@@ -312,7 +312,7 @@ export PATH="$GOPATH/bin:$PATH"
 cd /c/workspace/aiservice-monitoring/sdk-instrumentation/go
 
 # go.mod 파일 초기화 (없는 경우)
-go mod init github.com/your-org/aiservice-monitoring/sdk-instrumentation/go
+go mod init github.com/aurakimjh/aiservice-monitoring/sdk-instrumentation/go
 
 # OTel Go SDK 의존성 추가
 go get go.opentelemetry.io/otel@latest
@@ -979,7 +979,7 @@ KUBE_NODE_NAME=local
 |-----|-----|
 | **Name** | `Go: Debug Service` |
 | **Run kind** | `Package` |
-| **Package path** | `github.com/your-org/aiservice-monitoring/sdk-instrumentation/go` |
+| **Package path** | `github.com/aurakimjh/aiservice-monitoring/sdk-instrumentation/go` |
 | **Working directory** | `C:\workspace\aiservice-monitoring\sdk-instrumentation\go` |
 
 **Environment variables**:
@@ -1125,7 +1125,7 @@ ssh -T git@github.com
 
 ```bash
 # SSH 방식으로 클론 (HTTPS보다 권장)
-git clone git@github.com:your-org/aiservice-monitoring.git /c/workspace/aiservice-monitoring
+git clone git@github.com:aurakimjh/aiservice-monitoring.git /c/workspace/aiservice-monitoring
 
 cd /c/workspace/aiservice-monitoring
 
@@ -1512,7 +1512,7 @@ storage:
 
 ```bash
 # 1. 저장소 클론 (이미 있으면 생략)
-git clone https://github.com/your-org/aiservice-monitoring.git
+git clone https://github.com/aurakimjh/aiservice-monitoring.git
 cd aiservice-monitoring
 
 # 2. Lite 모드 시작 (단일 명령어)

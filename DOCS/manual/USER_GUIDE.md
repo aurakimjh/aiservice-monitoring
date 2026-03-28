@@ -1,6 +1,6 @@
 # AITOP 사용자 가이드
 
-> **문서 버전**: v1.3.0
+> **문서 버전**: v0.9.0-rc.1
 > **최종 업데이트**: 2026-03-28
 > **대상 독자**: SRE, MLOps 엔지니어, AI 엔지니어, 개발자
 > **관련 문서**: INSTALLATION_GUIDE.md, OPERATIONS_GUIDE.md

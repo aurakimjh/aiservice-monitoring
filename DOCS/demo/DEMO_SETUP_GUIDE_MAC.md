@@ -224,7 +224,7 @@ k6 version
 
 ```bash
 cd ~/workspace
-git clone https://github.com/your-org/aiservice-monitoring.git
+git clone https://github.com/aurakimjh/aiservice-monitoring.git
 cd aiservice-monitoring
 ```
 

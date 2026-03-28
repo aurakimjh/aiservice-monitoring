@@ -1,7 +1,7 @@
 # Java / .NET SDK 지원 및 메소드 프로파일링 통합 설계
 
-> **문서 버전**: v1.3.0
-> **작성일**: 2026-03-23 (Session 28) | **최종 업데이트**: 2026-03-26 (Phase 34 완료 반영 — Runtime Attach 전 언어(Java/Python/.NET/Node.js/Go) 구현 완료)
+> **문서 버전**: v0.9.0-rc.1
+> **작성일**: 2026-03-23 (Session 28) | **최종 업데이트**: 2026-03-28 (v0.9.0-rc.1)
 > **상태**: Phase 24 구현 완료 ✅ | Phase 33 Plugin Manager ✅ | Phase 34 Runtime Attach 전 언어 ✅
 >
 > **관련 문서**:

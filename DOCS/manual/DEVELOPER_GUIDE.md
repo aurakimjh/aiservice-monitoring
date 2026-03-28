@@ -1,6 +1,6 @@
 # AITOP 개발 가이드
 
-> **문서 버전**: v1.3.0
+> **문서 버전**: v0.9.0-rc.1
 > **최종 업데이트**: 2026-03-28
 > **대상 독자**: 백엔드 개발자, 프론트엔드 개발자, 플랫폼 엔지니어
 > **관련 문서**: ARCHITECTURE.md, AGENT_DESIGN.md, UI_DESIGN.md, METRICS_DESIGN.md
@@ -903,7 +903,7 @@ sdk-instrumentation/
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/your-org/aiservice-monitoring.git
+git clone https://github.com/aurakimjh/aiservice-monitoring.git
 cd aiservice-monitoring
 
 # 2. 로컬 인프라 기동 (Prometheus + Jaeger + PostgreSQL)
@@ -1233,7 +1233,7 @@ package it
 
 import (
     "context"
-    "github.com/your-org/aiservice-monitoring/agent/internal/core"
+    "github.com/aurakimjh/aiservice-monitoring/agent/internal/core"
 )
 
 type RedisClusterCollector struct {
@@ -1314,7 +1314,7 @@ func (c *RedisClusterCollector) Health() core.HealthStatus {
 ```go
 // agent/cmd/aitop-agent/main.go
 import (
-    "github.com/your-org/aiservice-monitoring/agent/internal/collector/it"
+    "github.com/aurakimjh/aiservice-monitoring/agent/internal/collector/it"
 )
 
 func main() {
@@ -1541,7 +1541,7 @@ package main
 
 import (
     "net/http"
-    "github.com/your-org/aiservice-monitoring/agent/internal/auth"
+    "github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 )
 
 func (s *Server) registerRedisRoutes(r chi.Router) {

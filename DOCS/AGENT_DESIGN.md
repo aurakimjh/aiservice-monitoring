@@ -1,10 +1,10 @@
 # AITOP Agent 상세 설계서
 
-> **문서 버전**: v1.8.0
-> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 릴리스)
+> **문서 버전**: v0.9.0-rc.1
+> **작성일**: 2026-03-21 | **최종 업데이트**: 2026-03-28 (v0.9.0-rc.1 상용 패키징 완료)
 > **구현 상태**: Phase 15~16 (Agent MVP/GA) ✅ | Phase 24~33 ✅ | Phase 34 (Runtime Attach) ✅ | Phase 35 (perf/eBPF) ✅ | Phase 36~38 (배치) ✅ | Phase 39 (Virtual Thread) ✅ | Phase 40 (RUM·Golden·Runtime·DB API) ✅ | Phase 8' (K8s Helm) ✅ | Phase 9' (SLO 튜닝) ✅
 > **관련 문서**:
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (67개 화면)
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
 > - [METRICS_DESIGN.md](./METRICS_DESIGN.md) — 레이어별 지표 정의 및 수식
 > - [SOLUTION_STRATEGY.md](./SOLUTION_STRATEGY.md) — 솔루션 방향성, 경쟁 분석

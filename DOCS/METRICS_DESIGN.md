@@ -1,13 +1,13 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v2.3.0
+> **문서 버전**: v0.9.0-rc.1
 > **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26 / GenAI Semantic Conventions v0.29
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
 > **최종 업데이트**: 2026-03-28 (v1.3 AI Observability — GenAI 메트릭, 토큰/비용 추적, Eval 품질 지표 추가)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
-> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (26개 화면)
+> - [UI_DESIGN.md](./UI_DESIGN.md) — 통합 모니터링 대시보드 UI 설계 (67개 화면)
 > - [AGENT_DESIGN.md](./AGENT_DESIGN.md) — AITOP Agent 상세 설계 (Collector, Fleet, CLI)
 > - [DIAGNOSTIC_ITEMS_CATALOG.md](./DIAGNOSTIC_ITEMS_CATALOG.md) — 진단 항목 91건 + 상시 메트릭 35종 카탈로그 (메트릭 ID 역방향 참조)
 > - [TEST_GUIDE.md](./TEST_GUIDE.md) — 테스트 & 운영 검증 가이드
@@ -1472,7 +1472,7 @@ abs(
 | Layer 5: GPU (DCGM) | `infra/kubernetes/dcgm-exporter.yaml` | 120줄 |
 | Alert Rules | `infra/docker/prometheus-rules.yaml` | 152줄 |
 | Recording Rules | `infra/kubernetes/prometheus-servicemonitor.yaml` | 150줄 |
-| Next.js 대시보드 | `frontend/src/app/` (자체 구현) | 26개 화면 |
+| Next.js 대시보드 | `frontend/src/app/` (자체 구현) | 67개 화면 |
 
 ---
 

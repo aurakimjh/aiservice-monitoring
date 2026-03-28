@@ -1,6 +1,6 @@
 # AITOP 경쟁 분석 — AI 시대 모니터링·진단 솔루션 비교
 
-> **문서 버전**: v1.0.0
+> **문서 버전**: v0.9.0-rc.1
 > **작성일**: 2026-03-24
 > **작성자**: Aura Kim — Architect & Lead Developer
 > **관점**: 전문 컨설턴트 + 고객(CTO/SRE/AI Engineer) 듀얼 관점
