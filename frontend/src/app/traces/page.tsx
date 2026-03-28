@@ -440,7 +440,7 @@ export default function TracesPage() {
         textStyle: { fontSize: 10, color: '#8B949E' },
       },
       grid: { left: 52, right: 16, top: 16, bottom: 48 },
-      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 14, bottom: 34 }],
+      dataZoom: [{ type: 'slider', height: 14, bottom: 34 }],
       toolbox: {
         feature: { brush: { title: { rect: 'Box Select', clear: 'Clear' } } },
         right: 16,
@@ -449,6 +449,8 @@ export default function TracesPage() {
       brush: {
         toolbox: ['rect', 'clear'],
         xAxisIndex: 0,
+        brushType: 'rect',
+        brushMode: 'single',
         brushStyle: {
           borderWidth: 1,
           color: 'rgba(74,144,217,0.15)',
@@ -534,6 +536,8 @@ export default function TracesPage() {
       grid: { left: 60, right: 16, top: 8, bottom: 64 },
       brush: {
         toolbox: ['rect', 'clear'],
+        brushType: 'rect',
+        brushMode: 'single',
         brushStyle: {
           borderWidth: 1,
           color: 'rgba(74,144,217,0.15)',
@@ -586,6 +590,9 @@ export default function TracesPage() {
       },
     );
 
+    // Activate brush tool by default
+    chart.dispatchAction({ type: 'takeGlobalCursor', key: 'brush', brushOption: { brushType: 'rect', brushMode: 'single' } });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chart.on('click', (params: { data?: any }) => {
       if (!params.data) return;
@@ -602,6 +609,8 @@ export default function TracesPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleHeatmapInit = useCallback((chart: any) => {
+    // Activate brush tool by default
+    chart.dispatchAction({ type: 'takeGlobalCursor', key: 'brush', brushOption: { brushType: 'rect', brushMode: 'single' } });
     // Cell click → filter transactions
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chart.on('click', (params: { seriesName?: string; data?: any }) => {
