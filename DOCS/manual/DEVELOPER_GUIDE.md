@@ -1,7 +1,7 @@
 # AITOP 개발 가이드
 
-> **문서 버전**: v1.0.0
-> **최종 업데이트**: 2026-03-26
+> **문서 버전**: v1.3.0
+> **최종 업데이트**: 2026-03-28
 > **대상 독자**: 백엔드 개발자, 프론트엔드 개발자, 플랫폼 엔지니어
 > **관련 문서**: ARCHITECTURE.md, AGENT_DESIGN.md, UI_DESIGN.md, METRICS_DESIGN.md
 
@@ -64,6 +64,10 @@
     - 10.3 [커밋 메시지 컨벤션](#103-커밋-메시지-컨벤션)
     - 10.4 [PR 프로세스](#104-pr-프로세스)
 11. [주요 의존성 및 라이브러리](#11-주요-의존성-및-라이브러리)
+12. [v1.3 AI Observability 개발](#12-v13-ai-observability-개발)
+    - 12.1 [OTel GenAI span 계측 패턴](#121-otel-genai-span-계측-패턴)
+    - 12.2 [API 엔드포인트 목록 (/genai/*)](#122-api-엔드포인트-목록-genai)
+    - 12.3 [AI 진단 ITEM 추가 방법](#123-ai-진단-item-추가-방법)
 
 ---
 
@@ -1855,3 +1859,187 @@ Closes #123
 | `next-intl` | 3.x | 국제화 (ko/en/ja) |
 | `playwright` | 1.44+ | E2E 테스트 |
 | `vitest` | 1.6+ | 단위 테스트 |
+
+---
+
+## 12. v1.3 AI Observability 개발
+
+> v1.3에서 OTel GenAI 시맨틱 컨벤션 기반의 LLM 트레이싱, 토큰 비용 분석,
+> RAG 파이프라인 모니터링, AI 진단 기능이 추가되었습니다.
+
+### 12.1 OTel GenAI span 계측 패턴
+
+v1.3은 [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)를 따릅니다.
+아래는 Python에서 LLM 호출을 계측하는 예시입니다.
+
+**Python 예시 (OpenAI 클라이언트 계측)**:
+
+```python
+from opentelemetry import trace
+from opentelemetry.semconv.ai import SpanAttributes
+
+tracer = trace.get_tracer("genai-app")
+
+def call_llm(prompt: str, model: str = "gpt-4o") -> str:
+    with tracer.start_as_current_span(
+        "chat",
+        kind=trace.SpanKind.CLIENT,
+        attributes={
+            SpanAttributes.GEN_AI_SYSTEM: "openai",
+            SpanAttributes.GEN_AI_REQUEST_MODEL: model,
+            SpanAttributes.GEN_AI_REQUEST_MAX_TOKENS: 1024,
+            SpanAttributes.GEN_AI_REQUEST_TEMPERATURE: 0.7,
+        },
+    ) as span:
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+            temperature=0.7,
+        )
+
+        # 응답 속성 기록
+        span.set_attribute(
+            SpanAttributes.GEN_AI_RESPONSE_MODEL, response.model
+        )
+        span.set_attribute(
+            SpanAttributes.GEN_AI_USAGE_INPUT_TOKENS,
+            response.usage.prompt_tokens,
+        )
+        span.set_attribute(
+            SpanAttributes.GEN_AI_USAGE_OUTPUT_TOKENS,
+            response.usage.completion_tokens,
+        )
+        span.set_attribute(
+            SpanAttributes.GEN_AI_RESPONSE_FINISH_REASONS,
+            [response.choices[0].finish_reason],
+        )
+
+        return response.choices[0].message.content
+```
+
+**RAG 파이프라인 계측 예시**:
+
+```python
+def rag_query(question: str) -> str:
+    with tracer.start_as_current_span("rag.pipeline") as pipeline_span:
+        # 1. 임베딩 단계
+        with tracer.start_as_current_span("rag.embed") as embed_span:
+            embedding = embed_model.encode(question)
+            embed_span.set_attribute("rag.embed.model", "nomic-embed-text")
+            embed_span.set_attribute("rag.embed.dimensions", len(embedding))
+
+        # 2. 검색 단계
+        with tracer.start_as_current_span("rag.retrieve") as retrieve_span:
+            results = vector_db.search(embedding, top_k=5)
+            retrieve_span.set_attribute("rag.retrieve.top_k", 5)
+            retrieve_span.set_attribute("rag.retrieve.results_count", len(results))
+
+        # 3. 생성 단계
+        context = "\n".join([r.text for r in results])
+        answer = call_llm(f"Context: {context}\nQuestion: {question}")
+
+        pipeline_span.set_attribute("rag.pipeline.context_chunks", len(results))
+        return answer
+```
+
+### 12.2 API 엔드포인트 목록 (/genai/*)
+
+v1.3에서 추가된 GenAI 관련 REST API 엔드포인트 목록입니다.
+
+| Method | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| `GET` | `/genai/traces` | LLM 트레이스 목록 조회 |
+| `GET` | `/genai/traces/:id` | 트레이스 상세 조회 (프롬프트/응답 포함) |
+| `GET` | `/genai/model-prices` | 모델 가격 테이블 조회 |
+| `PUT` | `/genai/model-prices` | 모델 가격 등록/갱신 |
+| `GET` | `/genai/costs` | 토큰 비용 집계 조회 |
+| `GET` | `/genai/costs/by-model` | 모델별 비용 상세 |
+| `GET` | `/genai/costs/by-service` | 서비스별 비용 상세 |
+| `GET` | `/genai/security-events` | 보안 이벤트 목록 |
+| `GET` | `/genai/eval/scores` | 모델 평가 점수 조회 |
+| `POST` | `/genai/eval/run` | 평가 실행 트리거 |
+| `GET` | `/ai/overview` | AI 대시보드 데이터 |
+| `GET` | `/ai/llm-traces` | LLM 트레이스 대시보드 데이터 |
+| `GET` | `/ai/diagnostics` | AI 진단 결과 조회 |
+| `GET` | `/ai/costs` | AI 비용 요약 |
+
+### 12.3 AI 진단 ITEM 추가 방법
+
+AI 진단 항목은 `collector/internal/diagnosis/ai_items.go` 파일에 정의됩니다.
+
+**새 진단 ITEM 추가 절차**:
+
+1. **ITEM 구조체 정의** (`ai_items.go`):
+
+```go
+// ai_items.go — 새 진단 항목 추가 예시
+
+var AIItemEmbeddingLatencyHigh = DiagnosisItem{
+    ID:          "embedding_latency_high",
+    Name:        "Embedding Latency High",
+    Description: "임베딩 생성 지연시간 P99가 임계치를 초과합니다",
+    Severity:    SeverityWarning,
+    Category:    CategoryAI,
+    CheckFunc:   checkEmbeddingLatency,
+    Interval:    5 * time.Minute,
+    Threshold: map[string]interface{}{
+        "p99_ms": 500,
+    },
+}
+
+func checkEmbeddingLatency(ctx context.Context, cfg DiagnosisConfig) (*DiagnosisResult, error) {
+    // Prometheus에서 임베딩 지연시간 P99 쿼리
+    query := `histogram_quantile(0.99, rate(genai_embedding_duration_bucket[5m]))`
+    val, err := cfg.PromClient.Query(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+
+    p99Ms := val * 1000
+    threshold := cfg.Threshold["p99_ms"].(float64)
+
+    result := &DiagnosisResult{
+        ItemID:    "embedding_latency_high",
+        Status:    StatusPass,
+        Value:     p99Ms,
+        Threshold: threshold,
+        Evidence:  fmt.Sprintf("Embedding P99 latency: %.1fms (threshold: %.0fms)", p99Ms, threshold),
+    }
+
+    if p99Ms > threshold {
+        result.Status = StatusWarning
+        result.Recommendation = "임베딩 모델 성능을 확인하거나, 배치 크기를 줄여보세요"
+    }
+
+    return result, nil
+}
+```
+
+2. **레지스트리에 등록** (`ai_items.go` 하단의 `init()` 함수):
+
+```go
+func init() {
+    RegisterDiagnosisItem(AIItemEmbeddingLatencyHigh)
+    // 기존 항목들...
+    // RegisterDiagnosisItem(AIItemLLMErrorRateHigh)
+    // RegisterDiagnosisItem(AIItemTokenCostSpike)
+}
+```
+
+3. **테스트 작성** (`ai_items_test.go`):
+
+```go
+func TestCheckEmbeddingLatency(t *testing.T) {
+    cfg := DiagnosisConfig{
+        PromClient: mockPromClient,
+        Threshold:  map[string]interface{}{"p99_ms": 500.0},
+    }
+
+    result, err := checkEmbeddingLatency(context.Background(), cfg)
+    require.NoError(t, err)
+    assert.Equal(t, StatusPass, result.Status)
+}
+```
+
+4. **프론트엔드 표시**: AI Diagnostics 대시보드에 자동으로 반영됩니다. 별도 UI 변경은 필요 없습니다.

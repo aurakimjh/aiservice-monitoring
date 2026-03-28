@@ -1,7 +1,7 @@
 # 통합 모니터링 대시보드 UI 설계서
 
-> **문서 버전**: v2.5.0
-> **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-26 (Phase 40 반영 — RUM·Golden Signals·런타임(Python/Go/.NET)·DB 모니터링 7개 신규 페이지)
+> **문서 버전**: v2.6.0
+> **작성일**: 2026-03-19 | **최종 업데이트**: 2026-03-28 (v1.3 AI Observability 반영 — AI Overview·LLM Traces·AI Diagnostics·AI Cost 4개 신규 페이지)
 > **관점**: 상용 솔루션 수준 UI/UX — Datadog, New Relic, Dynatrace 참조
 > **대상**: 프론트엔드 개발팀, UX 디자이너, 제품 기획
 > **구현 상태**: Phase 10~14 UI ✅ | Phase 15~16 Agent ✅ | Phase 30 AGPL-free ✅ | Phase 35 플레임그래프 ✅ | Phase 38 배치 ✅ | Phase 39 Virtual Thread ✅ | Phase 40 RUM·Golden·Runtime·DB ✅
@@ -2422,3 +2422,59 @@ diff 뷰 모드 활성 시 (☑ diff 뷰 모드):
 | Phase | 카테고리 | 화면 | 경로 | 상태 |
 |-------|---------|------|------|------|
 | 39-4 | Middleware/JVM | Virtual Thread 가젯 (Carrier Pool + 카운트 + Pinning + 지연 차트) | `/java/{agentId}` (섹션 확장) | 📋 |
+
+---
+
+## 17. AI Observability 화면 (v1.3)
+
+> v1.3에서 추가되는 AI 전용 대시보드 화면입니다.
+> 기존 §7 AI 서비스 전용 뷰를 확장하며, GenAI Span 기반 심층 분석 기능을 제공합니다.
+
+### 17.1 AI Overview Dashboard (`/ai/overview`)
+
+| 항목 | 상세 |
+|------|------|
+| **목적** | AI 서비스 전체 현황을 한눈에 파악 — 모델별 호출량, 비용, 품질 점수 |
+| **표시 항목** | 모델별 TPS, 평균 레이턴시, 총 토큰 사용량, 일간 비용 추이, Eval 품질 점수(Relevance/Faithfulness) 서머리 |
+| **데이터 소스** | `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.cost_usd`, `gen_ai.latency_ms` |
+| **갱신 주기** | 10초 (SSE 실시간) |
+| **특이사항** | 프로젝트 기반 필터링 (v1.2 Entity Model 연동), 모델 드롭다운으로 GPT-4/Claude/Llama 등 선택 |
+
+### 17.2 LLM Call Traces (`/ai/llm-traces`)
+
+| 항목 | 상세 |
+|------|------|
+| **목적** | 개별 LLM 호출의 전체 생애주기 트레이싱 + RAG Pipeline Waterfall |
+| **표시 항목** | GenAI Span 목록 (모델, 입력 토큰, 출력 토큰, 레이턴시, 비용), 프롬프트/응답 전문, RAG 파이프라인 Waterfall (Embedding → Retrieval → Reranking → Generation) |
+| **데이터 소스** | OTel GenAI Semantic Convention spans, `gen_ai.request.model`, `gen_ai.usage.*` |
+| **갱신 주기** | 실시간 (트레이스 수신 시 즉시) |
+| **특이사항** | 워터폴 차트에서 각 RAG 단계 클릭 시 상세 스팬 드릴다운. 프롬프트 버전 태그 표시 |
+
+### 17.3 AI Diagnostic Items (`/ai/diagnostics`)
+
+| 항목 | 상세 |
+|------|------|
+| **목적** | AI 서비스 전용 진단 항목 5종의 실시간 상태 및 이력 관리 |
+| **표시 항목** | ai-cost-spike, ai-agent-loop, ai-rag-quality, ai-gpu-saturation, ai-model-drift 각 항목의 현재 상태(정상/경고/위험), 최근 발생 이력, 임계치 설정 |
+| **데이터 소스** | 진단 엔진 결과 + `gen_ai.*` 메트릭 |
+| **갱신 주기** | 1분 (진단 주기) |
+| **특이사항** | 각 진단 항목 클릭 시 상세 Evidence 패널 (비용 급등 그래프, 루프 탐지 로그, RAG 품질 추이 등) |
+
+### 17.4 AI Cost Dashboard (`/ai/costs`)
+
+| 항목 | 상세 |
+|------|------|
+| **목적** | 실제 토큰 비용 데이터 기반 비용 분석 — 모델별/서비스별/일별 비용 추이 |
+| **표시 항목** | 모델별 토큰 단가 설정, 일/주/월 비용 추이 차트, 서비스별 비용 비중 파이차트, 비용 예산 대비 실적, 비용 이상 탐지 알림 |
+| **데이터 소스** | `gen_ai.cost_usd`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, 모델 가격 설정 |
+| **갱신 주기** | 1분 |
+| **특이사항** | 기존 §7.1 토큰 비용 패널을 대체. 실제 모델 API 과금 데이터 연동. 예산 초과 시 Slack/PagerDuty 알림 |
+
+### 17.5 화면 등록
+
+| Phase | 카테고리 | 화면 | 경로 | 상태 |
+|-------|---------|------|------|------|
+| v1.3 | AI Observability | AI Overview Dashboard | `/ai/overview` | 📋 |
+| v1.3 | AI Observability | LLM Call Traces + Pipeline Waterfall | `/ai/llm-traces` | 📋 |
+| v1.3 | AI Observability | AI Diagnostic Items 5종 | `/ai/diagnostics` | 📋 |
+| v1.3 | AI Observability | AI Cost Dashboard (실제 토큰 비용) | `/ai/costs` | 📋 |

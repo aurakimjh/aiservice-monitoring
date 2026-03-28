@@ -1,7 +1,7 @@
 # AITOP 운영자 가이드
 
-> **문서 버전**: v1.0.0
-> **최종 업데이트**: 2026-03-26
+> **문서 버전**: v1.3.0
+> **최종 업데이트**: 2026-03-28
 > **대상 독자**: 시스템 운영자, SRE, 인프라 엔지니어
 > **관련 문서**: INSTALLATION_GUIDE.md, USER_GUIDE.md
 
@@ -57,6 +57,10 @@
     - 11.1 [계정 및 권한 관리](#111-계정-및-권한-관리)
     - 11.2 [PII 마스킹 설정](#112-pii-마스킹-설정)
     - 11.3 [원격 CLI 감사](#113-원격-cli-감사)
+12. [v1.3 AI 운영](#12-v13-ai-운영)
+    - 12.1 [LLM 비용 모니터링](#121-llm-비용-모니터링)
+    - 12.2 [AI 진단 ITEM 확인](#122-ai-진단-item-확인)
+    - 12.3 [보안 이벤트 확인](#123-보안-이벤트-확인)
 
 ---
 
@@ -1064,3 +1068,99 @@ grep '"user":"sre-engineer@company.com"' \
 grep -E '"command":"(sudo|rm|chmod|passwd|iptables)"' \
   /var/log/aitop-agent/terminal-audit.log
 ```
+
+---
+
+## 12. v1.3 AI 운영
+
+> v1.3에서 LLM 트레이싱, 토큰 비용 분석, AI 진단, GenAI 보안 이벤트 기능이 추가되었습니다.
+> 이 섹션에서는 운영자가 AI 관련 기능을 모니터링하고 관리하는 방법을 설명합니다.
+
+### 12.1 LLM 비용 모니터링
+
+LLM API 호출에 따른 토큰 비용을 실시간으로 추적합니다.
+
+**API 엔드포인트**: `GET /ai/costs`
+
+**주요 확인 항목**:
+- 모델별 일간/주간/월간 비용 추이
+- 서비스별 토큰 소비량 상위 순위
+- 비용 급증(spike) 알림 설정
+
+**운영 절차**:
+```bash
+# 현재 비용 현황 조회
+curl -s http://localhost:8080/ai/costs | jq '.'
+
+# 모델별 비용 조회 (기간 지정)
+curl -s "http://localhost:8080/ai/costs?from=2026-03-01&to=2026-03-28&group_by=model" | jq '.'
+
+# 서비스별 비용 조회
+curl -s "http://localhost:8080/ai/costs?group_by=service" | jq '.'
+```
+
+**비용 알림 설정**:
+- 일일 비용이 임계값을 초과하면 알림 발송
+- 설정 → 알림 정책에서 `token_cost_daily > $100` 등의 조건 설정 가능
+
+### 12.2 AI 진단 ITEM 확인
+
+AI 서비스의 건전성을 자동으로 진단하는 항목(ITEM)들을 관리합니다.
+
+**API 엔드포인트**: `GET /ai/diagnostics`
+
+**진단 항목 목록 조회**:
+```bash
+# 전체 진단 결과 조회
+curl -s http://localhost:8080/ai/diagnostics | jq '.'
+
+# 특정 심각도 필터링
+curl -s "http://localhost:8080/ai/diagnostics?severity=critical" | jq '.'
+```
+
+**주요 진단 ITEM**:
+| ITEM ID | 설명 | 점검 주기 |
+|---------|------|----------|
+| `llm_error_rate_high` | LLM 에러율 임계치 초과 | 1분 |
+| `token_cost_spike` | 토큰 비용 급증 감지 | 5분 |
+| `rag_retrieval_latency` | RAG 검색 지연 P99 초과 | 1분 |
+| `model_drift_detected` | 모델 응답 품질 하락 | 1시간 |
+| `guardrail_block_rate` | 가드레일 차단율 초과 | 5분 |
+| `embedding_throughput_low` | 임베딩 처리량 저하 | 5분 |
+
+**운영 대응**:
+1. Critical 항목은 즉시 대응 — 알림 채널로 자동 발송
+2. Warning 항목은 일일 점검 시 확인
+3. 각 진단 항목의 근거 데이터(evidence)를 확인하여 원인 분석
+
+### 12.3 보안 이벤트 확인
+
+GenAI 관련 보안 이벤트(프롬프트 인젝션 시도, PII 유출 감지 등)를 모니터링합니다.
+
+**API 엔드포인트**: `GET /genai/security-events`
+
+**보안 이벤트 조회**:
+```bash
+# 전체 보안 이벤트 조회
+curl -s http://localhost:8080/genai/security-events | jq '.'
+
+# 최근 24시간 이벤트
+curl -s "http://localhost:8080/genai/security-events?from=24h" | jq '.'
+
+# 심각도별 필터링
+curl -s "http://localhost:8080/genai/security-events?severity=high" | jq '.'
+```
+
+**보안 이벤트 유형**:
+| 이벤트 유형 | 설명 | 심각도 |
+|------------|------|--------|
+| `prompt_injection` | 프롬프트 인젝션 시도 감지 | High |
+| `pii_leakage` | 응답에 PII 포함 감지 | High |
+| `sensitive_topic` | 민감 주제 질의 감지 | Medium |
+| `jailbreak_attempt` | 탈옥 시도 감지 | High |
+| `data_exfiltration` | 데이터 유출 패턴 감지 | Critical |
+
+**운영 절차**:
+1. 일일 점검 시 보안 이벤트 대시보드 확인
+2. High/Critical 이벤트는 즉시 해당 서비스 담당자에게 통보
+3. 반복되는 패턴은 가드레일 규칙에 추가하여 자동 차단

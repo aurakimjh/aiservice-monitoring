@@ -3,7 +3,7 @@
 > **대상 독자**: Windows 환경에서 시연 환경을 구성하는 누구나 (초보자도 OK)
 > **환경**: Windows 11 Pro, 64GB RAM (macOS 대비 메모리 절반 — 경량 구성 필요)
 > **macOS 가이드와의 차이점**: WSL2 + Docker Desktop 기반, 메모리 최적화 구성
-> **최종 업데이트**: 2026-03-26
+> **최종 업데이트**: 2026-03-28
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **macOS 가이드 참고**: [DEMO_SETUP_GUIDE_MAC.md](./DEMO_SETUP_GUIDE_MAC.md)
@@ -707,6 +707,15 @@ $env:OTEL_SERVICE_NAME = "nodejs-demo-app"
 node app.js
 # 또는 기존 방식: cd C:\demo\nodejs-demo && node app.js
 ```
+
+> **v1.3 참고**: RAG 서비스(`C:\demo\rag-demo`)를 실행하면 OTel GenAI span이 자동 생성됩니다.
+> LLM 호출(Ollama), 임베딩, 벡터 검색 단계가 각각 span으로 기록되어
+> AITOP AI 대시보드에서 확인할 수 있습니다.
+>
+> **AI 대시보드 접속 경로**:
+> - AI Overview: `http://localhost:3000/ai/overview` — LLM 호출 현황, 토큰 비용, 모델 성능
+> - LLM Traces: `http://localhost:3000/ai/llm-traces` — 개별 LLM 호출 트레이스 조회
+> - AI Diagnostics: `http://localhost:3000/ai/diagnostics` — AI 서비스 자동 진단 결과
 
 ### Step 5: 배치 서비스 (WSL2 bash 탭)
 

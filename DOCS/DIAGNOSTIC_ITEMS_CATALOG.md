@@ -1,7 +1,7 @@
 # AITOP 진단 항목 카탈로그 (Diagnostic Items Catalog)
 
 > **Phase 31 설계 점검 문서** — 진단/수집 항목 전체 분류 및 수집 방식 관리 기준
-> 최종 업데이트: 2026-03-26 (Phase 38 완료 — 배치 프로세스 진단 항목 반영 / Phase 7' E2E 검증 완료)
+> 최종 업데이트: 2026-03-28 (v1.3 AI Observability — AI 진단 항목 5종 추가 / Phase 38 완료 — 배치 프로세스 진단 항목 반영)
 > 참고 디렉토리: `C:/aitop/02. Working/20260312_v.0.0.5/` (IT 55건), `Sample_AI_진단항목/` (AI 31건)
 > 관련 문서: [AGENT_DESIGN.md](./AGENT_DESIGN.md) §3 Collector 체계, §12 진단 모드 | [METRICS_DESIGN.md](./METRICS_DESIGN.md) §13 미들웨어·Cache·MQ 메트릭
 
@@ -480,6 +480,56 @@ Collection Server는 하위 호환을 위해 v1/v2 모두 수신한다.
 | 📜 자동 → 🔧 내장 | 수집 빈도 요구가 높아짐 (분 → 초) | 내장 구현 후 스크립트는 Deprecated, 2 릴리스 후 제거 |
 | 🔧 내장 → 📜 자동 | 진단 로직이 복잡해지거나 벤더 의존성 높아짐 | 해당 Collector에 `script` 방식 추가, 내장 fallback 유지 |
 | 자동/내장 → 🖐️ 수동 | 운영 환경 부하 이슈 발견 | `collect_mode: manual` 설정 추가, UI 트리거 버튼 제공 |
+
+---
+
+---
+
+## 5. AI 진단 항목 5종 (v1.3 AI Observability)
+
+> v1.3에서 추가되는 AI 서비스 전용 실시간 진단 항목입니다.
+> 기존 §1.8 AI 서비스 진단이 설정/아키텍처 점검 중심이라면, 이 5종은 **운영 중 자동 탐지 → 알림** 목적의 룰 기반 진단입니다.
+> 수집 방식: 🔧 내장 (Agent 진단 엔진 자동 실행)
+
+| ID | 항목명 | 설명 | 룰 / 임계치 | 메트릭 소스 | 심각도 기본값 |
+|----|--------|------|------------|-----------|:----------:|
+| `ai-cost-spike` | AI 비용 급등 탐지 | 시간당 LLM 비용이 일 예산의 N%를 초과할 때 알림 | `rate(gen_ai.cost_usd[1h]) > daily_budget * 0.15` | `gen_ai.cost_usd` | 🟡 Warning |
+| `ai-agent-loop` | AI Agent 무한 루프 탐지 | 동일 Agent가 N회 이상 반복 호출 (tool-call loop) 감지 | `gen_ai.agent.iteration_count > 20` within 5min, 동일 tool 3회 연속 호출 | `gen_ai.agent.iteration_count`, span attributes | 🔴 Critical |
+| `ai-rag-quality` | RAG 품질 저하 탐지 | Retrieval 관련성 점수 또는 Faithfulness가 임계치 미만으로 하락 | `avg(gen_ai.eval.relevance[15m]) < 0.6` OR `avg(gen_ai.eval.faithfulness[15m]) < 0.7` | `gen_ai.eval.relevance`, `gen_ai.eval.faithfulness` | 🟡 Warning |
+| `ai-gpu-saturation` | AI GPU 포화 탐지 | GPU 활용률이 지속적으로 높아 LLM 추론 큐잉 발생 | `avg(gpu.utilization[5m]) > 0.95` AND `gen_ai.latency_ms P95 > 5000` | `gpu.utilization`, `gen_ai.latency_ms` | 🔴 Critical |
+| `ai-model-drift` | AI 모델 드리프트 탐지 | 동일 프롬프트에 대한 응답 품질이 시간 경과에 따라 변동 | `stddev(gen_ai.eval.relevance[1d]) > 0.15` OR `gen_ai.eval.hallucination` 7일 이동평균 > 0.2 | `gen_ai.eval.relevance`, `gen_ai.eval.hallucination` | 🟡 Warning |
+
+### 5.1 진단 항목 상세
+
+#### ai-cost-spike — AI 비용 급등
+
+- **탐지 로직**: 1시간 윈도우의 비용 증가율을 일 예산 대비 비율로 계산
+- **자동 대응**: 알림 + 선택적 Rate Limit 적용 (설정 시)
+- **Evidence**: 모델별 비용 분해, 비용 급등 시점 전후 호출 패턴
+
+#### ai-agent-loop — AI Agent 무한 루프
+
+- **탐지 로직**: Agent span의 iteration 카운트 + 동일 tool 연속 호출 패턴 감지
+- **자동 대응**: 알림 + Agent 강제 종료 권고 (Critical 시)
+- **Evidence**: Agent 실행 트레이스, tool-call 시퀀스 로그
+
+#### ai-rag-quality — RAG 품질 저하
+
+- **탐지 로직**: 15분 이동평균 Eval 점수 하락 감지
+- **자동 대응**: 알림 + VectorDB 인덱스 재빌드 권고
+- **Evidence**: 품질 점수 추이 차트, 최근 낮은 점수 요청 샘플
+
+#### ai-gpu-saturation — AI GPU 포화
+
+- **탐지 로직**: GPU 활용률 포화 + LLM 레이턴시 동시 급등
+- **자동 대응**: 알림 + 스케일아웃 권고
+- **Evidence**: GPU 사용률 타임라인, 추론 큐 깊이, 레이턴시 상관 차트
+
+#### ai-model-drift — AI 모델 드리프트
+
+- **탐지 로직**: 일간 품질 지표의 표준편차 증가 또는 환각 점수 이동평균 상승
+- **자동 대응**: 알림 + 프롬프트 버전 롤백 권고
+- **Evidence**: 7일 품질 추이, 프롬프트 버전별 성능 비교
 
 ---
 

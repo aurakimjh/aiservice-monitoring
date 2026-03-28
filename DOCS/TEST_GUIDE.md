@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: QA 엔지니어, SRE, 개발자, 프로젝트 관리자
-> **최종 업데이트**: 2026-03-26 (Phase 1-38 완료 / 배치·eBPF·Attach·GPU·플러그인 신규 기능 반영)
+> **최종 업데이트**: 2026-03-28 (v1.3 AI Observability 테스트 시나리오 추가)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -1354,6 +1354,61 @@ test/{테스트유형}_{차수}_{YYYY-MM-DD}/
 | Go 단위 테스트 (`go test ./...`) | **PASS** (30파일) | `master` |
 | Frontend 빌드 (`npx next build`) | **PASS** | `master` (Phase 38) |
 | Frontend Vitest | **PASS** (72케이스) | `master` |
+
+---
+
+## 11. v1.3 AI Observability 테스트
+
+> **추가 일자**: 2026-03-28
+> v1.3에서 추가된 AI Observability 기능의 테스트 시나리오입니다.
+
+### 11-1. LLM Call Tracing 테스트
+
+| 시나리오 | 검증 항목 | 기대 결과 | 우선순위 |
+|---------|---------|----------|:-------:|
+| OpenAI API 호출 트레이싱 | GenAI Span이 Jaeger에 수집되는지 | `gen_ai.system=openai`, `gen_ai.request.model`, 입출력 토큰 속성 포함 | P0 |
+| Ollama 로컬 모델 호출 | 자체 호스팅 모델도 GenAI Span 생성되는지 | `gen_ai.system=ollama` Span 수집 확인 | P0 |
+| RAG Pipeline Waterfall | Embedding→Retrieval→Reranking→Generation 4단계 스팬 | 각 단계별 개별 Span, 부모-자식 관계 정확, Waterfall UI 렌더링 | P0 |
+| 프롬프트/응답 캡처 | Span attributes에 입출력 텍스트 포함 | `gen_ai.prompt` / `gen_ai.completion` 속성 확인 (PII 마스킹 설정 시 마스킹) | P1 |
+| 스트리밍 응답 TTFT | SSE 스트리밍 호출 시 TTFT 측정 | `gen_ai.time_to_first_token_ms` 메트릭 수집 확인 | P1 |
+
+### 11-2. Token & Cost Tracking 테스트
+
+| 시나리오 | 검증 항목 | 기대 결과 | 우선순위 |
+|---------|---------|----------|:-------:|
+| 토큰 카운트 정확도 | 실제 API 응답의 usage 필드와 수집 메트릭 비교 | `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` 값 일치 | P0 |
+| 비용 계산 정확도 | 모델별 단가 설정 × 토큰 수 = 비용 | `gen_ai.cost_usd` = (input_tokens × input_price + output_tokens × output_price) | P0 |
+| 일간 비용 집계 | 24시간 비용 합산 | `/ai/costs` 대시보드에서 일간 합계 표시, Prometheus `sum(gen_ai.cost_usd)` 쿼리와 일치 | P1 |
+| 비용 예산 초과 알림 | daily_budget 설정 후 초과 유도 | `ai-cost-spike` 진단 항목 Warning/Critical 알림 발생 | P1 |
+
+### 11-3. Eval Framework 테스트
+
+| 시나리오 | 검증 항목 | 기대 결과 | 우선순위 |
+|---------|---------|----------|:-------:|
+| Relevance 평가 | 질문-응답 쌍에 대한 관련성 점수 산출 | `gen_ai.eval.relevance` 0~1 범위, 명확한 질문에 > 0.8 | P0 |
+| Faithfulness 평가 | 컨텍스트 대비 응답 충실도 | `gen_ai.eval.faithfulness` 0~1 범위, 컨텍스트 기반 응답에 > 0.8 | P0 |
+| Toxicity 평가 | 유해 콘텐츠 감지 | 정상 응답: < 0.1, 의도적 유해 입력: > 0.5 | P1 |
+| Hallucination 평가 | 환각 탐지 정확도 | 사실 기반 응답: < 0.2, 허구 응답: > 0.6 | P1 |
+| 품질 점수 추이 | 15분 이동평균 계산 및 임계치 알림 | `ai-rag-quality` 진단 항목 연동, 품질 하락 시 Warning | P1 |
+
+### 11-4. AI Diagnostic Items 테스트
+
+| 진단 항목 | 테스트 방법 | 기대 결과 | 우선순위 |
+|---------|---------|----------|:-------:|
+| `ai-cost-spike` | 단시간 대량 LLM 호출로 비용 급등 유도 | 1시간 비용 > daily_budget × 15% 시 Warning 발생 | P0 |
+| `ai-agent-loop` | Agent에 무한 루프 유발 프롬프트 입력 | iteration_count > 20 도달 시 Critical 알림 + Evidence 로그 | P0 |
+| `ai-rag-quality` | 의도적으로 저품질 컨텍스트 제공 | Relevance < 0.6 지속 시 Warning, Evidence에 낮은 점수 샘플 포함 | P1 |
+| `ai-gpu-saturation` | GPU 부하 테스트 + 동시 LLM 호출 | GPU > 95% + latency P95 > 5000ms 시 Critical | P1 |
+| `ai-model-drift` | 7일간 품질 점수 변동 시뮬레이션 | stddev(relevance) > 0.15 시 Warning + 프롬프트 롤백 권고 | P2 |
+
+### 11-5. AI Observability UI 테스트
+
+| 화면 | 검증 항목 | 기대 결과 | 우선순위 |
+|------|---------|----------|:-------:|
+| `/ai/overview` | 페이지 로드 + 실데이터 표시 | 모델별 KPI 카드, 비용 추이 차트 렌더링 | P0 |
+| `/ai/llm-traces` | LLM Span 목록 + 상세 드릴다운 | Span 테이블 표시, 클릭 시 프롬프트/응답 + Waterfall | P0 |
+| `/ai/diagnostics` | 진단 항목 5종 상태 표시 | 정상/경고/위험 배지, 이력 목록, Evidence 패널 | P1 |
+| `/ai/costs` | 비용 대시보드 렌더링 | 모델별 비용 차트, 예산 게이지, 일간 추이 | P1 |
 
 ---
 

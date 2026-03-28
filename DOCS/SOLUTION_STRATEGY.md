@@ -1,7 +1,7 @@
 # AITOP Solution Strategy — AI 서비스 모니터링의 글로벌 표준
 
-> **문서 버전**: v3.3.0
-> **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-26 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
+> **문서 버전**: v3.4.0
+> **작성일**: 2026-03-24 | **최종 업데이트**: 2026-03-28 | **문서 유형**: 전략 기획서 (Series A Strategy Document)
 > **작성자**: Aura Kim — Architect & Lead Developer
 > **기밀 등급**: Internal Confidential
 >
@@ -1728,6 +1728,46 @@ AITOP 방식:
 
 ---
 
+## v1.3 AI Observability 경쟁력
+
+> **v1.2에서 확립된 Entity Model** (Project → Host → Service → Instance → ServiceGroup, SQLite 영속, 프로젝트 기반 필터링)을 기반으로,
+> **v1.3은 AI Observability 전 영역을 커버**합니다.
+
+### 핵심 역량
+
+| 영역 | AITOP v1.3 기능 | 대응 경쟁사 수준 |
+|------|----------------|----------------|
+| **LLM Call Tracing** | OTel GenAI Span 기반 전 호출 트레이싱, 입출력 토큰·프롬프트·응답 캡처 | Datadog LLM Observability 동등 |
+| **Token & Cost Tracking** | 모델별 토큰 단가 설정, 실시간 비용 집계 (`gen_ai.cost_usd`), 일/주/월 추이 | Dynatrace AI Cost Analytics 동등 |
+| **RAG Pipeline Waterfall** | Embedding → Retrieval → Reranking → Generation 각 단계 지연·성공률 시각화 | Langfuse/Arize 수준 |
+| **Quality Evaluation** | Relevance, Faithfulness, Toxicity, Hallucination 4대 평가 지표 자동 산출 | Arize Phoenix 동등 |
+| **Prompt Version Management** | 프롬프트 템플릿 버전 관리, A/B 비교, 성능 회귀 감지 | Langsmith 참조 |
+| **AI Security Monitoring** | PII 유출 감지, Prompt Injection 탐지, 토큰 이상 사용 알림 | 자체 구현 (경쟁사 미비) |
+| **AI Diagnostic Items 5종** | ai-cost-spike, ai-agent-loop, ai-rag-quality, ai-gpu-saturation, ai-model-drift | 업계 최초 통합 진단 |
+
+### 경쟁 포지셔닝
+
+```
+                    AI Observability 깊이
+                    ▲
+                    │         ★ AITOP v1.3
+                    │           (Full-Stack AI + APM)
+                    │
+                    │    ● Datadog       ● Dynatrace
+                    │    (AI + APM)      (AI + APM)
+                    │
+                    │         ● Langfuse    ● Arize
+                    │         (AI Only)     (AI Only)
+                    │
+                    │  ● New Relic    ● WhaTap
+                    │  (Basic AI)     (No AI)
+                    ├──────────────────────────────────► APM 깊이
+```
+
+AITOP v1.3은 **전통 APM 깊이**(XLog, 플레임그래프, 배치, Fleet)와 **AI Observability 깊이**(LLM Tracing, RAG Waterfall, Eval, Cost)를 동시에 갖춘 유일한 솔루션입니다.
+
+---
+
 ## 마치며
 
 ```
@@ -1764,3 +1804,4 @@ AITOP 방식:
 > | v3.1.0 | 2026-03-25 | Phase 31~33 반영 — AGPL-free 전환, GPU 멀티벤더, Plugin Manager, 원클릭 프로파일링 전략 |
 > | v3.2.0 | 2026-03-26 | Phase 34~38 완료 반영 — Runtime Attach, perf/eBPF 프로파일링, 배치 모니터링 / Phase 7' E2E 완료 |
 > | v3.3.0 | 2026-03-26 | Phase 39 완료 반영 — JDK 21 Virtual Thread 모니터링 / §3.6 기능 갭 분석 신규 / §5.3-B 언어별 성능 지표 갭 보완 |
+> | v3.4.0 | 2026-03-28 | v1.2 Entity Model + v1.3 AI Observability 경쟁력 섹션 신규 추가 (LLM Tracing, Cost, RAG, Eval, AI Diagnostics) |

@@ -1,7 +1,7 @@
 # AITOP 설치 가이드
 
-> **문서 버전**: v1.0.0
-> **최종 업데이트**: 2026-03-26
+> **문서 버전**: v1.3.0
+> **최종 업데이트**: 2026-03-28
 > **대상 독자**: 시스템 관리자, DevOps 엔지니어, SRE
 > **관련 문서**: OPERATIONS_GUIDE.md, DEVELOPER_GUIDE.md
 
@@ -56,6 +56,9 @@
     - 13.3 [GPU 수집 오류](#133-gpu-수집-오류)
     - 13.4 [프로파일링 실패](#134-프로파일링-실패)
     - 13.5 [로그 및 진단 명령](#135-로그-및-진단-명령)
+14. [v1.2 엔티티 모델 + v1.3 AI 구성](#14-v12-엔티티-모델--v13-ai-구성)
+    - 14.1 [SQLite DB 자동 생성](#141-sqlite-db-자동-생성)
+    - 14.2 [모델 가격 테이블 설정](#142-모델-가격-테이블-설정)
 
 ---
 
@@ -1340,3 +1343,111 @@ docker compose -f infra/docker/docker-compose.yaml logs -f collection-server
 # Kubernetes 환경
 kubectl logs -n aitop-monitoring -l app=collection-server -f --tail=100
 ```
+
+---
+
+## 14. v1.2 엔티티 모델 + v1.3 AI 구성
+
+> v1.2에서 Project → Host → Service → Instance 엔티티 모델이 도입되었고,
+> v1.3에서 LLM 토큰 비용 추적을 위한 모델 가격 테이블이 추가되었습니다.
+
+### 14.1 SQLite DB 자동 생성
+
+v1.2부터 Collection Server는 엔티티 메타데이터를 SQLite에 저장합니다.
+서버 최초 기동 시 SQLite 파일이 자동으로 생성됩니다.
+
+**환경변수 설정**:
+
+```bash
+# Collection Server 환경변수
+AITOP_DB_PATH=/var/lib/aitop/aitop.db    # SQLite 파일 경로 (기본값)
+```
+
+**Docker Compose 설정**:
+```yaml
+aitop-server:
+  environment:
+    - AITOP_DB_PATH=/data/aitop.db
+  volumes:
+    - aitop_data:/data    # 영속성을 위해 볼륨 마운트 필수
+```
+
+**Kubernetes 설정**:
+```yaml
+env:
+  - name: AITOP_DB_PATH
+    value: /data/aitop.db
+volumeMounts:
+  - name: aitop-data
+    mountPath: /data
+```
+
+**주의사항**:
+- SQLite 파일이 위치하는 디렉토리에 **쓰기 권한**이 필요합니다
+- Docker/K8s 환경에서는 반드시 **영속 볼륨**에 마운트하세요 (컨테이너 재시작 시 데이터 유실 방지)
+- 기본 경로를 변경하려면 `AITOP_DB_PATH` 환경변수를 설정합니다
+- 서버 기동 시 DB 파일이 없으면 자동으로 생성되며, 스키마 마이그레이션도 자동 실행됩니다
+
+**확인 방법**:
+```bash
+# SQLite 파일 존재 확인
+ls -la /var/lib/aitop/aitop.db
+
+# 테이블 확인 (sqlite3 설치 필요)
+sqlite3 /var/lib/aitop/aitop.db ".tables"
+# 출력 예: projects  hosts  services  instances  host_approvals  ...
+```
+
+### 14.2 모델 가격 테이블 설정
+
+v1.3에서 LLM 토큰 비용을 계산하려면 모델별 가격 정보를 등록해야 합니다.
+
+**API 엔드포인트**: `PUT /genai/model-prices`
+
+**모델 가격 등록**:
+```bash
+curl -X PUT http://localhost:8080/genai/model-prices \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prices": [
+      {
+        "model": "gpt-4o",
+        "provider": "openai",
+        "input_cost_per_1k_tokens": 0.0025,
+        "output_cost_per_1k_tokens": 0.01,
+        "effective_date": "2026-03-01"
+      },
+      {
+        "model": "gpt-4o-mini",
+        "provider": "openai",
+        "input_cost_per_1k_tokens": 0.00015,
+        "output_cost_per_1k_tokens": 0.0006,
+        "effective_date": "2026-03-01"
+      },
+      {
+        "model": "claude-3.5-sonnet",
+        "provider": "anthropic",
+        "input_cost_per_1k_tokens": 0.003,
+        "output_cost_per_1k_tokens": 0.015,
+        "effective_date": "2026-03-01"
+      },
+      {
+        "model": "llama3.2:3b",
+        "provider": "ollama",
+        "input_cost_per_1k_tokens": 0,
+        "output_cost_per_1k_tokens": 0,
+        "effective_date": "2026-03-01"
+      }
+    ]
+  }'
+```
+
+**가격 조회**:
+```bash
+curl -s http://localhost:8080/genai/model-prices | jq '.'
+```
+
+**주의사항**:
+- 가격 정보가 등록되지 않은 모델의 비용은 0으로 계산됩니다
+- `effective_date`를 활용하여 가격 변경 이력을 관리할 수 있습니다
+- 로컬 모델(Ollama 등)은 비용을 0으로 설정합니다

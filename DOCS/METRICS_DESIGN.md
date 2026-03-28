@@ -1,9 +1,9 @@
 # AI 서비스 성능 모니터링 — 지표 정의 및 수집 방안 설계
 
-> **문서 버전**: v2.2.0
-> **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26
+> **문서 버전**: v2.3.0
+> **작성 기준**: OpenTelemetry Specification v1.31 / Semantic Conventions v1.26 / GenAI Semantic Conventions v0.29
 > **관점**: SRE (Site Reliability Engineer) — 프로덕션 즉시 적용 가능 수준
-> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 — Phase 40 메트릭 추가: RUM Core Web Vitals·Golden Signals·Python GIL/FT·.NET AOT·Go Scheduler·DB 쿼리 레벨)
+> **최종 업데이트**: 2026-03-28 (v1.3 AI Observability — GenAI 메트릭, 토큰/비용 추적, Eval 품질 지표 추가)
 >
 > **관련 문서**:
 > - [ARCHITECTURE.md](./ARCHITECTURE.md) — OTel + Agent 통합 아키텍처
@@ -1963,6 +1963,51 @@ abs(
 | `jvm.virtual_thread.unpark.total` | Counter | 1 | `agent_id` | Continuation resume 횟수 (JFR `jdk.VirtualThreadUnpark`) |
 
 > `park / unpark` 비율이 1에 가까울수록 정상 (스케줄링 균형). 비율이 크게 벗어나면 대기 누적을 의미합니다.
+
+---
+
+## 15. AI/LLM Metrics (v1.3 AI Observability)
+
+> OTel GenAI Semantic Conventions 기반. v1.3에서 추가된 AI 서비스 전용 메트릭입니다.
+> 참고: 기존 §5 AI 특화 핵심 성능 수식의 TTFT/TPS 메트릭과 함께 사용됩니다.
+
+### 15.1 GenAI 토큰 사용량 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `gen_ai.usage.input_tokens` | Counter | 1 | `gen_ai.request.model`, `service.name`, `project_id` | LLM 호출당 입력(프롬프트) 토큰 수 |
+| `gen_ai.usage.output_tokens` | Counter | 1 | `gen_ai.request.model`, `service.name`, `project_id` | LLM 호출당 출력(생성) 토큰 수 |
+| `gen_ai.usage.total_tokens` | Counter | 1 | `gen_ai.request.model`, `service.name` | 입력 + 출력 합계 토큰 수 |
+
+### 15.2 GenAI 비용·레이턴시 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `gen_ai.cost_usd` | Counter | USD | `gen_ai.request.model`, `service.name`, `project_id` | LLM 호출당 비용 (모델별 토큰 단가 × 토큰 수) |
+| `gen_ai.latency_ms` | Histogram | ms | `gen_ai.request.model`, `service.name`, `gen_ai.operation.name` | LLM 호출 전체 레이턴시 (P50/P95/P99) |
+| `gen_ai.time_to_first_token_ms` | Histogram | ms | `gen_ai.request.model`, `service.name` | 스트리밍 응답 시 첫 토큰 수신까지 시간 (TTFT) |
+
+### 15.3 GenAI Eval 품질 점수 메트릭
+
+| 메트릭명 | 타입 | 단위 | 레이블 | 설명 |
+|---------|------|------|-------|------|
+| `gen_ai.eval.relevance` | Gauge | 0~1 | `gen_ai.request.model`, `service.name`, `eval_method` | 질문 대비 응답 관련성 점수 (1.0 = 완벽 관련) |
+| `gen_ai.eval.faithfulness` | Gauge | 0~1 | `gen_ai.request.model`, `service.name`, `eval_method` | 컨텍스트 대비 응답 충실도 (1.0 = 환각 없음) |
+| `gen_ai.eval.toxicity` | Gauge | 0~1 | `gen_ai.request.model`, `service.name`, `eval_method` | 유해 콘텐츠 점수 (0.0 = 안전, 1.0 = 유해) |
+| `gen_ai.eval.hallucination` | Gauge | 0~1 | `gen_ai.request.model`, `service.name`, `eval_method` | 환각 탐지 점수 (0.0 = 사실, 1.0 = 완전 환각) |
+
+### 15.4 SLO 기준값
+
+| 메트릭 | 경고 | 위험 | 알림 채널 |
+|--------|------|------|----------|
+| `gen_ai.cost_usd` rate/1h | > 일 예산의 10%/h | > 일 예산의 20%/h | Slack #ai-cost (비용 급등) |
+| `gen_ai.latency_ms` P95 | > 3,000ms | > 10,000ms | PagerDuty (LLM 응답 지연) |
+| `gen_ai.eval.relevance` avg/1h | < 0.7 | < 0.5 | Slack #ai-quality (품질 하락) |
+| `gen_ai.eval.faithfulness` avg/1h | < 0.8 | < 0.6 | Slack #ai-quality (환각 증가) |
+| `gen_ai.eval.toxicity` avg/1h | > 0.3 | > 0.5 | PagerDuty (유해 콘텐츠) |
+| `gen_ai.eval.hallucination` avg/1h | > 0.2 | > 0.4 | PagerDuty (환각 빈도) |
+
+---
 
 *이 문서는 지표 정의가 변경될 때 업데이트합니다.*
 *관련 문서: [ARCHITECTURE.md](./ARCHITECTURE.md) | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | [UI_DESIGN.md](./UI_DESIGN.md) | [TEST_GUIDE.md](./TEST_GUIDE.md) | [JAVA_DOTNET_SDK_DESIGN.md](./JAVA_DOTNET_SDK_DESIGN.md)*

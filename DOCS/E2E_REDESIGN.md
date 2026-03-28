@@ -1,7 +1,7 @@
 # Phase 7': E2E 통합 검증 재설계
 
-> **버전**: v1.2.0
-> **날짜**: 2026-03-26 (Phase 38 배치 대시보드 + Phase 31-38 신규 시나리오 추가)
+> **버전**: v1.3.0
+> **날짜**: 2026-03-28 (v1.2 엔티티 모델 + v1.3 AI Observability 시나리오 추가)
 > **대상**: AITOP AI Service Monitoring Platform
 
 ---

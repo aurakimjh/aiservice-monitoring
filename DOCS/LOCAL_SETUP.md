@@ -2,7 +2,7 @@
 
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **대상 독자**: aiservice-monitoring 프로젝트에 처음 합류하는 개발자
-> **최종 업데이트**: 2026-03-26 (Phase 1~40 + Phase 7'~9' 전체 완료, v1.0.0 릴리스)
+> **최종 업데이트**: 2026-03-28 (v1.3 AI Observability 개발 환경 추가)
 > **작성자**: Aura Kim `<aura.kimjh@gmail.com>`
 >
 > **관련 문서**:
@@ -1641,6 +1641,75 @@ services:
 | **스토리지** | MinIO S3 or 로컬 | 로컬 파일시스템 |
 | **수정 가능** | 소스 코드 수정 가능 | 설정만 변경 가능 |
 | **보고서** | 없음 (개발용) | PDF/HTML 진단 보고서 |
+
+---
+
+## 12. v1.3 AI Observability 개발 환경
+
+> v1.3 AI Observability 기능 개발 시 추가로 필요한 환경 설정입니다.
+
+### 12.1 OTel GenAI Semantic Conventions 설정
+
+AI 서비스 계측에는 [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) v0.29를 따릅니다.
+
+```bash
+# Python AI 서비스 계측 패키지 설치
+pip install opentelemetry-instrumentation-openai opentelemetry-instrumentation-langchain
+
+# Node.js AI 서비스 계측
+npm install @opentelemetry/instrumentation-openai
+```
+
+주요 GenAI Span 속성:
+- `gen_ai.system` — 모델 프로바이더 (openai, anthropic, ollama 등)
+- `gen_ai.request.model` — 요청한 모델명 (gpt-4, claude-3.5-sonnet 등)
+- `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` — 토큰 수
+- `gen_ai.response.finish_reasons` — 완료 사유 (stop, length, tool_calls 등)
+
+### 12.2 모델 가격 설정 (Model Price Configuration)
+
+토큰 비용 추적을 위해 모델별 단가를 설정합니다.
+
+```yaml
+# config/model-pricing.yaml
+models:
+  gpt-4-turbo:
+    input_price_per_1k: 0.01      # USD per 1K input tokens
+    output_price_per_1k: 0.03     # USD per 1K output tokens
+  gpt-4o:
+    input_price_per_1k: 0.005
+    output_price_per_1k: 0.015
+  claude-3.5-sonnet:
+    input_price_per_1k: 0.003
+    output_price_per_1k: 0.015
+  llama-3-70b:                     # Self-hosted (GPU 비용 기반)
+    input_price_per_1k: 0.0008
+    output_price_per_1k: 0.0008
+```
+
+### 12.3 Eval Framework 로컬 실행
+
+품질 평가(Relevance, Faithfulness, Toxicity, Hallucination)를 로컬에서 테스트합니다.
+
+```bash
+# Eval 의존성 설치
+pip install ragas deepeval
+
+# 평가 스크립트 실행 (샘플 데이터)
+python scripts/eval_test.py --model gpt-4o --dataset test/fixtures/rag_qa_pairs.json
+```
+
+### 12.4 AI 진단 항목 개발 환경
+
+AI 진단 항목 5종 (ai-cost-spike, ai-agent-loop, ai-rag-quality, ai-gpu-saturation, ai-model-drift)의 룰 엔진은 Agent의 `diagnose` 패키지에 위치합니다.
+
+```bash
+# AI 진단 룰 단위 테스트
+cd agent && go test ./diagnose/ai/... -v
+
+# 진단 임계치 설정 (로컬 오버라이드)
+# config/diagnose-ai.yaml에서 임계치 조정 가능
+```
 
 ---
 

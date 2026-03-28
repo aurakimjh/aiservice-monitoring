@@ -1,7 +1,7 @@
 # AI 서비스는 어떻게 사용자의 질문을 처리하는가?
 
 > **대상 독자**: AI 서비스의 내부 동작을 처음 접하는 분 (기술 배경 불필요)
-> **최종 업데이트**: 2026-03-22
+> **최종 업데이트**: 2026-03-28 (v1.3 AI Observability 반영)
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 >
 > **관련 문서**:
@@ -463,6 +463,29 @@ AI 서비스도 마찬가지입니다:
 | Vector DB | 벡터 데이터베이스 | 임베딩 벡터를 저장하고 유사 벡터를 검색하는 특수 DB |
 | vLLM | vLLM | 오픈소스 LLM 추론 서버. 높은 처리량이 특징 |
 | VRAM | Video RAM | GPU의 메모리. AI 모델을 올려놓는 공간 |
+
+---
+
+---
+
+## v1.3 AI Observability 추가 관측 포인트
+
+v1.3에서 위 흐름의 각 단계를 OTel GenAI Semantic Conventions로 자동 추적합니다:
+
+| 단계 | OTel Span | 수집 메트릭 |
+|------|-----------|------------|
+| 전체 RAG 요청 | `rag.workflow` | total_ms, stages, sources_count |
+| 임베딩 | `rag.embedding` | model, dimension, latency_ms |
+| 벡터 검색 | `rag.vector_search` | collection, top_k, results_count, top_score |
+| LLM 추론 | `gen_ai.chat` | model, input_tokens, output_tokens, cost_usd, latency_ms |
+| 가드레일 | `guardrail.check` | action(PASS/BLOCK), violations |
+
+**자동 진단**: AI ITEM 5종이 위 메트릭을 기반으로 이상 상태를 자동 판정합니다.
+- 비용 급증 (cost > $100)
+- Agent Loop (latency > 10s)
+- RAG 품질 저하 (relevance < 0.5)
+- GPU 메모리 포화 (VRAM > 90%)
+- 모델 드리프트 (hallucination > 0.3)
 
 ---
 
