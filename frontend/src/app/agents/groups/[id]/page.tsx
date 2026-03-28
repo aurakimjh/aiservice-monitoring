@@ -4,12 +4,14 @@ import { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
 import { KPICard } from '@/components/monitoring';
 import { getGroupDashboard } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getRelativeTime } from '@/lib/utils';
+import type { GroupDashboard } from '@/types/monitoring';
 import { fleetApi } from '@/lib/api-client';
 import {
   Play,
@@ -224,7 +226,13 @@ export default function GroupDashboardPage() {
   const params = useParams<{ id: string }>();
   const groupId = params.id;
 
-  const dashboard = getGroupDashboard(groupId);
+  const demoFn = useCallback(() => getGroupDashboard(groupId), [groupId]);
+  const { data: dashboardData, source } = useDataSource<GroupDashboard>(
+    `/fleet/groups/${groupId}`,
+    demoFn,
+    { refreshInterval: 30_000 },
+  );
+  const dashboard = dashboardData ?? getGroupDashboard(groupId);
 
   const healthyPct = dashboard.agentCount > 0
     ? Math.round((dashboard.healthyCount / dashboard.agentCount) * 100)
@@ -270,9 +278,12 @@ export default function GroupDashboardPage() {
 
       {/* Title + actions */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          {dashboard.groupName}
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+            {dashboard.groupName}
+          </h1>
+          <DataSourceBadge source={source} />
+        </div>
 
         <div className="flex items-center gap-2">
           {/* 25-3-5: Batch Config */}

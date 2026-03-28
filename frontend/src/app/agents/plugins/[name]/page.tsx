@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card } from '@/components/ui';
+import { Card, DataSourceBadge } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { KPICard } from '@/components/monitoring';
 import { DeployStrategyModal } from '@/components/monitoring/deploy-strategy-modal';
 import { getPluginRegistry, getPluginAgentStatus } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import type { PluginRegistryItem, PluginAgentStatus } from '@/types/monitoring';
 import {
   Package,
@@ -53,9 +54,27 @@ export default function PluginDetailPage() {
   const params = useParams();
   const pluginName = params.name as string;
 
-  const plugins = useMemo(() => getPluginRegistry(), []);
-  const plugin = useMemo(() => plugins.find(p => p.name === pluginName), [plugins, pluginName]);
-  const agentStatuses = useMemo(() => getPluginAgentStatus(pluginName), [pluginName]);
+  const demoPlugin = useCallback(() => {
+    const all = getPluginRegistry();
+    return all.find(p => p.name === pluginName) ?? null;
+  }, [pluginName]);
+  const { data: pluginData, source } = useDataSource<PluginRegistryItem | null>(
+    `/fleet/plugins/${pluginName}`,
+    demoPlugin,
+    { refreshInterval: 30_000 },
+  );
+  const plugin = pluginData ?? getPluginRegistry().find(p => p.name === pluginName) ?? null;
+
+  const demoStatuses = useCallback(() => getPluginAgentStatus(pluginName), [pluginName]);
+  const { data: statusData } = useDataSource<PluginAgentStatus[]>(
+    `/fleet/plugins/${pluginName}/agents`,
+    demoStatuses,
+    {
+      refreshInterval: 30_000,
+      transform: (raw) => (raw as { items?: PluginAgentStatus[] }).items ?? raw as PluginAgentStatus[],
+    },
+  );
+  const agentStatuses: PluginAgentStatus[] = statusData ?? getPluginAgentStatus(pluginName);
 
   const [showDeploy, setShowDeploy] = useState(false);
 
@@ -97,6 +116,7 @@ export default function PluginDetailPage() {
             <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
               {plugin.name}
             </h1>
+            <DataSourceBadge source={source} />
             <span
               className="px-2 py-0.5 rounded text-[10px] font-mono"
               style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
