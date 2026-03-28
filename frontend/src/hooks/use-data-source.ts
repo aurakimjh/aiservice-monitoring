@@ -57,8 +57,11 @@ export function useDataSource<T>(
   },
 ): UseDataSourceResult<T> {
   const mode = useUIStore((s) => s.dataSourceMode);
-  const [data, setData] = useState<T | null>(null);
-  const [source, setSource] = useState<DataSource>('demo');
+  // Initialize with demo data immediately to prevent blank flash
+  const [data, setData] = useState<T | null>(() => {
+    try { return mode === 'live' ? null : demoFallback(); } catch { return null; }
+  });
+  const [source, setSource] = useState<DataSource>(mode === 'live' ? 'live' : 'demo');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const prevSourceRef = useRef<DataSource>('demo');
@@ -107,7 +110,8 @@ export function useDataSource<T>(
         // Live mode: 에러 표시 (fallback 없음)
         setData(null);
         setSource('live');
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        setError(msg.includes('timeout') ? 'API timeout — server may be down' : msg.includes('fetch') ? 'Network error — check connection' : msg);
       }
     } finally {
       setLoading(false);
