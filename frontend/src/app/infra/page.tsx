@@ -301,11 +301,11 @@ export default function InfraPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPICard title="Total Hosts" value={total} status="healthy" />
-        <KPICard title="Healthy" value={healthy} status="healthy" />
-        <KPICard title="Warning" value={warning} status={warning > 0 ? 'warning' : 'healthy'} />
-        <KPICard title="Critical / Offline" value={critical} status={critical > 0 ? 'critical' : 'healthy'} />
-        <KPICard title="Avg CPU" value={avgCpu} unit="%" status={avgCpu > 80 ? 'warning' : 'healthy'} />
+        <KPICard title="Total Hosts" helpId="total-hosts" value={total} status="healthy" />
+        <KPICard title="Healthy" helpId="healthy-hosts" value={healthy} status="healthy" />
+        <KPICard title="Warning" helpId="warning-hosts" value={warning} status={warning > 0 ? 'warning' : 'healthy'} />
+        <KPICard title="Critical / Offline" helpId="critical-hosts" value={critical} status={critical > 0 ? 'critical' : 'healthy'} />
+        <KPICard title="Avg CPU" helpId="cpu-usage" value={avgCpu} unit="%" status={avgCpu > 80 ? 'warning' : 'healthy'} />
         <KPICard title="Pending" value={pendingAgents.length} status={hasPending ? 'warning' : 'healthy'} subtitle={hasPending ? 'Needs approval' : 'None'} />
       </div>
 

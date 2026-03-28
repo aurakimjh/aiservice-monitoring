@@ -99,6 +99,7 @@ export default function HomePage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KPICard
           title="Services"
+          helpId="services"
           value={totalAgents}
           subtitle={`${onlineAgents} online`}
           status={onlineAgents === totalAgents ? 'healthy' : 'warning'}
@@ -107,6 +108,7 @@ export default function HomePage() {
         />
         <KPICard
           title="Error Rate"
+          helpId="error-rate"
           value="0.12"
           unit="%"
           trend={{ direction: 'down', value: '0.03%', positive: true }}
@@ -114,6 +116,7 @@ export default function HomePage() {
         />
         <KPICard
           title="P95 Latency"
+          helpId="p95-latency"
           value="245"
           unit="ms"
           trend={{ direction: 'down', value: '15ms', positive: true }}
@@ -122,6 +125,7 @@ export default function HomePage() {
         />
         <KPICard
           title="Avg CPU"
+          helpId="cpu-usage"
           value={avgCpu}
           unit="%"
           status={parseFloat(avgCpu) > 80 ? 'warning' : 'healthy'}
@@ -129,6 +133,7 @@ export default function HomePage() {
         />
         <KPICard
           title="Backends"
+          helpId="backends"
           value={promStatus === 'connected' && jaegerStatus === 'connected' ? 'OK' : 'Partial'}
           subtitle={`Prom: ${promStatus} · Jaeger: ${jaegerStatus}`}
           status={promStatus === 'connected' ? 'healthy' : 'warning'}

@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button, Tabs, DataSourceBadge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, Tabs, DataSourceBadge, WidgetHelp } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { useDashboardStore } from '@/stores/dashboard-store';
@@ -224,6 +224,7 @@ export default function DashboardBuilderPage() {
                       <div className="flex items-center gap-1.5 min-w-0">
                         {store.editMode && <GripVertical size={12} className="text-[var(--text-muted)] shrink-0 opacity-0 group-hover:opacity-100" />}
                         <span className="text-[11px] font-medium text-[var(--text-primary)] truncate">{widget.title}</span>
+                        <WidgetHelp widgetId={widget.type} />
                       </div>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {/* SUM / Individual toggle */}

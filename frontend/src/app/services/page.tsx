@@ -135,11 +135,11 @@ export default function ServicesPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPICard title="Total Services" value={total} subtitle={`${healthy} healthy`} status="healthy" />
-        <KPICard title="Avg P95 Latency" value={avgP95} unit="ms" status={avgP95 > 1000 ? 'warning' : 'healthy'} />
-        <KPICard title="Total Throughput" value={totalRpm.toLocaleString()} unit="rpm" status="healthy" />
-        <KPICard title="Avg Error Rate" value={avgError.toFixed(2)} unit="%" status={avgError > 0.5 ? 'warning' : 'healthy'} />
-        <KPICard title="Dependencies" value={topoData.edges?.length ?? 0} subtitle="call relationships" />
+        <KPICard title="Total Services" helpId="total-services" value={total} subtitle={`${healthy} healthy`} status="healthy" />
+        <KPICard title="Avg P95 Latency" helpId="avg-p95" value={avgP95} unit="ms" status={avgP95 > 1000 ? 'warning' : 'healthy'} />
+        <KPICard title="Total Throughput" helpId="total-throughput" value={totalRpm.toLocaleString()} unit="rpm" status="healthy" />
+        <KPICard title="Avg Error Rate" helpId="avg-error-rate" value={avgError.toFixed(2)} unit="%" status={avgError > 0.5 ? 'warning' : 'healthy'} />
+        <KPICard title="Dependencies" helpId="dependencies" value={topoData.edges?.length ?? 0} subtitle="call relationships" />
       </div>
 
       {/* Filters + View Toggle */}

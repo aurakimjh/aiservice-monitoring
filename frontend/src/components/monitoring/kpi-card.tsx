@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { SparkLine } from '@/components/charts';
+import { WidgetHelp } from '@/components/ui/widget-help';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 type TrendDirection = 'up' | 'down' | 'flat';
@@ -15,6 +16,7 @@ interface KPICardProps {
   sparkData?: number[];
   status?: 'healthy' | 'warning' | 'critical';
   badge?: React.ReactNode;
+  helpId?: string;
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function KPICard({
   sparkData,
   status,
   badge,
+  helpId,
   className,
 }: KPICardProps) {
   const TrendIcon =
@@ -60,6 +63,7 @@ export function KPICard({
     >
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] font-medium">
         {title}
+        {helpId && <WidgetHelp widgetId={helpId} />}
         {badge}
       </div>
 

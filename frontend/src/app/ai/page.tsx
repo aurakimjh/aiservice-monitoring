@@ -159,6 +159,7 @@ export default function AIServicesPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KPICard
           title="TTFT P95"
+          helpId="ai-ttft"
           value={formatDuration(kpis.avgTTFT)}
           subtitle="SLO: < 2s"
           status={kpis.avgTTFT > 2000 ? 'critical' : kpis.avgTTFT > 1500 ? 'warning' : 'healthy'}
@@ -166,6 +167,7 @@ export default function AIServicesPage() {
         />
         <KPICard
           title="TPS P50"
+          helpId="ai-tps"
           value={kpis.avgTPS}
           unit="tok/s"
           subtitle="SLO: > 30"
@@ -175,6 +177,7 @@ export default function AIServicesPage() {
         />
         <KPICard
           title="GPU Avg"
+          helpId="ai-gpu"
           value={kpis.avgGPU}
           unit="%"
           subtitle="Threshold: 90%"
@@ -183,6 +186,7 @@ export default function AIServicesPage() {
         />
         <KPICard
           title="Token Cost"
+          helpId="ai-token-cost"
           value={formatCost(kpis.totalCost)}
           unit="/h"
           subtitle={`Budget: $15/h`}
@@ -191,6 +195,7 @@ export default function AIServicesPage() {
         />
         <KPICard
           title="Block Rate"
+          helpId="ai-block-rate"
           value={kpis.avgBlockRate.toFixed(1)}
           unit="%"
           subtitle="Threshold: 5%"
