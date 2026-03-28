@@ -160,10 +160,10 @@ export default function MarketplacePage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Items" value={items.length} status="healthy" />
-        <KPICard title="Dashboards" value={dashboardCount} subtitle={`${Math.round((dashboardCount / items.length) * 100)}% of total`} />
-        <KPICard title="Prompts" value={promptCount} subtitle={`${Math.round((promptCount / items.length) * 100)}% of total`} />
-        <KPICard title="Plugins" value={pluginCount} subtitle={`${Math.round((pluginCount / items.length) * 100)}% of total`} />
+        <KPICard helpId="marketplace-total" title="Total Items" value={items.length} status="healthy" />
+        <KPICard helpId="marketplace-dashboards" title="Dashboards" value={dashboardCount} subtitle={`${Math.round((dashboardCount / items.length) * 100)}% of total`} />
+        <KPICard helpId="marketplace-prompts" title="Prompts" value={promptCount} subtitle={`${Math.round((promptCount / items.length) * 100)}% of total`} />
+        <KPICard helpId="marketplace-plugins" title="Plugins" value={pluginCount} subtitle={`${Math.round((pluginCount / items.length) * 100)}% of total`} />
       </div>
 
       {/* Tabs */}

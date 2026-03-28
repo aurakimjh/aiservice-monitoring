@@ -65,10 +65,10 @@ export default function CostsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Cost" value={`$${totalPerDay.toFixed(0)}`} unit="/day" trend={{ direction: 'up', value: '+4.2%', positive: false }} status="healthy" />
-        <KPICard title="Monthly Estimate" value={`$${(totalPerDay * 30).toFixed(0)}`} subtitle="projected" />
-        <KPICard title="LLM API" value={`$${grouped['LLM API']?.total.toFixed(0) ?? 0}`} unit="/day" subtitle={`${((grouped['LLM API']?.total ?? 0) / totalPerDay * 100).toFixed(0)}% of total`} status="warning" />
-        <KPICard title="GPU Compute" value={`$${grouped['GPU Compute']?.total.toFixed(0) ?? 0}`} unit="/day" subtitle={`${((grouped['GPU Compute']?.total ?? 0) / totalPerDay * 100).toFixed(0)}% of total`} />
+        <KPICard helpId="total-daily-cost" title="Total Cost" value={`$${totalPerDay.toFixed(0)}`} unit="/day" trend={{ direction: 'up', value: '+4.2%', positive: false }} status="healthy" />
+        <KPICard helpId="monthly-estimate" title="Monthly Estimate" value={`$${(totalPerDay * 30).toFixed(0)}`} subtitle="projected" />
+        <KPICard helpId="llm-api-cost" title="LLM API" value={`$${grouped['LLM API']?.total.toFixed(0) ?? 0}`} unit="/day" subtitle={`${((grouped['LLM API']?.total ?? 0) / totalPerDay * 100).toFixed(0)}% of total`} status="warning" />
+        <KPICard helpId="gpu-compute-cost" title="GPU Compute" value={`$${grouped['GPU Compute']?.total.toFixed(0) ?? 0}`} unit="/day" subtitle={`${((grouped['GPU Compute']?.total ?? 0) / totalPerDay * 100).toFixed(0)}% of total`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

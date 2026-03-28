@@ -122,10 +122,10 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
       {activeTab === 'overview' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KPICard title="TTFT P95" value={svc.ttftP95 ? formatDuration(svc.ttftP95) : '—'} subtitle="SLO: < 2s" status={((svc.ttftP95 ?? 0) > 2000) ? 'critical' : ((svc.ttftP95 ?? 0) > 1500) ? 'warning' : 'healthy'} sparkData={[800, 900, 1000, 1100, 1200, 1100, 1300, 1200, 1250, (svc.ttftP95 ?? 0) / 10]} />
-            <KPICard title="TPS P50" value={svc.tpsP50 ?? '—'} unit="tok/s" subtitle="SLO: > 30" status={((svc.tpsP50 ?? 0) < 30) ? 'warning' : 'healthy'} trend={{ direction: 'up', value: '+8%', positive: true }} sparkData={[35, 38, 40, 42, 39, 41, 43, 40, 42, svc.tpsP50 ?? 0]} />
-            <KPICard title="Cost" value={svc.costPerHour != null ? formatCost(svc.costPerHour) : '—'} unit="/h" status="healthy" trend={{ direction: 'down', value: '-3%', positive: true }} />
-            <KPICard title="Error Rate" value={svc.errorRate != null ? `${svc.errorRate}%` : '—'} status={((svc.errorRate ?? 0) > 1) ? 'critical' : ((svc.errorRate ?? 0) > 0.5) ? 'warning' : 'healthy'} />
+            <KPICard helpId="ai-svc-ttft-p95" title="TTFT P95" value={svc.ttftP95 ? formatDuration(svc.ttftP95) : '—'} subtitle="SLO: < 2s" status={((svc.ttftP95 ?? 0) > 2000) ? 'critical' : ((svc.ttftP95 ?? 0) > 1500) ? 'warning' : 'healthy'} sparkData={[800, 900, 1000, 1100, 1200, 1100, 1300, 1200, 1250, (svc.ttftP95 ?? 0) / 10]} />
+            <KPICard helpId="ai-svc-tps-p50" title="TPS P50" value={svc.tpsP50 ?? '—'} unit="tok/s" subtitle="SLO: > 30" status={((svc.tpsP50 ?? 0) < 30) ? 'warning' : 'healthy'} trend={{ direction: 'up', value: '+8%', positive: true }} sparkData={[35, 38, 40, 42, 39, 41, 43, 40, 42, svc.tpsP50 ?? 0]} />
+            <KPICard helpId="ai-svc-cost" title="Cost" value={svc.costPerHour != null ? formatCost(svc.costPerHour) : '—'} unit="/h" status="healthy" trend={{ direction: 'down', value: '-3%', positive: true }} />
+            <KPICard helpId="ai-svc-error-rate" title="Error Rate" value={svc.errorRate != null ? `${svc.errorRate}%` : '—'} status={((svc.errorRate ?? 0) > 1) ? 'critical' : ((svc.errorRate ?? 0) > 0.5) ? 'warning' : 'healthy'} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -382,10 +382,10 @@ function GuardrailTab() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Checks" value={data.totalChecks.toLocaleString()} status="healthy" />
-        <KPICard title="Blocked" value={data.blockCount} status={data.blockRate > 5 ? 'critical' : data.blockRate > 3 ? 'warning' : 'healthy'} />
-        <KPICard title="Block Rate" value={`${data.blockRate}%`} subtitle="Threshold: 5%" status={data.blockRate > 5 ? 'critical' : 'healthy'} sparkData={[1.8, 2.0, 1.9, 2.2, 2.1, 2.0, 2.3, 2.1, 2.0, data.blockRate]} />
-        <KPICard title="Latency Contrib" value={`${data.latencyContribution}%`} subtitle="of total response time" />
+        <KPICard helpId="guardrail-total-checks" title="Total Checks" value={data.totalChecks.toLocaleString()} status="healthy" />
+        <KPICard helpId="guardrail-blocked" title="Blocked" value={data.blockCount} status={data.blockRate > 5 ? 'critical' : data.blockRate > 3 ? 'warning' : 'healthy'} />
+        <KPICard helpId="guardrail-block-rate" title="Block Rate" value={`${data.blockRate}%`} subtitle="Threshold: 5%" status={data.blockRate > 5 ? 'critical' : 'healthy'} sparkData={[1.8, 2.0, 1.9, 2.2, 2.1, 2.0, 2.3, 2.1, 2.0, data.blockRate]} />
+        <KPICard helpId="guardrail-latency-contrib" title="Latency Contrib" value={`${data.latencyContribution}%`} subtitle="of total response time" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

@@ -97,21 +97,25 @@ export default function PipelinesPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="pipeline-active"
           title="Active Pipelines"
           value={activePipelines}
           status="healthy"
         />
         <KPICard
+          helpId="pipeline-running-tasks"
           title="Running Tasks"
           value={runningTasks}
           status={runningTasks > 0 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="pipeline-success-rate"
           title="Success Rate"
           value={`${avgSuccessRate.toFixed(1)}%`}
           status={avgSuccessRate >= 95 ? 'healthy' : avgSuccessRate >= 85 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="pipeline-avg-duration"
           title="Avg Duration"
           value={formatDuration(avgDuration)}
         />

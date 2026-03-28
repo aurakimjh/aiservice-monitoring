@@ -227,19 +227,22 @@ export default function ConnectionPoolPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Pools" value={totalPools} status="healthy" />
+        <KPICard helpId="conn-pool-total" title="Total Pools" value={totalPools} status="healthy" />
         <KPICard
+          helpId="conn-pool-avg-util"
           title="Avg Utilization"
           value={avgUtil}
           unit="%"
           status={avgUtil >= 90 ? 'critical' : avgUtil >= 70 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="conn-pool-leak-suspects"
           title="Leak Suspects"
           value={leakCount}
           status={leakCount > 0 ? 'critical' : 'healthy'}
         />
         <KPICard
+          helpId="conn-pool-waiting"
           title="Waiting Requests"
           value={waitingCount}
           status={waitingCount > 0 ? 'warning' : 'healthy'}

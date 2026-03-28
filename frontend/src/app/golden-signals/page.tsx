@@ -333,6 +333,7 @@ export default function GoldenSignalsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="gs-avg-latency-p95"
           title="Avg Latency P95"
           value={kpi.avgP95.toFixed(1)}
           unit="ms"
@@ -341,6 +342,7 @@ export default function GoldenSignalsPage() {
           sparkData={aggregatedTS.map(d => d.latency_p95)}
         />
         <KPICard
+          helpId="gs-total-traffic"
           title="Total Traffic"
           value={kpi.totalTraffic >= 1000 ? `${(kpi.totalTraffic / 1000).toFixed(1)}k` : String(kpi.totalTraffic)}
           unit="rpm"
@@ -349,6 +351,7 @@ export default function GoldenSignalsPage() {
           sparkData={aggregatedTS.map(d => d.traffic_rpm)}
         />
         <KPICard
+          helpId="gs-avg-error-rate"
           title="Avg Error Rate"
           value={kpi.avgError.toFixed(2)}
           unit="%"
@@ -357,6 +360,7 @@ export default function GoldenSignalsPage() {
           sparkData={aggregatedTS.map(d => d.error_rate)}
         />
         <KPICard
+          helpId="gs-avg-saturation"
           title="Avg Saturation"
           value={kpi.avgSat.toFixed(1)}
           unit="%"

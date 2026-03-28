@@ -168,10 +168,10 @@ export default function ThreadDumpPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Threads" value={dump.total} status="healthy" />
-        <KPICard title="Virtual Threads" value={dump.virtual.length} status="healthy" />
-        <KPICard title="VT Running" value={vtCounts.running} status="healthy" />
-        <KPICard title="VT Blocked" value={vtCounts.blocked} status={vtCounts.blocked > 0 ? 'warning' : 'healthy'} />
+        <KPICard helpId="thread-total" title="Total Threads" value={dump.total} status="healthy" />
+        <KPICard helpId="thread-virtual" title="Virtual Threads" value={dump.virtual.length} status="healthy" />
+        <KPICard helpId="thread-vt-running" title="VT Running" value={vtCounts.running} status="healthy" />
+        <KPICard helpId="thread-vt-blocked" title="VT Blocked" value={vtCounts.blocked} status={vtCounts.blocked > 0 ? 'warning' : 'healthy'} />
       </div>
 
       {/* Tab selector */}

@@ -951,6 +951,7 @@ export default function DatabasePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-3">
         <KPICard
+          helpId="db-total-instances"
           title="Total Instances"
           value={totalInstances}
           subtitle="Active database instances"
@@ -958,12 +959,14 @@ export default function DatabasePage() {
           status="healthy"
         />
         <KPICard
+          helpId="db-avg-qps"
           title="Avg QPS"
           value={formatNumber(avgQps)}
           subtitle="Queries per second"
           sparkData={[2800, 3100, 3200, 3400, 3300, 3500, avgQps]}
         />
         <KPICard
+          helpId="db-slow-queries"
           title="Slow Queries (24h)"
           value={slowQueryCount}
           status={slowQueryCount > 5 ? 'warning' : 'healthy'}
@@ -971,6 +974,7 @@ export default function DatabasePage() {
           sparkData={[3, 5, 4, 6, 7, 8, slowQueryCount]}
         />
         <KPICard
+          helpId="db-active-locks"
           title="Active Locks"
           value={activeLocks}
           status={activeLocks > 2 ? 'critical' : activeLocks > 0 ? 'warning' : 'healthy'}

@@ -155,23 +155,27 @@ export default function PluginDetailPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KPICard
+          helpId="plugin-detail-total-agents"
           title="Total Agents"
           value={plugin.agent_summary.total}
           subtitle="targeted"
         />
         <KPICard
+          helpId="plugin-detail-installed"
           title="Installed"
           value={plugin.agent_summary.installed}
           subtitle={`${successRate}% success`}
           status="healthy"
         />
         <KPICard
+          helpId="plugin-detail-failed"
           title="Failed"
           value={plugin.agent_summary.failed}
           subtitle="require attention"
           status={plugin.agent_summary.failed > 0 ? 'critical' : undefined}
         />
         <KPICard
+          helpId="plugin-detail-pending"
           title="Pending"
           value={plugin.agent_summary.pending}
           subtitle="awaiting install"

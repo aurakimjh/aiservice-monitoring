@@ -122,10 +122,10 @@ export default function SystemProfilingPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Profiles" value={totalProfiles} subtitle="perf/eBPF captures" status="healthy" />
-        <KPICard title="Active Agents" value={activeAgents} subtitle="agents reporting" status="healthy" />
-        <KPICard title="Avg Duration" value={avgDuration} unit="s" subtitle="profile duration" status="healthy" />
-        <KPICard title="Storage Used" value={formatBytes(totalStorage)} subtitle="folded stack data" status="healthy" />
+        <KPICard helpId="sys-profiling-total" title="Total Profiles" value={totalProfiles} subtitle="perf/eBPF captures" status="healthy" />
+        <KPICard helpId="sys-profiling-active-agents" title="Active Agents" value={activeAgents} subtitle="agents reporting" status="healthy" />
+        <KPICard helpId="sys-profiling-avg-duration" title="Avg Duration" value={avgDuration} unit="s" subtitle="profile duration" status="healthy" />
+        <KPICard helpId="sys-profiling-storage" title="Storage Used" value={formatBytes(totalStorage)} subtitle="folded stack data" status="healthy" />
       </div>
 
       {/* Agent selector + filters */}

@@ -316,6 +316,7 @@ export default function PythonRuntimePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-3">
         <KPICard
+          helpId="python-gil-contention"
           title="GIL Contention / FT Utilization"
           value={ftAgents.length > 0 ? `${avgFtUtilization}%` : `${avgGilContention}%`}
           subtitle={ftAgents.length > 0
@@ -326,12 +327,14 @@ export default function PythonRuntimePage() {
           sparkData={[28, 32, 35, 30, 34, 31, avgGilContention]}
         />
         <KPICard
+          helpId="python-active-threads"
           title="Active Threads"
           value={totalThreads}
           subtitle={`Across ${agents.length} agents`}
           sparkData={[60, 65, 72, 78, 75, 80, totalThreads]}
         />
         <KPICard
+          helpId="python-asyncio-pending"
           title="Asyncio Pending Tasks"
           value={totalAsyncPending}
           subtitle="Total pending across all agents"
@@ -339,6 +342,7 @@ export default function PythonRuntimePage() {
           sparkData={[120, 135, 148, 155, 142, 158, totalAsyncPending]}
         />
         <KPICard
+          helpId="python-gc-pause"
           title="GC Total Pause (avg)"
           value={`${avgGcPause}`}
           unit="ms"

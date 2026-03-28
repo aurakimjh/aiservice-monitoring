@@ -177,13 +177,13 @@ export default function GPUClusterPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <KPICard title="GPUs" value={stats.count} subtitle={`${filteredHosts.length} hosts`} status="healthy" />
-        <KPICard title="Avg VRAM" value={stats.avgVRAM} unit="%" status={stats.avgVRAM > 90 ? 'critical' : stats.avgVRAM > 75 ? 'warning' : 'healthy'} sparkData={[68, 70, 72, 75, 73, 76, 74, 75, 77, stats.avgVRAM]} />
-        <KPICard title="Avg Temp" value={stats.avgTemp} unit="°C" status={stats.avgTemp > 80 ? 'critical' : stats.avgTemp > 70 ? 'warning' : 'healthy'} sparkData={[58, 60, 62, 61, 63, 62, 64, 63, 62, stats.avgTemp]} />
-        <KPICard title="Total Power" value={Math.round(stats.totalPower)} unit="W" status="healthy" />
-        <KPICard title="Critical" value={stats.critical} subtitle="VRAM ≥ 90%" status={stats.critical > 0 ? 'critical' : 'healthy'} />
-        <KPICard title="vGPU" value={stats.virtual} subtitle="virtual instances" status="healthy" />
-        <KPICard title="MIG" value={stats.mig} subtitle="partitions" status="healthy" />
+        <KPICard helpId="gpu-count" title="GPUs" value={stats.count} subtitle={`${filteredHosts.length} hosts`} status="healthy" />
+        <KPICard helpId="gpu-avg-vram" title="Avg VRAM" value={stats.avgVRAM} unit="%" status={stats.avgVRAM > 90 ? 'critical' : stats.avgVRAM > 75 ? 'warning' : 'healthy'} sparkData={[68, 70, 72, 75, 73, 76, 74, 75, 77, stats.avgVRAM]} />
+        <KPICard helpId="gpu-avg-temp" title="Avg Temp" value={stats.avgTemp} unit="°C" status={stats.avgTemp > 80 ? 'critical' : stats.avgTemp > 70 ? 'warning' : 'healthy'} sparkData={[58, 60, 62, 61, 63, 62, 64, 63, 62, stats.avgTemp]} />
+        <KPICard helpId="gpu-total-power" title="Total Power" value={Math.round(stats.totalPower)} unit="W" status="healthy" />
+        <KPICard helpId="gpu-critical" title="Critical" value={stats.critical} subtitle="VRAM ≥ 90%" status={stats.critical > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="gpu-vgpu" title="vGPU" value={stats.virtual} subtitle="virtual instances" status="healthy" />
+        <KPICard helpId="gpu-mig" title="MIG" value={stats.mig} subtitle="partitions" status="healthy" />
       </div>
 
       {/* OOM Warning */}

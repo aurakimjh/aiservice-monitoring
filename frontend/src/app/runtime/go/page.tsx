@@ -371,6 +371,7 @@ export default function GoRuntimePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="go-sched-latency-p95"
           title="Sched Latency P95"
           value={kpi.maxP95}
           unit={'\u00b5s'}
@@ -378,6 +379,7 @@ export default function GoRuntimePage() {
           status={kpi.maxP95 > 150 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="go-gc-stw-pause"
           title="GC STW Pause"
           value={kpi.avgSTW}
           unit={'\u00b5s'}
@@ -385,12 +387,14 @@ export default function GoRuntimePage() {
           status={kpi.avgSTW > 100 ? 'critical' : kpi.avgSTW > 60 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="go-total-goroutines"
           title="Total Goroutines"
           value={kpi.totalGoroutines.toLocaleString()}
           subtitle="across all agents"
           status={kpi.totalGoroutines > 20000 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="go-heap-alloc"
           title="Heap Alloc"
           value={Math.round(kpi.totalHeap / 1024 * 100) / 100 >= 1 ? `${(kpi.totalHeap / 1024).toFixed(1)}` : String(kpi.totalHeap)}
           unit={kpi.totalHeap >= 1024 ? 'GB' : 'MB'}

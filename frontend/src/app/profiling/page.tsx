@@ -84,10 +84,10 @@ export default function ProfilingPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Profiles" value={profiles.length} subtitle="captured profiles" status="healthy" />
-        <KPICard title="Active Services" value={uniqueServices.length} subtitle="services profiled" status="healthy" />
-        <KPICard title="Avg Duration" value={avgDuration} unit="s" subtitle="profile duration" status="healthy" />
-        <KPICard title="Storage Used" value={`${(totalStorage / 1024 / 1024).toFixed(1)}`} unit="MB" subtitle="profile data" status="healthy" />
+        <KPICard helpId="profiling-total-profiles" title="Total Profiles" value={profiles.length} subtitle="captured profiles" status="healthy" />
+        <KPICard helpId="profiling-active-services" title="Active Services" value={uniqueServices.length} subtitle="services profiled" status="healthy" />
+        <KPICard helpId="profiling-avg-duration" title="Avg Duration" value={avgDuration} unit="s" subtitle="profile duration" status="healthy" />
+        <KPICard helpId="profiling-storage" title="Storage Used" value={`${(totalStorage / 1024 / 1024).toFixed(1)}`} unit="MB" subtitle="profile data" status="healthy" />
       </div>
 
       {/* Tabs */}

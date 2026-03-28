@@ -78,21 +78,23 @@ export default function AIOverviewPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPICard title="AI Services" value={models.length || '-'} subtitle={`${totalCalls} total calls`} status="healthy" />
-        <KPICard title="Total Tokens" value={totalTokens > 0 ? totalTokens.toLocaleString() : '-'} status="healthy" />
+        <KPICard helpId="ai-services-count" title="AI Services" value={models.length || '-'} subtitle={`${totalCalls} total calls`} status="healthy" />
+        <KPICard helpId="ai-total-tokens" title="Total Tokens" value={totalTokens > 0 ? totalTokens.toLocaleString() : '-'} status="healthy" />
         <KPICard
+          helpId="ai-total-cost"
           title="Total Cost"
           value={totalCostUSD > 0 ? `$${totalCostUSD.toFixed(2)}` : '$0.00'}
           subtitle={totalCostUSD === 0 ? 'Local LLM' : undefined}
           status={totalCostUSD > 100 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="ai-avg-latency"
           title="Avg Latency"
           value={avgLatency || '-'}
           unit="ms"
           status={avgLatency > 2000 ? 'warning' : 'healthy'}
         />
-        <KPICard title="Models" value={models.length || '-'} subtitle={models.join(', ') || 'None'} status="healthy" />
+        <KPICard helpId="ai-models-count" title="Models" value={models.length || '-'} subtitle={models.join(', ') || 'None'} status="healthy" />
       </div>
 
       {/* Charts Row */}

@@ -663,10 +663,11 @@ export default function MiddlewarePage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Monitored Hosts" value={totalHosts} status="healthy" />
-        <KPICard title="Languages" value={langs.length} status="healthy" />
-        <KPICard title="Connection Pools" value={totalConnPools} status="healthy" />
+        <KPICard helpId="middleware-hosts" title="Monitored Hosts" value={totalHosts} status="healthy" />
+        <KPICard helpId="middleware-languages" title="Languages" value={langs.length} status="healthy" />
+        <KPICard helpId="middleware-conn-pools" title="Connection Pools" value={totalConnPools} status="healthy" />
         <KPICard
+          helpId="middleware-leak-alerts"
           title="Leak Alerts"
           value={leakAlerts + alerts.length}
           status={leakAlerts + alerts.length > 0 ? 'critical' : 'healthy'}

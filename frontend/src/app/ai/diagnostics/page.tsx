@@ -63,10 +63,10 @@ export default function AIDiagnosticsPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Items" value={result.total} status="healthy" />
-        <KPICard title="Passed" value={result.passed} status="healthy" />
-        <KPICard title="Warned" value={result.warned} status={result.warned > 0 ? 'warning' : 'healthy'} />
-        <KPICard title="Failed" value={result.failed} status={result.failed > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="ai-diag-total" title="Total Items" value={result.total} status="healthy" />
+        <KPICard helpId="ai-diag-passed" title="Passed" value={result.passed} status="healthy" />
+        <KPICard helpId="ai-diag-warned" title="Warned" value={result.warned} status={result.warned > 0 ? 'warning' : 'healthy'} />
+        <KPICard helpId="ai-diag-failed" title="Failed" value={result.failed} status={result.failed > 0 ? 'critical' : 'healthy'} />
       </div>
 
       {/* Item Cards */}

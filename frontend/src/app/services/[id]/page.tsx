@@ -277,6 +277,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           {/* Golden Signals */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <KPICard
+              helpId="svc-latency-p95"
               title="Latency (P95)"
               value={formatDuration(service.latencyP95)}
               subtitle={`P50: ${formatDuration(service.latencyP50)} / P99: ${formatDuration(service.latencyP99)}`}
@@ -284,6 +285,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               sparkData={[180, 210, 195, 230, 245, 220, 260, 240, 250, service.latencyP95 / 10]}
             />
             <KPICard
+              helpId="svc-traffic"
               title="Traffic"
               value={(service.rpm ?? 0).toLocaleString()}
               unit="rpm"
@@ -292,6 +294,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               sparkData={[900, 950, 1020, 980, 1050, 1100, 1080, 1120, 1150, service.rpm]}
             />
             <KPICard
+              helpId="svc-error-rate"
               title="Error Rate"
               value={(service.errorRate ?? 0).toFixed(2)}
               unit="%"
@@ -299,6 +302,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               sparkData={[0.1, 0.12, 0.08, 0.15, 0.11, 0.09, 0.13, 0.1, 0.12, service.errorRate]}
             />
             <KPICard
+              helpId="svc-saturation"
               title="Saturation"
               value={`${saturation.cpu}%`}
               subtitle={`MEM ${saturation.mem}%${saturation.gpu !== null ? ` / GPU ${saturation.gpu}%` : ''}`}

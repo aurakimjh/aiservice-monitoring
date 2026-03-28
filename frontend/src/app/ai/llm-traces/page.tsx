@@ -85,15 +85,17 @@ export default function LLMTracesPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total LLM Calls" value={totalCalls} status="healthy" />
-        <KPICard title="Total Tokens" value={totalTokens.toLocaleString()} status="healthy" />
+        <KPICard helpId="llm-total-calls" title="Total LLM Calls" value={totalCalls} status="healthy" />
+        <KPICard helpId="llm-total-tokens" title="Total Tokens" value={totalTokens.toLocaleString()} status="healthy" />
         <KPICard
+          helpId="llm-total-cost"
           title="Total Cost"
           value={`$${totalCost.toFixed(4)}`}
           subtitle={totalCost === 0 ? 'Local LLM ($0)' : undefined}
           status={totalCost > 10 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="llm-avg-latency"
           title="Avg Latency"
           value={avgLatency}
           unit="ms"

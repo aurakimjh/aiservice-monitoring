@@ -114,12 +114,12 @@ export default function ExecutiveDashboardPage() {
 
       {/* Top KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPICard title="Overall Health" value={summary.overallHealth === 'healthy' ? 'Good' : 'Degraded'} status={summary.overallHealth === 'healthy' ? 'healthy' : 'warning'} />
-        <KPICard title="Services" value={services.length + aiServices.length} subtitle={`${aiServices.length} AI`} status="healthy" />
-        <KPICard title="SLO Compliance" value={`${summary.sloCompliance}%`} subtitle={`${sloMet}/${slos.length} met`} status={sloBreached > 0 ? 'critical' : 'healthy'} />
-        <KPICard title="Open Incidents" value={openIncidents} status={openIncidents > 0 ? 'critical' : 'healthy'} />
-        <KPICard title="MTTR" value={`${summary.mttr}m`} subtitle="mean time to resolve" status="healthy" />
-        <KPICard title="Daily Cost" value={formatCost(totalCost)} trend={{ direction: summary.costTrend > 0 ? 'up' : 'down', value: `${summary.costTrend > 0 ? '+' : ''}${summary.costTrend}%`, positive: summary.costTrend < 0 }} />
+        <KPICard helpId="exec-overall-health" title="Overall Health" value={summary.overallHealth === 'healthy' ? 'Good' : 'Degraded'} status={summary.overallHealth === 'healthy' ? 'healthy' : 'warning'} />
+        <KPICard helpId="exec-services" title="Services" value={services.length + aiServices.length} subtitle={`${aiServices.length} AI`} status="healthy" />
+        <KPICard helpId="exec-slo-compliance" title="SLO Compliance" value={`${summary.sloCompliance}%`} subtitle={`${sloMet}/${slos.length} met`} status={sloBreached > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="exec-open-incidents" title="Open Incidents" value={openIncidents} status={openIncidents > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="exec-mttr" title="MTTR" value={`${summary.mttr}m`} subtitle="mean time to resolve" status="healthy" />
+        <KPICard helpId="exec-daily-cost" title="Daily Cost" value={formatCost(totalCost)} trend={{ direction: summary.costTrend > 0 ? 'up' : 'down', value: `${summary.costTrend > 0 ? '+' : ''}${summary.costTrend}%`, positive: summary.costTrend < 0 }} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

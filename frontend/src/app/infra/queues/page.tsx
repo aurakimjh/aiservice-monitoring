@@ -49,22 +49,26 @@ export default function QueuesPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="queue-total"
           title="Total Queues"
           value={totalQueues}
           status="healthy"
         />
         <KPICard
+          helpId="queue-total-messages"
           title="Total Messages"
           value={formatNumber(totalMessages)}
           status="healthy"
         />
         <KPICard
+          helpId="queue-throughput"
           title="Throughput"
           value={totalThroughput.toLocaleString()}
           unit="/s"
           status="healthy"
         />
         <KPICard
+          helpId="queue-consumer-lag"
           title="Consumer Lag"
           value={totalLag.toLocaleString()}
           status={totalLag > 5000 ? 'critical' : totalLag > 1000 ? 'warning' : 'healthy'}

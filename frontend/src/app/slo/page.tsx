@@ -82,10 +82,10 @@ export default function SLOPage() {
         <div className="space-y-4">
           {/* Probe KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KPICard title="Total Probes" value={probes.length} subtitle="Synthetic monitors" />
-            <KPICard title="Healthy" value={probes.filter((p) => p.status === 'healthy').length} status="healthy" subtitle="Operating normally" />
-            <KPICard title="Degraded" value={probes.filter((p) => p.status === 'degraded').length} status={probes.some((p) => p.status === 'degraded') ? 'warning' : 'healthy'} subtitle="Performance issues" />
-            <KPICard title="Down" value={probes.filter((p) => p.status === 'down').length} status={probes.some((p) => p.status === 'down') ? 'critical' : 'healthy'} subtitle="Unreachable" />
+            <KPICard helpId="probe-total" title="Total Probes" value={probes.length} subtitle="Synthetic monitors" />
+            <KPICard helpId="probe-healthy" title="Healthy" value={probes.filter((p) => p.status === 'healthy').length} status="healthy" subtitle="Operating normally" />
+            <KPICard helpId="probe-degraded" title="Degraded" value={probes.filter((p) => p.status === 'degraded').length} status={probes.some((p) => p.status === 'degraded') ? 'warning' : 'healthy'} subtitle="Performance issues" />
+            <KPICard helpId="probe-down" title="Down" value={probes.filter((p) => p.status === 'down').length} status={probes.some((p) => p.status === 'down') ? 'critical' : 'healthy'} subtitle="Unreachable" />
           </div>
 
           {/* Probe List */}
@@ -145,10 +145,10 @@ export default function SLOPage() {
 
       {activeTab === 'slo' && <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total SLOs" value={slos.length} subtitle={`${stats.met} met`} status="healthy" />
-        <KPICard title="Avg Compliance" value={`${stats.avgCompliance.toFixed(1)}%`} status={stats.avgCompliance >= 99 ? 'healthy' : 'warning'} />
-        <KPICard title="At Risk" value={stats.atRisk} status={stats.atRisk > 0 ? 'warning' : 'healthy'} />
-        <KPICard title="Breached" value={stats.breached} status={stats.breached > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="slo-total" title="Total SLOs" value={slos.length} subtitle={`${stats.met} met`} status="healthy" />
+        <KPICard helpId="slo-avg-compliance" title="Avg Compliance" value={`${stats.avgCompliance.toFixed(1)}%`} status={stats.avgCompliance >= 99 ? 'healthy' : 'warning'} />
+        <KPICard helpId="slo-at-risk" title="At Risk" value={stats.atRisk} status={stats.atRisk > 0 ? 'warning' : 'healthy'} />
+        <KPICard helpId="slo-breached" title="Breached" value={stats.breached} status={stats.breached > 0 ? 'critical' : 'healthy'} />
       </div>
 
       {/* SLO Cards */}

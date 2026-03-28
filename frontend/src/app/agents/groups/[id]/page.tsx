@@ -321,23 +321,27 @@ export default function GroupDashboardPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KPICard
+          helpId="group-agent-count"
           title="Agent Count"
           value={dashboard.agentCount}
           className="[&>div:first-child]:flex [&>div:first-child]:items-center [&>div:first-child]:gap-1.5"
         />
         <KPICard
+          helpId="group-healthy-pct"
           title="Healthy %"
           value={healthyPct}
           unit="%"
           status={healthyPct >= 80 ? 'healthy' : healthyPct >= 50 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="group-avg-cpu"
           title="Avg CPU %"
           value={dashboard.avgCpu}
           unit="%"
           status={dashboard.avgCpu > 80 ? 'critical' : dashboard.avgCpu > 60 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="group-avg-memory"
           title="Avg Memory %"
           value={dashboard.avgMemory}
           unit="%"

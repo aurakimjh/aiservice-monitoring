@@ -135,6 +135,7 @@ export default function TrainingPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="training-active-jobs"
           title="Active Jobs"
           value={activeJobs}
           subtitle={`${jobs.length} total jobs`}
@@ -142,6 +143,7 @@ export default function TrainingPage() {
           sparkData={[1, 2, 2, 3, 2, 3, 2, 2, 3, activeJobs]}
         />
         <KPICard
+          helpId="training-avg-gpu"
           title="Avg GPU Utilization"
           value={avgGpu}
           unit="%"
@@ -150,6 +152,7 @@ export default function TrainingPage() {
           sparkData={[80, 82, 85, 88, 90, 92, 91, 93, 94, avgGpu]}
         />
         <KPICard
+          helpId="training-best-loss"
           title="Current Best Loss"
           value={bestLoss === Infinity ? '—' : bestLoss.toFixed(2)}
           subtitle="Validation loss"
@@ -157,6 +160,7 @@ export default function TrainingPage() {
           sparkData={[1.2, 0.9, 0.7, 0.55, 0.48, 0.42, 0.38, 0.32, 0.28, bestLoss === Infinity ? 0 : bestLoss]}
         />
         <KPICard
+          helpId="training-total-checkpoints"
           title="Total Checkpoints"
           value={totalCheckpoints}
           subtitle="Across all jobs"

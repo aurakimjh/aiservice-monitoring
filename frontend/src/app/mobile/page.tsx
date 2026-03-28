@@ -106,10 +106,10 @@ export default function MobilePage() {
 
               {/* KPI cards 2x2 grid */}
               <div className="grid grid-cols-2 gap-2">
-                <KPICard title="Critical Alerts" value="3" status="critical" />
-                <KPICard title="Service Health" value="92%" status="healthy" />
-                <KPICard title="TTFT P95" value="1.2s" status="warning" />
-                <KPICard title="GPU Avg" value="72%" />
+                <KPICard helpId="mobile-critical-alerts" title="Critical Alerts" value="3" status="critical" />
+                <KPICard helpId="mobile-service-health" title="Service Health" value="92%" status="healthy" />
+                <KPICard helpId="mobile-ttft-p95" title="TTFT P95" value="1.2s" status="warning" />
+                <KPICard helpId="mobile-gpu-avg" title="GPU Avg" value="72%" />
               </div>
 
               {/* Service status list */}

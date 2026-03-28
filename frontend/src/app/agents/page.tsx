@@ -474,11 +474,11 @@ export default function AgentsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KPICard title="Total Agents" value={stats.total} subtitle="registered" status="healthy" />
-        <KPICard title="Healthy" value={stats.healthy} status="healthy" />
-        <KPICard title="Degraded" value={stats.degraded} status={stats.degraded > 0 ? 'warning' : 'healthy'} />
-        <KPICard title="Offline" value={stats.offline} status={stats.offline > 0 ? 'critical' : 'healthy'} subtitle="needs attention" />
-        <KPICard title="Pending Updates" value={stats.needsUpdate} subtitle="agents" trend={{ direction: 'flat', value: 'v1.2.0 target' }} />
+        <KPICard helpId="total-agents" title="Total Agents" value={stats.total} subtitle="registered" status="healthy" />
+        <KPICard helpId="agents-healthy" title="Healthy" value={stats.healthy} status="healthy" />
+        <KPICard helpId="agents-degraded" title="Degraded" value={stats.degraded} status={stats.degraded > 0 ? 'warning' : 'healthy'} />
+        <KPICard helpId="agents-offline" title="Offline" value={stats.offline} status={stats.offline > 0 ? 'critical' : 'healthy'} subtitle="needs attention" />
+        <KPICard helpId="agents-pending-updates" title="Pending Updates" value={stats.needsUpdate} subtitle="agents" trend={{ direction: 'flat', value: 'v1.2.0 target' }} />
       </div>
 
       <Tabs tabs={VIEW_TABS} activeTab={activeTab} onChange={setActiveTab} />

@@ -141,12 +141,14 @@ export default function BatchPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-3">
         <KPICard
+          helpId="total-batch-jobs"
           title="Total Jobs"
           value={totalJobs}
           subtitle="Registered batch jobs"
           sparkData={[5, 6, 6, 7, 7, 7, 7]}
         />
         <KPICard
+          helpId="batch-running"
           title="Running Now"
           value={runningNow}
           status={runningNow > 0 ? 'healthy' : undefined}
@@ -154,6 +156,7 @@ export default function BatchPage() {
           sparkData={[1, 2, 1, 2, 3, 2, 2]}
         />
         <KPICard
+          helpId="batch-failed-24h"
           title="Failed (24h)"
           value={failedCount24h}
           status={failedCount24h > 0 ? 'critical' : 'healthy'}
@@ -161,6 +164,7 @@ export default function BatchPage() {
           sparkData={[0, 1, 0, 0, 2, 1, failedCount24h]}
         />
         <KPICard
+          helpId="batch-success-rate"
           title="Avg Success Rate"
           value={`${avgSuccessRate}%`}
           status={avgSuccessRate >= 95 ? 'healthy' : avgSuccessRate >= 80 ? 'warning' : 'critical'}

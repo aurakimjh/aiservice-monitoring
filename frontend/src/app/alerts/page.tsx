@@ -98,10 +98,10 @@ export default function AlertsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Alert Policies" value={policies.length} subtitle={`${policies.filter((p) => p.enabled).length} enabled`} status="healthy" />
-        <KPICard title="Open Incidents" value={openIncidents} status={openIncidents > 0 ? 'critical' : 'healthy'} />
-        <KPICard title="MTTR" value="30m" subtitle="mean time to resolve" status="healthy" />
-        <KPICard title="Channels" value={channels.length} subtitle={`${channels.filter((c) => c.enabled).length} active`} />
+        <KPICard helpId="alert-policies" title="Alert Policies" value={policies.length} subtitle={`${policies.filter((p) => p.enabled).length} enabled`} status="healthy" />
+        <KPICard helpId="open-incidents" title="Open Incidents" value={openIncidents} status={openIncidents > 0 ? 'critical' : 'healthy'} />
+        <KPICard helpId="mttr" title="MTTR" value="30m" subtitle="mean time to resolve" status="healthy" />
+        <KPICard helpId="notification-channels" title="Channels" value={channels.length} subtitle={`${channels.filter((c) => c.enabled).length} active`} />
       </div>
 
       <Tabs

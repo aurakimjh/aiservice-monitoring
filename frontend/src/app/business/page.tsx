@@ -67,6 +67,7 @@ export default function BusinessKPIPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {topKPIs.map((kpi) => (
           <KPICard
+            helpId={`biz-${kpi.id}`}
             key={kpi.id}
             title={kpi.name}
             value={kpi.unit === '$/month' ? `$${kpi.value.toLocaleString()}` : `${kpi.value}`}

@@ -199,10 +199,10 @@ export default function DiagnosticsPage() {
       {activeTab === 'diagnostics' && <>
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="IT Items" value={55} subtitle="OS, Middleware, Network" />
-        <KPICard title="AI Items" value={31} subtitle="LLM, GPU, VectorDB, Guardrail" />
-        <KPICard title="Last Scan" value={latestRun ? getRelativeTime(new Date(latestRun.timestamp)) : '—'} subtitle={latestRun ? `${latestRun.duration}s duration` : ''} status={latestRun?.status === 'healthy' ? 'healthy' : latestRun?.status === 'warning' ? 'warning' : 'critical'} />
-        <KPICard title="Pass Rate" value={latestRun ? `${Math.round((latestRun.passed / latestRun.items) * 100)}%` : '—'} subtitle={latestRun ? `${latestRun.passed}/${latestRun.items} passed` : ''} status={latestRun && latestRun.failed > 0 ? 'warning' : 'healthy'} />
+        <KPICard helpId="diag-it-items" title="IT Items" value={55} subtitle="OS, Middleware, Network" />
+        <KPICard helpId="diag-ai-items" title="AI Items" value={31} subtitle="LLM, GPU, VectorDB, Guardrail" />
+        <KPICard helpId="diag-last-scan" title="Last Scan" value={latestRun ? getRelativeTime(new Date(latestRun.timestamp)) : '—'} subtitle={latestRun ? `${latestRun.duration}s duration` : ''} status={latestRun?.status === 'healthy' ? 'healthy' : latestRun?.status === 'warning' ? 'warning' : 'critical'} />
+        <KPICard helpId="diag-pass-rate" title="Pass Rate" value={latestRun ? `${Math.round((latestRun.passed / latestRun.items) * 100)}%` : '—'} subtitle={latestRun ? `${latestRun.passed}/${latestRun.items} passed` : ''} status={latestRun && latestRun.failed > 0 ? 'warning' : 'healthy'} />
       </div>
 
       {/* Run History */}

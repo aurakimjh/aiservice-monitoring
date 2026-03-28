@@ -165,6 +165,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
           {/* Resource KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <KPICard
+              helpId="cpu-usage"
               title="CPU Usage"
               value={cpu ? cpu.total_pct.toFixed(1) : host.cpuPercent}
               unit="%"
@@ -172,6 +173,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               status={host.cpuPercent > 85 ? 'critical' : host.cpuPercent > 70 ? 'warning' : 'healthy'}
             />
             <KPICard
+              helpId="memory"
               title="Memory"
               value={mem ? mem.used_pct.toFixed(1) : host.memPercent}
               unit="%"
@@ -179,6 +181,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               status={(mem?.used_pct ?? host.memPercent) > 85 ? 'warning' : 'healthy'}
             />
             <KPICard
+              helpId="disk"
               title="Disk"
               value={mainDisk ? mainDisk.used_pct.toFixed(1) : '0'}
               unit="%"
@@ -186,6 +189,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               status={(mainDisk?.used_pct ?? 0) > 85 ? 'warning' : 'healthy'}
             />
             <KPICard
+              helpId="network-io"
               title="Network I/O"
               value={nets.length > 0 ? `${totalNet.rx.toFixed(1)}/${totalNet.tx.toFixed(1)}` : 'N/A'}
               unit={nets.length > 0 ? 'MB/s' : undefined}

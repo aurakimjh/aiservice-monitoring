@@ -90,10 +90,11 @@ export default function EvaluationPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total Evaluations" value={totalEvals} status="healthy" />
-        <KPICard title="Avg Quality" value={avgQuality} status="healthy" />
-        <KPICard title="Pass Rate" value={`${passRate}%`} status={passRate >= 80 ? 'healthy' : 'warning'} />
+        <KPICard helpId="eval-total" title="Total Evaluations" value={totalEvals} status="healthy" />
+        <KPICard helpId="eval-avg-quality" title="Avg Quality" value={avgQuality} status="healthy" />
+        <KPICard helpId="eval-pass-rate" title="Pass Rate" value={`${passRate}%`} status={passRate >= 80 ? 'healthy' : 'warning'} />
         <KPICard
+          helpId="eval-running"
           title="Running"
           value={runningCount}
           status={runningCount > 0 ? 'warning' : 'healthy'}

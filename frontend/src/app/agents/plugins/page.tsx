@@ -107,22 +107,26 @@ export default function FleetPluginsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KPICard
+          helpId="plugin-total"
           title="Total Plugins"
           value={totalPlugins}
           subtitle={`${activePlugins} active`}
         />
         <KPICard
+          helpId="plugin-deployed-agents"
           title="Deployed Agents"
           value={totalDeployedAgents}
           subtitle={`across ${activePlugins} plugins`}
         />
         <KPICard
+          helpId="plugin-success-rate"
           title="Success Rate"
           value={`${successRate}%`}
           subtitle={`${totalAgents} total targets`}
           status={Number(successRate) >= 90 ? 'healthy' : Number(successRate) >= 70 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="plugin-pending-deploys"
           title="Pending Deploys"
           value={pendingDeploys}
           subtitle="awaiting install"

@@ -212,23 +212,27 @@ export default function CachePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="cache-total-instances"
           title="Total Instances"
           value={totalInstances}
           status="healthy"
         />
         <KPICard
+          helpId="cache-avg-hit-rate"
           title="Avg Hit Rate"
           value={avgHitRate}
           unit="%"
           status={avgHitRate >= 90 ? 'healthy' : avgHitRate >= 80 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="cache-avg-memory"
           title="Avg Memory"
           value={avgMemory}
           unit="%"
           status={avgMemory >= 85 ? 'critical' : avgMemory >= 70 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="cache-total-ops"
           title="Total Ops/sec"
           value={totalOps.toLocaleString()}
           status="healthy"

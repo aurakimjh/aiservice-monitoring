@@ -133,6 +133,7 @@ export default function AICostOptimizationPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="ai-total-daily-cost"
           title="Total AI Cost"
           value={`$${totalCost.toFixed(2)}`}
           subtitle="per day"
@@ -140,12 +141,14 @@ export default function AICostOptimizationPage() {
           sparkData={[42, 44, 46, 45, 48, 47, 49, 50, totalCost]}
         />
         <KPICard
+          helpId="ai-potential-savings"
           title="Potential Savings"
           value={`$${totalSavings.toFixed(2)}`}
           subtitle="per day"
           trend={{ direction: 'down', value: `${((totalSavings / totalCost) * 100).toFixed(0)}%`, positive: true }}
         />
         <KPICard
+          helpId="ai-cache-hit-rate"
           title="Cache Hit Rate"
           value={`${(cache.hitRate * 100).toFixed(0)}`}
           unit="%"
@@ -153,6 +156,7 @@ export default function AICostOptimizationPage() {
           status="warning"
         />
         <KPICard
+          helpId="ai-budget-alerts"
           title="Active Budget Alerts"
           value={activeBudgetAlerts}
           subtitle={`of ${budgetAlerts.length} total`}

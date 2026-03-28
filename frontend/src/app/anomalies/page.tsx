@@ -61,17 +61,20 @@ export default function AnomaliesPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="anomaly-total-detected"
           title="Total Detected"
           value={anomalies.length}
           subtitle="anomalies detected"
           status="healthy"
         />
         <KPICard
+          helpId="anomaly-active"
           title="Active Anomalies"
           value={activeCount}
           status="critical"
         />
         <KPICard
+          helpId="anomaly-detection-time"
           title="Avg Detection Time"
           value="2.3"
           unit="min"
@@ -79,6 +82,7 @@ export default function AnomaliesPage() {
           status="healthy"
         />
         <KPICard
+          helpId="anomaly-auto-resolved"
           title="Auto-Resolved Rate"
           value={`${Math.round((resolvedCount / anomalies.length) * 100)}%`}
           subtitle={`${resolvedCount} of ${anomalies.length} resolved`}

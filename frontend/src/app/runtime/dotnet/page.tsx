@@ -386,6 +386,7 @@ export default function DotNetRuntimePage() {
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="dotnet-threadpool-starvation"
           title="ThreadPool Starvation Events"
           value={totalStarvation}
           subtitle="across all agents"
@@ -393,6 +394,7 @@ export default function DotNetRuntimePage() {
           sparkData={[0, 1, 0, 3, 2, 5, 4, 8, 6, 15]}
         />
         <KPICard
+          helpId="dotnet-gc-suspension"
           title="GC Suspension Time"
           value={avgSuspension}
           unit="ms"
@@ -401,6 +403,7 @@ export default function DotNetRuntimePage() {
           sparkData={[1.2, 1.5, 0.8, 2.1, 1.8, 2.0, 1.6, 2.4, 1.9, 2.0]}
         />
         <KPICard
+          helpId="dotnet-avg-heap"
           title="Avg Heap Size"
           value={avgHeap}
           unit="MB"
@@ -409,6 +412,7 @@ export default function DotNetRuntimePage() {
           sparkData={[280, 310, 295, 340, 320, 346, 330, 350, 342, 346]}
         />
         <KPICard
+          helpId="dotnet-aot-warnings"
           title="AOT Warnings"
           value={totalAOTWarnings}
           subtitle="reflection + trimming"

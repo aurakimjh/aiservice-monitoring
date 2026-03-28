@@ -70,6 +70,7 @@ export default function CloudPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="total-cloud-cost"
           title="Total Cloud Cost"
           value={`$${totalCost.toLocaleString()}`}
           unit="/mo"
@@ -77,6 +78,7 @@ export default function CloudPage() {
         />
         {summaries.map((s) => (
           <KPICard
+            helpId="cloud-provider-cost"
             key={s.provider}
             title={PROVIDER_LABELS[s.provider] ?? s.provider}
             value={`$${s.totalCost.toLocaleString()}`}

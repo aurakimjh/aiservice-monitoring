@@ -306,7 +306,7 @@ export default function InfraPage() {
         <KPICard title="Warning" helpId="warning-hosts" value={warning} status={warning > 0 ? 'warning' : 'healthy'} />
         <KPICard title="Critical / Offline" helpId="critical-hosts" value={critical} status={critical > 0 ? 'critical' : 'healthy'} />
         <KPICard title="Avg CPU" helpId="cpu-usage" value={avgCpu} unit="%" status={avgCpu > 80 ? 'warning' : 'healthy'} />
-        <KPICard title="Pending" value={pendingAgents.length} status={hasPending ? 'warning' : 'healthy'} subtitle={hasPending ? 'Needs approval' : 'None'} />
+        <KPICard helpId="infra-pending-agents" title="Pending" value={pendingAgents.length} status={hasPending ? 'warning' : 'healthy'} subtitle={hasPending ? 'Needs approval' : 'None'} />
       </div>
 
       {/* Filters + View Toggle */}

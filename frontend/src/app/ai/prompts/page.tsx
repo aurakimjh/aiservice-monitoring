@@ -143,18 +143,21 @@ export default function PromptHubPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="prompt-total"
           title="Total Prompts"
           value={totalPrompts}
           status="healthy"
           sparkData={[3, 3, 4, 4, 4, 5, 5, 5, 5, 5]}
         />
         <KPICard
+          helpId="prompt-avg-quality"
           title="Avg Quality"
           value={avgQuality}
           status="healthy"
           sparkData={[0.78, 0.80, 0.82, 0.83, 0.85, 0.84, 0.86, 0.87, 0.87, 0.87]}
         />
         <KPICard
+          helpId="prompt-24h-usage"
           title="24h Usage"
           value={totalUsage24h}
           subtitle="Total API calls"
@@ -162,6 +165,7 @@ export default function PromptHubPage() {
           status="healthy"
         />
         <KPICard
+          helpId="prompt-active-versions"
           title="Active Versions"
           value={activeVersions}
           subtitle="Across all prompts"

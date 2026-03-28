@@ -207,6 +207,7 @@ export default function RUMPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="rum-avg-lcp"
           title="Avg LCP"
           value={kpis.avgLcp}
           unit="ms"
@@ -214,6 +215,7 @@ export default function RUMPage() {
           subtitle="Largest Contentful Paint"
         />
         <KPICard
+          helpId="rum-avg-fid"
           title="Avg FID"
           value={kpis.avgFid}
           unit="ms"
@@ -221,12 +223,14 @@ export default function RUMPage() {
           subtitle="First Input Delay"
         />
         <KPICard
+          helpId="rum-avg-cls"
           title="Avg CLS"
           value={kpis.avgCls}
           status={getCWVStatus('cls', kpis.avgCls) === 'good' ? 'healthy' : getCWVStatus('cls', kpis.avgCls) === 'poor' ? 'critical' : 'warning'}
           subtitle="Cumulative Layout Shift"
         />
         <KPICard
+          helpId="rum-total-sessions"
           title="Total Sessions"
           value={kpis.totalSessions.toLocaleString()}
           subtitle="Across all regions"

@@ -127,12 +127,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {/* KPI Row */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <KPICard
+              helpId="project-services"
               title="Services"
               value={services.length}
               subtitle={`${services.filter((s) => s.status === 'healthy').length} healthy`}
               status={services.every((s) => s.status === 'healthy') ? 'healthy' : 'warning'}
             />
             <KPICard
+              helpId="project-error-rate"
               title="Error Rate"
               value={(project.errorRate ?? 0).toFixed(2)}
               unit="%"
@@ -140,6 +142,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               status={(project.errorRate ?? 0) < 0.5 ? 'healthy' : (project.errorRate ?? 0) < 1 ? 'warning' : 'critical'}
             />
             <KPICard
+              helpId="project-p95-latency"
               title="P95 Latency"
               value={project.p95Latency ?? 0}
               unit="ms"
@@ -148,6 +151,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               sparkData={[280, 265, 270, 255, 248, 260, 252, 245]}
             />
             <KPICard
+              helpId="project-throughput"
               title="Throughput"
               value="1.2K"
               unit="/s"
@@ -155,6 +159,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               status="healthy"
             />
             <KPICard
+              helpId="project-slo-compliance"
               title="SLO Compliance"
               value={(project.sloCompliance ?? 0).toFixed(1)}
               unit="%"

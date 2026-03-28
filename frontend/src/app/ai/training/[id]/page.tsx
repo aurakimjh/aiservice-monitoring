@@ -182,12 +182,14 @@ export default function TrainingJobDetailPage({
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="training-val-loss"
           title="Val Loss"
           value={job.valLoss > 0 ? job.valLoss.toFixed(3) : '—'}
           subtitle={`Train: ${job.trainLoss > 0 ? job.trainLoss.toFixed(3) : '—'}`}
           status={job.valLoss > 0 && job.valLoss < 0.3 ? 'healthy' : job.valLoss < 0.5 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="training-val-accuracy"
           title="Val Accuracy"
           value={job.valAccuracy > 0 ? job.valAccuracy.toFixed(1) : '—'}
           unit="%"
@@ -195,6 +197,7 @@ export default function TrainingJobDetailPage({
           status={job.valAccuracy > 90 ? 'healthy' : job.valAccuracy > 80 ? 'warning' : 'critical'}
         />
         <KPICard
+          helpId="training-gpu-util"
           title="GPU Utilization"
           value={job.gpuUtilization > 0 ? job.gpuUtilization : '—'}
           unit={job.gpuUtilization > 0 ? '%' : undefined}
@@ -202,6 +205,7 @@ export default function TrainingJobDetailPage({
           status={job.gpuUtilization > 90 ? 'critical' : job.gpuUtilization > 75 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="training-throughput"
           title="Throughput"
           value={job.tokensPerSecond > 0 ? job.tokensPerSecond.toLocaleString() : '—'}
           unit={job.tokensPerSecond > 0 ? 'tok/s' : undefined}

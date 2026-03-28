@@ -223,24 +223,28 @@ export default function TopologyPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
+          helpId="topo-total-services"
           title="Total Services"
           value={totalServices}
           subtitle="discovered services"
           status="healthy"
         />
         <KPICard
+          helpId="topo-active-connections"
           title="Active Connections"
           value={activeConnections}
           subtitle="live connections"
           status="healthy"
         />
         <KPICard
+          helpId="topo-new-24h"
           title="New (24h)"
           value={newIn24h}
           subtitle="recently discovered"
           status={newIn24h > 0 ? 'warning' : 'healthy'}
         />
         <KPICard
+          helpId="topo-removed-24h"
           title="Removed (24h)"
           value={removedIn24h}
           subtitle="no longer active"

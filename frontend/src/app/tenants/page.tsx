@@ -107,11 +107,11 @@ export default function TenantsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPICard title="Total Tenants" value={stats.total} subtitle={`${stats.active} active`} status="healthy" />
-        <KPICard title="Monthly Revenue" value={formatCost(stats.totalRevenue)} subtitle="/month" status="healthy" />
-        <KPICard title="Total Users" value={stats.totalUsers} status="healthy" />
-        <KPICard title="Total Hosts" value={stats.totalHosts} status="healthy" />
-        <KPICard title="Avg Revenue" value={formatCost(stats.totalRevenue / stats.total)} unit="/tenant" />
+        <KPICard helpId="tenant-total" title="Total Tenants" value={stats.total} subtitle={`${stats.active} active`} status="healthy" />
+        <KPICard helpId="tenant-monthly-revenue" title="Monthly Revenue" value={formatCost(stats.totalRevenue)} subtitle="/month" status="healthy" />
+        <KPICard helpId="tenant-total-users" title="Total Users" value={stats.totalUsers} status="healthy" />
+        <KPICard helpId="tenant-total-hosts" title="Total Hosts" value={stats.totalHosts} status="healthy" />
+        <KPICard helpId="tenant-avg-revenue" title="Avg Revenue" value={formatCost(stats.totalRevenue / stats.total)} unit="/tenant" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
