@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { AISubNav } from '@/components/ai';
 import { Breadcrumb, Card, CardHeader, CardTitle, Tabs, Badge, Modal, Button, Select, DataSourceBadge } from '@/components/ui';
+import { KPICard } from '@/components/monitoring';
 import { useDataSource } from '@/hooks/use-data-source';
 import { Input } from '@/components/ui';
-import { KPICard } from '@/components/monitoring';
 import { getEvalJobs, getEvalSamples, getABTests } from '@/lib/demo-data';
 import { EvalJobTable } from '@/components/ai/eval-job-table';
 import { EvalSampleDetail } from '@/components/ai/eval-sample-detail';
@@ -26,7 +26,10 @@ export default function EvaluationPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['relevancy', 'faithfulness']);
 
-  const jobs = useMemo(() => getEvalJobs(), []);
+  // Live eval data from API + demo fallback
+  const demoJobs = useCallback(() => getEvalJobs(), []);
+  const { data: jobsData, source } = useDataSource('/genai/evals', demoJobs, { refreshInterval: 30_000 });
+  const jobs = Array.isArray(jobsData) ? jobsData : (jobsData as any)?.items ?? getEvalJobs();
   const abTests = useMemo(() => getABTests(), []);
   const expandedSamples = useMemo(
     () => (expandedJobId ? getEvalSamples(expandedJobId) : []),

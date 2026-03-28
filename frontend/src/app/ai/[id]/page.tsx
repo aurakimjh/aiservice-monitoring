@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, Badge, Button, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { StatusIndicator, KPICard, GPUCard } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
@@ -47,8 +48,14 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
   const router = useRouter();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const projectId = currentProjectId ?? 'proj-ai-prod';
-  const aiServices = getProjectAIServices(projectId);
-  const svc = aiServices.find((s) => s.id === id);
+
+  // Live: API / Demo: fallback
+  const demoSvc = useCallback(() => {
+    const all = getProjectAIServices(projectId);
+    return all.find((s) => s.id === id) ?? null;
+  }, [projectId, id]);
+  const { data: liveSvc, source } = useDataSource(`/ai/services/${id}`, demoSvc);
+  const svc = liveSvc ?? getProjectAIServices(projectId).find((s) => s.id === id) ?? null;
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -90,6 +97,7 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
         <div className="flex items-center gap-2">
           <StatusIndicator status={svc.status} size="lg" pulse={svc.status === 'critical'} />
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">{svc.name}</h1>
+          <DataSourceBadge source={source} />
           <Badge variant="status" status={svc.status}>{svc.status}</Badge>
           <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded',
             svc.type === 'rag' ? 'bg-[#58A6FF]/15 text-[#58A6FF]' :

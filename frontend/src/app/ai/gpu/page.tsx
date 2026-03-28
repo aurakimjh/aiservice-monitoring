@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard, GPUCard, StatusIndicator } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { useProjectStore } from '@/stores/project-store';
@@ -31,9 +32,25 @@ const VENDOR_LABELS: Record<string, string> = {
 
 const CHART_COLORS = ['#58A6FF', '#3FB950', '#D29922', '#F85149', '#BC8CFF', '#F778BA', '#79C0FF', '#56D364'];
 
+// Transform GPU API response
+function transformGPU(raw: unknown) {
+  const resp = raw as { items?: Array<Record<string, unknown>> };
+  if (!resp.items?.length) return [];
+  return resp.items;
+}
+
 export default function GPUClusterPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const hosts = getProjectHosts(currentProjectId ?? 'proj-ai-prod');
+  const demoHosts = useCallback(() => getProjectHosts(currentProjectId ?? 'proj-ai-prod'), [currentProjectId]);
+  const { data: hostsData, source } = useDataSource('/ai/gpu', demoHosts, {
+    refreshInterval: 30_000,
+    transform: (raw) => {
+      // API may return GPU-specific format; fallback to host format
+      const resp = raw as { items?: unknown[] };
+      return resp?.items ?? raw;
+    },
+  });
+  const hosts = (Array.isArray(hostsData) ? hostsData : []) as ReturnType<typeof getProjectHosts>;
   const [vendorFilter, setVendorFilter] = useState<GPUVendor | 'all'>('all');
 
   const gpuHosts = useMemo(() => hosts.filter((h) => h.gpus && h.gpus.length > 0), [hosts]);
@@ -84,7 +101,10 @@ export default function GPUClusterPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">GPU Cluster</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">GPU Cluster</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
           <Filter size={12} />
           <span>Vendor</span>
