@@ -206,7 +206,7 @@ export default function ServicesPage() {
       {view === 'map' && (
         <Card>
           <CardHeader>
-            <CardTitle>Service Topology</CardTitle>
+            <CardTitle helpId="map-service-topology">Service Topology</CardTitle>
             <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
               {Object.entries(LAYER_CONFIG).map(([key, config]) => (
                 <span key={key} className="flex items-center gap-1">

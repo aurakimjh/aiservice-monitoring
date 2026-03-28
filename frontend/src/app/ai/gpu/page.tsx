@@ -227,7 +227,7 @@ export default function GPUClusterPage() {
       {filteredGPUs.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <Card>
-            <CardHeader><CardTitle>VRAM Usage Trend</CardTitle></CardHeader>
+            <CardHeader><CardTitle helpId="chart-gpu-vram-trend">VRAM Usage Trend</CardTitle></CardHeader>
             <TimeSeriesChart
               series={filteredHosts.flatMap((h, hi) =>
                 (h.gpus ?? []).map((g, gi) => ({
@@ -242,7 +242,7 @@ export default function GPUClusterPage() {
             />
           </Card>
           <Card>
-            <CardHeader><CardTitle>Temperature Trend</CardTitle></CardHeader>
+            <CardHeader><CardTitle helpId="chart-gpu-temp-trend">Temperature Trend</CardTitle></CardHeader>
             <TimeSeriesChart
               series={filteredHosts.flatMap((h, hi) =>
                 (h.gpus ?? []).map((g, gi) => ({
@@ -257,7 +257,7 @@ export default function GPUClusterPage() {
             />
           </Card>
           <Card>
-            <CardHeader><CardTitle>Power Draw Trend</CardTitle></CardHeader>
+            <CardHeader><CardTitle helpId="chart-gpu-power-trend">Power Draw Trend</CardTitle></CardHeader>
             <TimeSeriesChart
               series={filteredHosts.flatMap((h, hi) =>
                 (h.gpus ?? []).map((g, gi) => ({
@@ -271,7 +271,7 @@ export default function GPUClusterPage() {
             />
           </Card>
           <Card>
-            <CardHeader><CardTitle>SM / Core Occupancy Trend</CardTitle></CardHeader>
+            <CardHeader><CardTitle helpId="chart-gpu-sm-occupancy">SM / Core Occupancy Trend</CardTitle></CardHeader>
             <TimeSeriesChart
               series={filteredHosts.flatMap((h, hi) =>
                 (h.gpus ?? []).map((g, gi) => ({

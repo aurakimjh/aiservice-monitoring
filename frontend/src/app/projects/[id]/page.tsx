@@ -171,7 +171,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>Response Time (P50 / P95)</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-response-time">Response Time (P50 / P95)</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
                   { name: 'P50', data: generateTimeSeries(180, 30, 60), type: 'area' },
@@ -183,7 +183,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Throughput (RPM)</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-throughput">Throughput (RPM)</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[{ name: 'RPM', data: generateTimeSeries(1200, 200, 60), type: 'area', color: '#3FB950' }]}
                 yAxisLabel="req/min"
@@ -195,13 +195,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           {/* Health Grid + AI Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>Host Health Map</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="map-host-health">Host Health Map</CardTitle></CardHeader>
               <ServiceHealthGrid title={`${hosts.length} hosts`} cells={healthCells} columns={Math.min(hosts.length, 6)} />
             </Card>
 
             {aiServices.length > 0 ? (
               <Card>
-                <CardHeader><CardTitle>AI Services Summary</CardTitle></CardHeader>
+                <CardHeader><CardTitle helpId="chart-ai-services-summary">AI Services Summary</CardTitle></CardHeader>
                 <div className="space-y-2.5">
                   {aiServices.map((ai) => (
                     <div key={ai.id} className="flex items-center justify-between text-sm">

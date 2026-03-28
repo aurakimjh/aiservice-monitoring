@@ -144,7 +144,7 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
           <CardHeader>
-            <CardTitle>Response Time (P50 / P95)</CardTitle>
+            <CardTitle helpId="chart-response-time">Response Time (P50 / P95)</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -159,7 +159,7 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Throughput (RPM)</CardTitle>
+            <CardTitle helpId="chart-throughput">Throughput (RPM)</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -176,7 +176,7 @@ export default function HomePage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>Service Health Map</CardTitle>
+              <CardTitle helpId="map-service-health">Service Health Map</CardTitle>
               <DataSourceBadge source={source} />
             </div>
           </CardHeader>
@@ -189,7 +189,7 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>AI Services Summary</CardTitle>
+            <CardTitle helpId="chart-ai-services-summary">AI Services Summary</CardTitle>
           </CardHeader>
           <div className="space-y-3">
             <div className="flex justify-between items-center text-sm">

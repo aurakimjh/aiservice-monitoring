@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { WidgetHelp } from './widget-help';
 
 interface CardProps {
   children: React.ReactNode;
@@ -43,10 +44,11 @@ export function CardHeader({ children, className }: { children: React.ReactNode;
   );
 }
 
-export function CardTitle({ children, className }: { children: React.ReactNode; className?: string }) {
+export function CardTitle({ children, className, helpId }: { children: React.ReactNode; className?: string; helpId?: string }) {
   return (
-    <h3 className={cn('text-sm font-medium text-[var(--text-primary)]', className)}>
+    <h3 className={cn('text-sm font-medium text-[var(--text-primary)] inline-flex items-center gap-1', className)}>
       {children}
+      {helpId && <WidgetHelp widgetId={helpId} />}
     </h3>
   );
 }

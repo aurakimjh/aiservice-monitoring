@@ -74,13 +74,13 @@ export default function CostsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Pie chart */}
         <Card>
-          <CardHeader><CardTitle>Cost Distribution</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-cost-distribution">Cost Distribution</CardTitle></CardHeader>
           <EChartsWrapper option={pieOption} height={280} />
         </Card>
 
         {/* Cost trend */}
         <Card>
-          <CardHeader><CardTitle>Daily Cost Trend</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-daily-cost-trend">Daily Cost Trend</CardTitle></CardHeader>
           <TimeSeriesChart
             series={Object.entries(grouped).map(([cat, { total }]) => ({
               name: cat,

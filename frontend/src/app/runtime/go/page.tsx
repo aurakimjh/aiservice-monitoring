@@ -429,7 +429,7 @@ export default function GoRuntimePage() {
       {/* Agent Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Agent Overview</CardTitle>
+          <CardTitle className="text-sm" helpId="table-go-agent-overview">Agent Overview</CardTitle>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -532,7 +532,7 @@ export default function GoRuntimePage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Activity size={14} className="text-[#00ADD8]" />
-              <CardTitle className="text-sm">Scheduler Latency Histogram</CardTitle>
+              <CardTitle className="text-sm" helpId="chart-go-sched-latency">Scheduler Latency Histogram</CardTitle>
             </div>
             <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
               Distribution of goroutine scheduling delays across all agents
@@ -548,7 +548,7 @@ export default function GoRuntimePage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Layers size={14} className="text-[#F85149]" />
-              <CardTitle className="text-sm">GC Stop-the-World Pause</CardTitle>
+              <CardTitle className="text-sm" helpId="chart-go-gc-stw">GC Stop-the-World Pause</CardTitle>
             </div>
             <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
               STW pause duration over time (aggregated across agents)
@@ -565,7 +565,7 @@ export default function GoRuntimePage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <MemoryStick size={14} className="text-[#3FB950]" />
-            <CardTitle className="text-sm">Goroutine Breakdown by Agent</CardTitle>
+            <CardTitle className="text-sm" helpId="chart-go-goroutine-breakdown">Goroutine Breakdown by Agent</CardTitle>
           </div>
           <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
             Runnable vs waiting goroutines per agent — high runnable count may indicate CPU contention

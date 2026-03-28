@@ -100,11 +100,11 @@ export default function AIOverviewPage() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
-          <CardHeader><CardTitle>Model Distribution (by calls)</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-model-distribution">Model Distribution (by calls)</CardTitle></CardHeader>
           <EChartsWrapper option={modelPieOption} height={220} />
         </Card>
         <Card>
-          <CardHeader><CardTitle>Cost Trend ($/h)</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-cost-trend">Cost Trend ($/h)</CardTitle></CardHeader>
           <TimeSeriesChart
             series={[{ name: 'Cost', data: costTrendData, type: 'area', color: '#D29922' }]}
             yAxisLabel="$/h"

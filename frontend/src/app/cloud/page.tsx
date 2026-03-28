@@ -151,7 +151,7 @@ export default function CloudPage() {
           {/* 30-day cost trend */}
           <Card>
             <CardHeader>
-              <CardTitle>30-Day Cost Trend</CardTitle>
+              <CardTitle helpId="chart-cloud-cost-trend">30-Day Cost Trend</CardTitle>
             </CardHeader>
             <TimeSeriesChart
               series={costTrendSeries}

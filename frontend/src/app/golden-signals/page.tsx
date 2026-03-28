@@ -393,7 +393,7 @@ export default function GoldenSignalsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle helpId="chart-gs-latency">
               <span className="inline-flex items-center gap-1.5">
                 <Gauge size={14} className="text-[#58A6FF]" /> Latency
               </span>
@@ -405,7 +405,7 @@ export default function GoldenSignalsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle helpId="chart-gs-traffic">
               <span className="inline-flex items-center gap-1.5">
                 <TrendingUp size={14} className="text-[#58A6FF]" /> Traffic
               </span>
@@ -417,7 +417,7 @@ export default function GoldenSignalsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle helpId="chart-gs-error-rate">
               <span className="inline-flex items-center gap-1.5">
                 <AlertTriangle size={14} className="text-[#F85149]" /> Error Rate
               </span>
@@ -429,7 +429,7 @@ export default function GoldenSignalsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle helpId="chart-gs-saturation">
               <span className="inline-flex items-center gap-1.5">
                 <Zap size={14} className="text-[#D29922]" /> Saturation
               </span>

@@ -267,7 +267,7 @@ export default function TopologyPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>
+            <CardTitle helpId="map-topology">
               <GitFork size={16} className="inline mr-1.5 -mt-0.5" />
               {drillLevel === 'service' && 'Service Topology'}
               {drillLevel === 'host' && 'Host Topology'}

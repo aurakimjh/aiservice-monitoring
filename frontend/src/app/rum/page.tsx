@@ -260,7 +260,7 @@ export default function RUMPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>
+              <CardTitle helpId="chart-cwv-distribution">
                 <span className="flex items-center gap-2">
                   <BarChart3 size={14} />
                   CWV Distribution by Pages

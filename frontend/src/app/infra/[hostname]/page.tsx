@@ -201,7 +201,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
           {/* Resource Charts — Agent 실데이터 기반 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>CPU — User / System / IOWait</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-cpu-usage">CPU — User / System / IOWait</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={cpu ? [
                   { name: 'User', data: generateTimeSeries(cpu.user_pct, Math.max(0.5, cpu.user_pct * 0.15), 60), type: 'area', color: '#58A6FF' },
@@ -216,7 +216,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Memory — Used / Cached</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-memory-usage">Memory — Used / Cached</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={mem ? [
                   { name: `Used (${Math.round(mem.used_mb - mem.cached_mb)}MB)`, data: generateTimeSeries(mem.used_mb - mem.cached_mb, Math.max(10, (mem.used_mb - mem.cached_mb) * 0.05), 60), type: 'area', color: '#3FB950' },
@@ -229,7 +229,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Disk Usage</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-disk-usage">Disk Usage</CardTitle></CardHeader>
               {disks.length > 0 ? (
                 <div className="space-y-3 p-2">
                   {disks.map((d) => (
@@ -251,7 +251,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               )}
             </Card>
             <Card>
-              <CardHeader><CardTitle>Network I/O</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-network-io">Network I/O</CardTitle></CardHeader>
               {nets.length > 0 ? (
                 <div className="space-y-3 p-2">
                   {nets.map((n) => (
@@ -393,7 +393,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               {/* Thread Pools */}
               {hostRuntime.threadPools && hostRuntime.threadPools.length > 0 && (
                 <Card>
-                  <CardHeader><CardTitle>Thread Pools</CardTitle></CardHeader>
+                  <CardHeader><CardTitle helpId="table-thread-pools">Thread Pools</CardTitle></CardHeader>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -437,7 +437,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               {/* Connection Pools */}
               {hostRuntime.connectionPools && hostRuntime.connectionPools.length > 0 && (
                 <Card>
-                  <CardHeader><CardTitle>Connection Pools</CardTitle></CardHeader>
+                  <CardHeader><CardTitle helpId="table-connection-pools">Connection Pools</CardTitle></CardHeader>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -489,7 +489,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               {/* Event Loop (Node.js) */}
               {hostRuntime.eventLoop && (
                 <Card>
-                  <CardHeader><CardTitle>Event Loop</CardTitle></CardHeader>
+                  <CardHeader><CardTitle helpId="chart-event-loop">Event Loop</CardTitle></CardHeader>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Lag</div>
@@ -514,7 +514,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               {/* Goroutines (Go) */}
               {hostRuntime.goroutines != null && (
                 <Card>
-                  <CardHeader><CardTitle>Goroutines</CardTitle></CardHeader>
+                  <CardHeader><CardTitle helpId="chart-goroutines">Goroutines</CardTitle></CardHeader>
                   <div className="flex items-center justify-center py-4">
                     <div className="text-center">
                       <div className="text-4xl font-bold text-[var(--text-primary)] tabular-nums">{hostRuntime.goroutines.toLocaleString()}</div>
@@ -527,7 +527,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
               {/* Workers (Python) */}
               {hostRuntime.workers && (
                 <Card>
-                  <CardHeader><CardTitle>Workers</CardTitle></CardHeader>
+                  <CardHeader><CardTitle helpId="chart-workers">Workers</CardTitle></CardHeader>
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-[var(--status-healthy)] tabular-nums">{hostRuntime.workers.active}</div>

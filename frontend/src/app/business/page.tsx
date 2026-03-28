@@ -89,7 +89,7 @@ export default function BusinessKPIPage() {
         <div className="space-y-3">
           <Card>
             <CardHeader>
-              <CardTitle>TTFT (seconds) vs Conversion Rate (%)</CardTitle>
+              <CardTitle helpId="chart-ttft-vs-conversion">TTFT (seconds) vs Conversion Rate (%)</CardTitle>
             </CardHeader>
             <p className="text-xs text-[var(--text-muted)]">
               Scatter plot visualization — Lower TTFT (Time to First Token) correlates with higher conversion rates.

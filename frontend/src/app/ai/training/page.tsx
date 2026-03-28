@@ -387,7 +387,7 @@ export default function TrainingPage() {
       {activeTab === 'comparison' && (
         <Card padding="none">
           <CardHeader>
-            <CardTitle>Train vs Inference Comparison</CardTitle>
+            <CardTitle helpId="table-train-vs-inference">Train vs Inference Comparison</CardTitle>
           </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

@@ -246,7 +246,7 @@ function PipelineWaterfall() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Layers size={14} className="text-[var(--text-muted)]" />
-          <CardTitle>Pipeline Waterfall (Recent)</CardTitle>
+          <CardTitle helpId="chart-pipeline-waterfall">Pipeline Waterfall (Recent)</CardTitle>
         </div>
       </CardHeader>
       <div className="space-y-3">

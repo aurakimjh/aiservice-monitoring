@@ -843,7 +843,7 @@ export default function TracesPage() {
         <div className="grid grid-cols-2 gap-3">
           <Card padding="none">
             <CardHeader className="px-4 pt-3 pb-0">
-              <CardTitle className="text-xs">XLog 산점도</CardTitle>
+              <CardTitle className="text-xs" helpId="chart-xlog-scatter">XLog 산점도</CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
                 <span className="text-[10px]">시간 동기화 ON</span>
               </div>
@@ -856,7 +856,7 @@ export default function TracesPage() {
           </Card>
           <Card padding="none">
             <CardHeader className="px-4 pt-3 pb-0">
-              <CardTitle className="text-xs">응답시간 HeatMap</CardTitle>
+              <CardTitle className="text-xs" helpId="chart-heatmap">응답시간 HeatMap</CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
                 <span className="inline-flex items-center gap-0.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D0021B' }} />
@@ -875,7 +875,7 @@ export default function TracesPage() {
         /* Single view: XLog or HeatMap */
         <Card padding="none">
           <CardHeader className="px-4 pt-3 pb-0">
-            <CardTitle>
+            <CardTitle helpId={viewMode === 'xlog' ? 'chart-xlog-scatter' : 'chart-heatmap'}>
               {viewMode === 'xlog' ? 'XLog 산점도' : '응답시간 HeatMap (WhaTap 스타일)'}
             </CardTitle>
             {viewMode === 'xlog' ? (

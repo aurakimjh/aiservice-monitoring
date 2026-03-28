@@ -1169,6 +1169,392 @@ const WIDGET_DESCRIPTIONS: Record<string, Record<Locale, { title: string; descri
     en: { title: 'VT Blocked', description: 'Number of blocked virtual threads.' },
     ja: { title: 'VTブロック', description: 'ブロックされた仮想スレッド数です。' },
   },
+  // ── Chart / Widget Help IDs ──
+  'chart-response-time': {
+    ko: { title: '응답 시간', description: 'P50 및 P95 응답 시간 추이 차트입니다.' },
+    en: { title: 'Response Time', description: 'P50 and P95 response time trend chart.' },
+    ja: { title: '応答時間', description: 'P50およびP95応答時間の推移チャートです。' },
+  },
+  'chart-throughput': {
+    ko: { title: '처리량 (RPM)', description: '분당 요청 처리량 추이 차트입니다.' },
+    en: { title: 'Throughput (RPM)', description: 'Requests per minute throughput trend chart.' },
+    ja: { title: 'スループット(RPM)', description: '分間リクエスト処理量の推移チャートです。' },
+  },
+  'map-service-health': {
+    ko: { title: '서비스 헬스 맵', description: '전체 서비스/호스트의 상태를 그리드로 시각화합니다.' },
+    en: { title: 'Service Health Map', description: 'Grid visualization of all service/host health status.' },
+    ja: { title: 'サービスヘルスマップ', description: '全サービス/ホストの状態をグリッドで可視化します。' },
+  },
+  'chart-ai-services-summary': {
+    ko: { title: 'AI 서비스 요약', description: 'AI 서비스 주요 지표(TTFT, TPS, VRAM, 비용)의 요약입니다.' },
+    en: { title: 'AI Services Summary', description: 'Summary of key AI service metrics (TTFT, TPS, VRAM, cost).' },
+    ja: { title: 'AIサービスサマリー', description: 'AIサービスの主要指標(TTFT、TPS、VRAM、コスト)のサマリーです。' },
+  },
+  'chart-svc-latency': {
+    ko: { title: '지연시간', description: '서비스의 P50/P95/P99 응답시간 추이 차트입니다.' },
+    en: { title: 'Latency', description: 'P50/P95/P99 response time trend chart for this service.' },
+    ja: { title: 'レイテンシ', description: 'サービスのP50/P95/P99応答時間推移チャートです。' },
+  },
+  'chart-svc-traffic': {
+    ko: { title: '트래픽 (RPM)', description: '서비스의 분당 요청 수 추이 차트입니다.' },
+    en: { title: 'Traffic (RPM)', description: 'Requests per minute trend chart for this service.' },
+    ja: { title: 'トラフィック(RPM)', description: 'サービスの分間リクエスト数推移チャートです。' },
+  },
+  'chart-svc-error-rate': {
+    ko: { title: '에러율', description: '서비스의 에러 응답 비율 추이 차트입니다.' },
+    en: { title: 'Error Rate', description: 'Error response rate trend chart for this service.' },
+    ja: { title: 'エラー率', description: 'サービスのエラー応答率推移チャートです。' },
+  },
+  'chart-xlog-scatter': {
+    ko: { title: 'XLog 산점도', description: '개별 트랜잭션의 응답시간 분포를 산점도로 표시합니다.' },
+    en: { title: 'XLog Scatter', description: 'Scatter plot showing response time distribution of individual transactions.' },
+    ja: { title: 'XLog散布図', description: '個々のトランザクションの応答時間分布を散布図で表示します。' },
+  },
+  'chart-heatmap': {
+    ko: { title: '응답시간 HeatMap', description: '시간대별 응답시간 분포를 히트맵으로 시각화합니다.' },
+    en: { title: 'Response Time HeatMap', description: 'Heatmap visualization of response time distribution over time.' },
+    ja: { title: '応答時間ヒートマップ', description: '時間帯ごとの応答時間分布をヒートマップで可視化します。' },
+  },
+  'chart-cpu-usage': {
+    ko: { title: 'CPU 사용률', description: 'User/System/IOWait별 CPU 사용률 추이 차트입니다.' },
+    en: { title: 'CPU Usage', description: 'CPU utilization trend chart broken down by User/System/IOWait.' },
+    ja: { title: 'CPU使用率', description: 'User/System/IOWait別CPU使用率の推移チャートです。' },
+  },
+  'chart-memory-usage': {
+    ko: { title: '메모리 사용률', description: 'Used/Cached 메모리 사용량 추이 차트입니다.' },
+    en: { title: 'Memory Usage', description: 'Used/Cached memory usage trend chart.' },
+    ja: { title: 'メモリ使用率', description: 'Used/Cachedメモリ使用量の推移チャートです。' },
+  },
+  'chart-disk-usage': {
+    ko: { title: '디스크 사용량', description: '마운트 포인트별 디스크 사용량을 표시합니다.' },
+    en: { title: 'Disk Usage', description: 'Disk usage per mount point.' },
+    ja: { title: 'ディスク使用量', description: 'マウントポイントごとのディスク使用量を表示します。' },
+  },
+  'chart-network-io': {
+    ko: { title: '네트워크 I/O', description: 'RX/TX 네트워크 트래픽 추이 차트입니다.' },
+    en: { title: 'Network I/O', description: 'RX/TX network traffic trend chart.' },
+    ja: { title: 'ネットワークI/O', description: 'RX/TXネットワークトラフィックの推移チャートです。' },
+  },
+  'table-thread-pools': {
+    ko: { title: '스레드 풀', description: '런타임 스레드 풀의 활성 스레드, 대기열, 사용률 정보입니다.' },
+    en: { title: 'Thread Pools', description: 'Runtime thread pool active threads, queue, and utilization info.' },
+    ja: { title: 'スレッドプール', description: 'ランタイムスレッドプールのアクティブスレッド、キュー、使用率情報です。' },
+  },
+  'table-connection-pools': {
+    ko: { title: '커넥션 풀', description: '데이터베이스 커넥션 풀의 활성/유휴 연결 및 누수 감지 정보입니다.' },
+    en: { title: 'Connection Pools', description: 'Database connection pool active/idle connections and leak detection info.' },
+    ja: { title: 'コネクションプール', description: 'データベースコネクションプールのアクティブ/アイドル接続とリーク検出情報です。' },
+  },
+  'chart-event-loop': {
+    ko: { title: '이벤트 루프', description: 'Node.js 이벤트 루프 지연 및 활성 핸들/요청 정보입니다.' },
+    en: { title: 'Event Loop', description: 'Node.js event loop lag and active handles/requests info.' },
+    ja: { title: 'イベントループ', description: 'Node.jsイベントループの遅延とアクティブハンドル/リクエスト情報です。' },
+  },
+  'chart-goroutines': {
+    ko: { title: '고루틴', description: '현재 활성 고루틴 수를 표시합니다.' },
+    en: { title: 'Goroutines', description: 'Displays the current number of active goroutines.' },
+    ja: { title: 'ゴルーチン', description: '現在のアクティブゴルーチン数を表示します。' },
+  },
+  'chart-workers': {
+    ko: { title: '워커', description: 'Python 워커의 활성/최대 수를 표시합니다.' },
+    en: { title: 'Workers', description: 'Displays Python worker active/max counts.' },
+    ja: { title: 'ワーカー', description: 'Pythonワーカーのアクティブ/最大数を表示します。' },
+  },
+  'chart-ttft-trend': {
+    ko: { title: 'TTFT 추이', description: 'Time To First Token의 P50/P95 추이 차트입니다.' },
+    en: { title: 'TTFT Trend', description: 'Time To First Token P50/P95 trend chart.' },
+    ja: { title: 'TTFT推移', description: 'Time To First TokenのP50/P95推移チャートです。' },
+  },
+  'chart-tps-trend': {
+    ko: { title: 'TPS 추이', description: '초당 토큰 생성 속도(TPS) 추이 차트입니다.' },
+    en: { title: 'TPS Trend', description: 'Tokens per second (TPS) trend chart.' },
+    ja: { title: 'TPS推移', description: '秒間トークン生成速度(TPS)の推移チャートです。' },
+  },
+  'chart-vram-usage': {
+    ko: { title: 'VRAM 사용량 추이', description: 'GPU VRAM 사용률 추이 차트입니다.' },
+    en: { title: 'VRAM Usage Trend', description: 'GPU VRAM utilization trend chart.' },
+    ja: { title: 'VRAM使用量推移', description: 'GPU VRAM使用率の推移チャートです。' },
+  },
+  'chart-gpu-temperature': {
+    ko: { title: '온도 추이', description: 'GPU 온도 추이 차트입니다.' },
+    en: { title: 'Temperature Trend', description: 'GPU temperature trend chart.' },
+    ja: { title: '温度推移', description: 'GPU温度の推移チャートです。' },
+  },
+  'chart-ttft-distribution': {
+    ko: { title: 'TTFT 분포', description: 'Time To First Token의 히스토그램 분포 차트입니다.' },
+    en: { title: 'TTFT Distribution', description: 'Histogram distribution of Time To First Token.' },
+    ja: { title: 'TTFT分布', description: 'Time To First Tokenのヒストグラム分布チャートです。' },
+  },
+  'chart-token-throughput': {
+    ko: { title: '토큰 처리량 (TPS)', description: '초당 토큰 처리 속도 P50/P95 추이 차트입니다.' },
+    en: { title: 'Token Throughput (TPS)', description: 'Token throughput P50/P95 trend chart (tokens/sec).' },
+    ja: { title: 'トークンスループット(TPS)', description: '秒間トークン処理速度P50/P95の推移チャートです。' },
+  },
+  'chart-token-usage-cost': {
+    ko: { title: '토큰 사용량 및 비용', description: 'Input/Output 토큰 사용량과 비용 추이 차트입니다.' },
+    en: { title: 'Token Usage & Cost', description: 'Input/Output token usage and cost trend chart.' },
+    ja: { title: 'トークン使用量&コスト', description: 'Input/Outputトークン使用量とコストの推移チャートです。' },
+  },
+  'chart-concurrent-requests': {
+    ko: { title: '동시 요청', description: 'LLM 동시 요청 수 추이 차트입니다.' },
+    en: { title: 'Concurrent Requests', description: 'LLM concurrent request count trend chart.' },
+    ja: { title: '同時リクエスト', description: 'LLM同時リクエスト数の推移チャートです。' },
+  },
+  'chart-pipeline-stages': {
+    ko: { title: '파이프라인 단계', description: 'RAG 파이프라인 각 단계별 평균 지연시간을 표시합니다.' },
+    en: { title: 'Pipeline Stages', description: 'Average latency per RAG pipeline stage.' },
+    ja: { title: 'パイプラインステージ', description: 'RAGパイプラインの各ステージの平均レイテンシを表示します。' },
+  },
+  'chart-search-quality': {
+    ko: { title: '검색 품질', description: 'Relevancy, Top-K Hit Rate, Faithfulness 등 검색 품질 지표입니다.' },
+    en: { title: 'Search Quality', description: 'Search quality metrics including relevancy, top-K hit rate, and faithfulness.' },
+    ja: { title: '検索品質', description: 'Relevancy、Top-Kヒット率、Faithfulness等の検索品質指標です。' },
+  },
+  'chart-embedding-performance': {
+    ko: { title: '임베딩 성능', description: '임베딩 모델의 P95 지연, 처리량, 캐시 적중률 정보입니다.' },
+    en: { title: 'Embedding Performance', description: 'Embedding model P95 latency, throughput, and cache hit rate.' },
+    ja: { title: 'エンベディング性能', description: 'エンベディングモデルのP95レイテンシ、スループット、キャッシュヒット率情報です。' },
+  },
+  'chart-vector-db': {
+    ko: { title: 'Vector DB', description: '벡터 데이터베이스 상태, 인덱스, 검색/삽입 성능 정보입니다.' },
+    en: { title: 'Vector DB', description: 'Vector database status, index, and search/insert performance info.' },
+    ja: { title: 'Vector DB', description: 'ベクターデータベースの状態、インデックス、検索/挿入性能情報です。' },
+  },
+  'chart-block-rate-trend': {
+    ko: { title: '차단율 추이', description: 'Guardrail에 의한 요청 차단율 추이 차트입니다.' },
+    en: { title: 'Block Rate Trend', description: 'Guardrail request block rate trend chart.' },
+    ja: { title: 'ブロック率推移', description: 'ガードレールによるリクエストブロック率の推移チャートです。' },
+  },
+  'chart-violation-types': {
+    ko: { title: '위반 유형', description: 'Guardrail 위반 유형별 발생 건수 차트입니다.' },
+    en: { title: 'Violation Types', description: 'Guardrail violation count by type.' },
+    ja: { title: '違反タイプ', description: 'ガードレール違反タイプ別発生件数チャートです。' },
+  },
+  'chart-guardrail-latency': {
+    ko: { title: 'Guardrail 지연', description: 'Input/Output 검사의 지연시간 추이 차트입니다.' },
+    en: { title: 'Guardrail Latency', description: 'Input/Output check latency trend chart.' },
+    ja: { title: 'ガードレールレイテンシ', description: 'Input/Output検査のレイテンシ推移チャートです。' },
+  },
+  'chart-model-distribution': {
+    ko: { title: '모델 분포', description: 'AI 모델별 호출 수 분포 차트입니다.' },
+    en: { title: 'Model Distribution', description: 'AI model call distribution chart.' },
+    ja: { title: 'モデル分布', description: 'AIモデル別呼び出し数の分布チャートです。' },
+  },
+  'chart-cost-trend': {
+    ko: { title: '비용 추이', description: '시간당 비용($/h) 추이 차트입니다.' },
+    en: { title: 'Cost Trend', description: 'Cost per hour ($/h) trend chart.' },
+    ja: { title: 'コスト推移', description: '時間あたりコスト($/h)の推移チャートです。' },
+  },
+  'chart-gpu-vram-trend': {
+    ko: { title: 'VRAM 사용량 추이', description: '호스트별 GPU VRAM 사용률 추이 차트입니다.' },
+    en: { title: 'VRAM Usage Trend', description: 'GPU VRAM utilization trend chart by host.' },
+    ja: { title: 'VRAM使用量推移', description: 'ホスト別GPU VRAM使用率の推移チャートです。' },
+  },
+  'chart-gpu-temp-trend': {
+    ko: { title: '온도 추이', description: '호스트별 GPU 온도 추이 차트입니다.' },
+    en: { title: 'Temperature Trend', description: 'GPU temperature trend chart by host.' },
+    ja: { title: '温度推移', description: 'ホスト別GPU温度の推移チャートです。' },
+  },
+  'chart-gpu-power-trend': {
+    ko: { title: '전력 소비 추이', description: '호스트별 GPU 전력 소비(W) 추이 차트입니다.' },
+    en: { title: 'Power Draw Trend', description: 'GPU power draw (W) trend chart by host.' },
+    ja: { title: '消費電力推移', description: 'ホスト別GPU消費電力(W)の推移チャートです。' },
+  },
+  'chart-gpu-sm-occupancy': {
+    ko: { title: 'SM 점유율 추이', description: '호스트별 GPU SM/Core 점유율 추이 차트입니다.' },
+    en: { title: 'SM Occupancy Trend', description: 'GPU SM/Core occupancy trend chart by host.' },
+    ja: { title: 'SM占有率推移', description: 'ホスト別GPU SM/Core占有率の推移チャートです。' },
+  },
+  'chart-cost-vs-quality': {
+    ko: { title: '비용 대 품질', description: '모델별 비용과 품질의 상관관계를 버블 차트로 표시합니다.' },
+    en: { title: 'Cost vs Quality', description: 'Bubble chart showing cost-quality correlation per model.' },
+    ja: { title: 'コスト対品質', description: 'モデル別コストと品質の相関をバブルチャートで表示します。' },
+  },
+  'chart-cache-hit-distribution': {
+    ko: { title: '캐시 적중 분포', description: 'AI 요청의 캐시 적중/미스 비율 도넛 차트입니다.' },
+    en: { title: 'Cache Hit Distribution', description: 'Donut chart of AI request cache hit/miss ratio.' },
+    ja: { title: 'キャッシュヒット分布', description: 'AIリクエストのキャッシュヒット/ミス比率のドーナツチャートです。' },
+  },
+  'chart-potential-savings': {
+    ko: { title: '잠재 절감액', description: '시맨틱 캐싱 등을 통한 잠재적 비용 절감 정보입니다.' },
+    en: { title: 'Potential Savings', description: 'Potential cost savings through semantic caching and optimization.' },
+    ja: { title: '潜在節約額', description: 'セマンティックキャッシングなどによる潜在的コスト削減情報です。' },
+  },
+  'chart-pipeline-waterfall': {
+    ko: { title: '파이프라인 워터폴', description: '최근 RAG 파이프라인 호출의 워터폴 타임라인입니다.' },
+    en: { title: 'Pipeline Waterfall', description: 'Waterfall timeline of recent RAG pipeline calls.' },
+    ja: { title: 'パイプラインウォーターフォール', description: '最近のRAGパイプライン呼び出しのウォーターフォールタイムラインです。' },
+  },
+  'chart-quality-score-trend': {
+    ko: { title: '품질 점수 추이', description: '프롬프트 버전별 품질 점수 추이 차트입니다.' },
+    en: { title: 'Quality Score Trend', description: 'Quality score trend chart across prompt versions.' },
+    ja: { title: '品質スコア推移', description: 'プロンプトバージョン別品質スコアの推移チャートです。' },
+  },
+  'chart-loss-curve': {
+    ko: { title: '손실 곡선', description: 'Train Loss와 Val Loss의 학습 추이 차트입니다.' },
+    en: { title: 'Loss Curve', description: 'Training and validation loss curve chart.' },
+    ja: { title: '損失曲線', description: 'Train LossとVal Lossの学習推移チャートです。' },
+  },
+  'chart-accuracy-curve': {
+    ko: { title: '정확도 곡선', description: 'Train Accuracy와 Val Accuracy의 추이 차트입니다.' },
+    en: { title: 'Accuracy Curve', description: 'Training and validation accuracy curve chart.' },
+    ja: { title: '精度曲線', description: 'Train AccuracyとVal Accuracyの推移チャートです。' },
+  },
+  'chart-training-gpu-util': {
+    ko: { title: 'GPU 사용률', description: '학습 작업의 GPU 사용률 추이 차트입니다.' },
+    en: { title: 'GPU Utilization', description: 'GPU utilization trend chart for the training job.' },
+    ja: { title: 'GPU使用率', description: 'トレーニングジョブのGPU使用率推移チャートです。' },
+  },
+  'chart-learning-rate': {
+    ko: { title: '학습률 스케줄', description: '학습률(Learning Rate) 스케줄 추이 차트입니다.' },
+    en: { title: 'Learning Rate Schedule', description: 'Learning rate schedule trend chart.' },
+    ja: { title: '学習率スケジュール', description: '学習率(Learning Rate)スケジュールの推移チャートです。' },
+  },
+  'table-checkpoints': {
+    ko: { title: '체크포인트', description: '학습 중 저장된 모델 체크포인트 목록입니다.' },
+    en: { title: 'Checkpoints', description: 'List of saved model checkpoints during training.' },
+    ja: { title: 'チェックポイント', description: 'トレーニング中に保存されたモデルチェックポイントの一覧です。' },
+  },
+  'chart-gs-latency': {
+    ko: { title: '지연시간', description: '전체 서비스의 P50/P95/P99 지연시간 추이 차트입니다.' },
+    en: { title: 'Latency', description: 'P50/P95/P99 latency trend chart across all services.' },
+    ja: { title: 'レイテンシ', description: '全サービスのP50/P95/P99レイテンシ推移チャートです。' },
+  },
+  'chart-gs-traffic': {
+    ko: { title: '트래픽', description: '전체 서비스의 분당 요청 수 추이 차트입니다.' },
+    en: { title: 'Traffic', description: 'Requests per minute trend chart across all services.' },
+    ja: { title: 'トラフィック', description: '全サービスの分間リクエスト数推移チャートです。' },
+  },
+  'chart-gs-error-rate': {
+    ko: { title: '에러율', description: '전체 서비스의 에러 비율 추이 차트입니다.' },
+    en: { title: 'Error Rate', description: 'Error rate trend chart across all services.' },
+    ja: { title: 'エラー率', description: '全サービスのエラー率推移チャートです。' },
+  },
+  'chart-gs-saturation': {
+    ko: { title: '포화도', description: '전체 서비스의 CPU/메모리 사용률 추이 차트입니다.' },
+    en: { title: 'Saturation', description: 'CPU/memory utilization trend chart across all services.' },
+    ja: { title: '飽和度', description: '全サービスのCPU/メモリ使用率推移チャートです。' },
+  },
+  'chart-cwv-distribution': {
+    ko: { title: 'CWV 분포', description: '페이지별 Core Web Vitals(LCP, FID, CLS) 분포 차트입니다.' },
+    en: { title: 'CWV Distribution', description: 'Core Web Vitals (LCP, FID, CLS) distribution chart by page.' },
+    ja: { title: 'CWV分布', description: 'ページ別Core Web Vitals(LCP、FID、CLS)の分布チャートです。' },
+  },
+  'map-topology': {
+    ko: { title: '토폴로지 맵', description: '서비스/호스트/인스턴스 간 의존성을 시각화한 토폴로지 맵입니다.' },
+    en: { title: 'Topology Map', description: 'Topology map visualizing dependencies between services/hosts/instances.' },
+    ja: { title: 'トポロジーマップ', description: 'サービス/ホスト/インスタンス間の依存関係を可視化したトポロジーマップです。' },
+  },
+  'chart-exec-slo': {
+    ko: { title: 'SLO 준수율', description: 'SLO 달성률 게이지 차트와 개별 SLO 상태입니다.' },
+    en: { title: 'SLO Compliance', description: 'SLO compliance gauge chart with individual SLO status.' },
+    ja: { title: 'SLO準拠率', description: 'SLO達成率ゲージチャートと個別SLO状態です。' },
+  },
+  'chart-exec-cost-breakdown': {
+    ko: { title: '비용 구성', description: '일일 운영 비용의 카테고리별 구성 도넛 차트입니다.' },
+    en: { title: 'Cost Breakdown', description: 'Daily operational cost donut chart by category.' },
+    ja: { title: 'コスト内訳', description: '日次運用コストのカテゴリ別構成ドーナツチャートです。' },
+  },
+  'table-exec-top-issues': {
+    ko: { title: '주요 이슈', description: '현재 가장 중요한 미해결 이슈 목록입니다.' },
+    en: { title: 'Top Issues', description: 'List of the most important unresolved issues.' },
+    ja: { title: '主要イシュー', description: '現在最も重要な未解決イシューの一覧です。' },
+  },
+  'chart-exec-health-trend': {
+    ko: { title: '서비스 상태 추이', description: '30일간 서비스 상태(정상/경고/위험) 추이 차트입니다.' },
+    en: { title: 'Service Health Trend', description: '30-day service health (healthy/warning/critical) trend chart.' },
+    ja: { title: 'サービス状態推移', description: '30日間のサービス状態(正常/警告/危険)推移チャートです。' },
+  },
+  'chart-exec-cost-trend': {
+    ko: { title: '비용 추이 (30일)', description: '30일간 일일 총 비용 추이 차트입니다.' },
+    en: { title: 'Cost Trend (30 days)', description: '30-day daily total cost trend chart.' },
+    ja: { title: 'コスト推移(30日)', description: '30日間の日次総コスト推移チャートです。' },
+  },
+  'chart-cost-distribution': {
+    ko: { title: '비용 분포', description: '카테고리별 비용 분포 파이 차트입니다.' },
+    en: { title: 'Cost Distribution', description: 'Cost distribution pie chart by category.' },
+    ja: { title: 'コスト分布', description: 'カテゴリ別コスト分布パイチャートです。' },
+  },
+  'chart-daily-cost-trend': {
+    ko: { title: '일일 비용 추이', description: '카테고리별 일일 비용 추이 차트입니다.' },
+    en: { title: 'Daily Cost Trend', description: 'Daily cost trend chart by category.' },
+    ja: { title: '日次コスト推移', description: 'カテゴリ別日次コスト推移チャートです。' },
+  },
+  'chart-anomaly-ttft': {
+    ko: { title: 'TTFT P95 동적 임계값', description: 'ML 기반 TTFT P95 동적 임계값 및 이상 탐지 차트입니다.' },
+    en: { title: 'Dynamic Threshold — TTFT P95', description: 'ML-based dynamic threshold and anomaly detection chart for TTFT P95.' },
+    ja: { title: 'TTFT P95動的閾値', description: 'MLベースのTTFT P95動的閾値と異常検出チャートです。' },
+  },
+  'chart-anomaly-error-rate': {
+    ko: { title: '에러율 동적 임계값', description: 'ML 기반 에러율 동적 임계값 및 이상 탐지 차트입니다.' },
+    en: { title: 'Dynamic Threshold — Error Rate', description: 'ML-based dynamic threshold and anomaly detection chart for error rate.' },
+    ja: { title: 'エラー率動的閾値', description: 'MLベースのエラー率動的閾値と異常検出チャートです。' },
+  },
+  'chart-cloud-cost-trend': {
+    ko: { title: '30일 비용 추이', description: '클라우드 제공자별 30일 비용 추이 차트입니다.' },
+    en: { title: '30-Day Cost Trend', description: '30-day cost trend chart by cloud provider.' },
+    ja: { title: '30日コスト推移', description: 'クラウドプロバイダー別30日コスト推移チャートです。' },
+  },
+  'map-service-topology': {
+    ko: { title: '서비스 토폴로지', description: '서비스 간 호출 관계를 네트워크 맵으로 시각화합니다.' },
+    en: { title: 'Service Topology', description: 'Network map visualization of service call relationships.' },
+    ja: { title: 'サービストポロジー', description: 'サービス間呼び出し関係をネットワークマップで可視化します。' },
+  },
+  'map-host-health': {
+    ko: { title: '호스트 헬스 맵', description: '프로젝트 호스트의 상태를 그리드로 시각화합니다.' },
+    en: { title: 'Host Health Map', description: 'Grid visualization of project host health status.' },
+    ja: { title: 'ホストヘルスマップ', description: 'プロジェクトホストの状態をグリッドで可視化します。' },
+  },
+  'chart-ttft-vs-conversion': {
+    ko: { title: 'TTFT 대 전환율', description: 'TTFT(초)와 전환율(%)의 상관관계 차트입니다.' },
+    en: { title: 'TTFT vs Conversion Rate', description: 'Correlation chart between TTFT (seconds) and conversion rate (%).' },
+    ja: { title: 'TTFT対コンバージョン率', description: 'TTFT(秒)とコンバージョン率(%)の相関チャートです。' },
+  },
+  'table-train-vs-inference': {
+    ko: { title: '학습 vs 추론 비교', description: '학습(Training)과 추론(Inference) 메트릭 비교 테이블입니다.' },
+    en: { title: 'Train vs Inference', description: 'Comparison table of training and inference metrics.' },
+    ja: { title: '学習vs推論比較', description: 'トレーニングと推論のメトリクス比較テーブルです。' },
+  },
+  'chart-revenue-by-plan': {
+    ko: { title: '플랜별 수익', description: '테넌트 플랜별 수익 분포 파이 차트입니다.' },
+    en: { title: 'Revenue by Plan', description: 'Revenue distribution pie chart by tenant plan.' },
+    ja: { title: 'プラン別収益', description: 'テナントプラン別収益分布パイチャートです。' },
+  },
+  'table-go-agent-overview': {
+    ko: { title: 'Go 에이전트 개요', description: 'Go 런타임 에이전트별 스케줄러, GC, 고루틴 지표 테이블입니다.' },
+    en: { title: 'Go Agent Overview', description: 'Table of scheduler, GC, and goroutine metrics per Go runtime agent.' },
+    ja: { title: 'Goエージェント概要', description: 'Goランタイムエージェント別スケジューラ、GC、ゴルーチン指標テーブルです。' },
+  },
+  'chart-go-sched-latency': {
+    ko: { title: '스케줄러 지연 히스토그램', description: 'Go 고루틴 스케줄링 지연 분포 히스토그램입니다.' },
+    en: { title: 'Scheduler Latency Histogram', description: 'Go goroutine scheduling delay distribution histogram.' },
+    ja: { title: 'スケジューラレイテンシヒストグラム', description: 'Goゴルーチンスケジューリング遅延分布のヒストグラムです。' },
+  },
+  'chart-go-gc-stw': {
+    ko: { title: 'GC STW 일시정지', description: 'Go GC Stop-the-World 일시정지 시간 추이 차트입니다.' },
+    en: { title: 'GC Stop-the-World Pause', description: 'Go GC Stop-the-World pause duration trend chart.' },
+    ja: { title: 'GC STWポーズ', description: 'Go GC Stop-the-Worldポーズ時間の推移チャートです。' },
+  },
+  'chart-go-goroutine-breakdown': {
+    ko: { title: '에이전트별 고루틴 분석', description: '에이전트별 Runnable/Waiting 고루틴 분포 차트입니다.' },
+    en: { title: 'Goroutine Breakdown', description: 'Runnable vs waiting goroutines breakdown chart by agent.' },
+    ja: { title: 'エージェント別ゴルーチン分析', description: 'エージェント別Runnable/Waitingゴルーチン分布チャートです。' },
+  },
+  'chart-dotnet-threadpool': {
+    ko: { title: '.NET ThreadPool', description: '.NET ThreadPool 스레드 수 및 대기열 길이 추이 차트입니다.' },
+    en: { title: '.NET ThreadPool', description: '.NET ThreadPool thread count and queue length trend chart.' },
+    ja: { title: '.NET ThreadPool', description: '.NET ThreadPoolスレッド数とキュー長の推移チャートです。' },
+  },
+  'chart-dotnet-gc': {
+    ko: { title: '.NET GC 세대별 수집', description: '.NET GC 세대(Gen0/Gen1/Gen2)별 수집 횟수 차트입니다.' },
+    en: { title: '.NET GC Collections', description: '.NET GC collections chart by generation (Gen0/Gen1/Gen2).' },
+    ja: { title: '.NET GC世代別収集', description: '.NET GC世代(Gen0/Gen1/Gen2)別収集回数チャートです。' },
+  },
+  'table-dotnet-aot-warnings': {
+    ko: { title: 'AOT 제한 경고', description: 'Native AOT 리플렉션 및 트리밍 관련 경고 목록입니다.' },
+    en: { title: 'AOT Restriction Warnings', description: 'List of Native AOT reflection and trimming warnings.' },
+    ja: { title: 'AOT制限警告', description: 'Native AOTリフレクションおよびトリミング関連警告の一覧です。' },
+  },
 };
 
 // Fallback for unknown widgets

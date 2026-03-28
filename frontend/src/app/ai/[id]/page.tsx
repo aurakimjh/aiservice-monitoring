@@ -130,14 +130,14 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>TTFT Trend</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-ttft-trend">TTFT Trend</CardTitle></CardHeader>
               <TimeSeriesChart series={[
                 { name: 'P50', data: generateTimeSeries((svc.ttftP95 ?? 1000) * 0.6, 200, 60), color: '#3FB950' },
                 { name: 'P95', data: generateTimeSeries(svc.ttftP95 ?? 1000, 300, 60), color: '#D29922' },
               ]} yAxisLabel="ms" thresholdLine={{ value: 2000, label: 'SLO 2s', color: '#F85149' }} height={200} />
             </Card>
             <Card>
-              <CardHeader><CardTitle>TPS Trend</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-tps-trend">TPS Trend</CardTitle></CardHeader>
               <TimeSeriesChart series={[
                 { name: 'TPS', data: generateTimeSeries(svc.tpsP50 ?? 40, 8, 60), type: 'area', color: '#58A6FF' },
               ]} yAxisLabel="tok/s" thresholdLine={{ value: 30, label: 'SLO 30', color: '#D29922' }} height={200} />
@@ -163,7 +163,7 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
-              <CardHeader><CardTitle>VRAM Usage Trend</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-vram-usage">VRAM Usage Trend</CardTitle></CardHeader>
               <TimeSeriesChart series={gpus.map((g, i) => ({
                 name: `GPU #${g.index}`,
                 data: generateTimeSeries(g.vramPercent, 8, 60),
@@ -171,7 +171,7 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
               }))} yAxisLabel="%" thresholdLine={{ value: 90, label: '90%', color: '#F85149' }} height={200} />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Temperature Trend</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-gpu-temperature">Temperature Trend</CardTitle></CardHeader>
               <TimeSeriesChart series={gpus.map((g, i) => ({
                 name: `GPU #${g.index}`,
                 data: generateTimeSeries(g.temperature, 5, 60),
@@ -208,7 +208,7 @@ function LLMTab({ svc }: { svc: { ttftP95?: number; tpsP50?: number; costPerHour
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
-          <CardHeader><CardTitle>TTFT Distribution</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-ttft-distribution">TTFT Distribution</CardTitle></CardHeader>
           <EChartsWrapper option={histOption} height={240} />
           <div className="flex items-center gap-4 mt-2 text-xs text-[var(--text-muted)]">
             <span>P50: {formatDuration((svc.ttftP95 ?? 1200) * 0.6)}</span>
@@ -217,14 +217,14 @@ function LLMTab({ svc }: { svc: { ttftP95?: number; tpsP50?: number; costPerHour
           </div>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Token Throughput (TPS)</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-token-throughput">Token Throughput (TPS)</CardTitle></CardHeader>
           <TimeSeriesChart series={[
             { name: 'P50', data: generateTimeSeries(svc.tpsP50 ?? 42, 8, 60), color: '#58A6FF' },
             { name: 'P95', data: generateTimeSeries((svc.tpsP50 ?? 42) * 1.4, 12, 60), color: '#D29922' },
           ]} yAxisLabel="tok/s" thresholdLine={{ value: 30, label: 'Target 30', color: '#3FB950' }} height={240} />
         </Card>
         <Card>
-          <CardHeader><CardTitle>Token Usage &amp; Cost</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-token-usage-cost">Token Usage &amp; Cost</CardTitle></CardHeader>
           <TimeSeriesChart series={[
             { name: 'Input tok/min', data: generateTimeSeries(45200, 5000, 60), type: 'area', color: '#58A6FF' },
             { name: 'Output tok/min', data: generateTimeSeries(12800, 2000, 60), type: 'area', color: '#3FB950' },
@@ -236,7 +236,7 @@ function LLMTab({ svc }: { svc: { ttftP95?: number; tpsP50?: number; costPerHour
           </div>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Concurrent Requests</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-concurrent-requests">Concurrent Requests</CardTitle></CardHeader>
           <TimeSeriesChart series={[
             { name: 'Concurrent', data: generateTimeSeries(8, 4, 60), type: 'area', color: '#BC8CFF' },
           ]} yAxisLabel="requests" thresholdLine={{ value: 20, label: 'Limit 20', color: '#F85149' }} height={240} />
@@ -260,7 +260,7 @@ function RAGTab() {
     <div className="space-y-4">
       {/* Pipeline Flow */}
       <Card>
-        <CardHeader><CardTitle>Pipeline Stages (avg latency)</CardTitle></CardHeader>
+        <CardHeader><CardTitle helpId="chart-pipeline-stages">Pipeline Stages (avg latency)</CardTitle></CardHeader>
         <div className="flex items-center gap-1 h-10 rounded-[var(--radius-md)] overflow-hidden">
           {data.stages.map((stage) => (
             <div
@@ -288,7 +288,7 @@ function RAGTab() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Search Quality */}
         <Card>
-          <CardHeader><CardTitle>Search Quality</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-search-quality">Search Quality</CardTitle></CardHeader>
           <div className="space-y-2.5">
             {[
               { label: 'Relevancy Score', value: data.searchQuality.relevancyScore, max: 1, fmt: (v: number) => v.toFixed(2) },
@@ -312,7 +312,7 @@ function RAGTab() {
 
         {/* Embedding Performance */}
         <Card>
-          <CardHeader><CardTitle>Embedding Performance</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-embedding-performance">Embedding Performance</CardTitle></CardHeader>
           <div className="space-y-2 text-xs">
             {[
               { label: 'Model', value: data.embeddingPerf.model },
@@ -340,7 +340,7 @@ function RAGTab() {
 
         {/* VectorDB Status */}
         <Card>
-          <CardHeader><CardTitle>Vector DB ({data.vectorDB.engine})</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-vector-db">Vector DB ({data.vectorDB.engine})</CardTitle></CardHeader>
           <div className="space-y-2 text-xs">
             {[
               { label: 'Collection', value: data.vectorDB.collection },
@@ -390,19 +390,19 @@ function GuardrailTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
-          <CardHeader><CardTitle>Block Rate Trend</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-block-rate-trend">Block Rate Trend</CardTitle></CardHeader>
           <TimeSeriesChart series={[
             { name: 'Block Rate', data: generateTimeSeries(data.blockRate, 0.8, 60), type: 'area', color: '#F85149' },
           ]} yAxisLabel="%" thresholdLine={{ value: 5, label: '5%', color: '#D29922' }} height={220} />
         </Card>
         <Card>
-          <CardHeader><CardTitle>Violation Types</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-violation-types">Violation Types</CardTitle></CardHeader>
           <EChartsWrapper option={violationOption} height={220} />
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Guardrail Latency</CardTitle></CardHeader>
+        <CardHeader><CardTitle helpId="chart-guardrail-latency">Guardrail Latency</CardTitle></CardHeader>
         <TimeSeriesChart series={[
           { name: 'Input Check', data: generateTimeSeries(50, 15, 60), color: '#9B59B6' },
           { name: 'Output Check', data: generateTimeSeries(80, 20, 60), color: '#BC8CFF' },

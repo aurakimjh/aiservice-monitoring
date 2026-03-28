@@ -386,7 +386,7 @@ export default function PromptHubPage() {
               {/* Quality trend chart */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Quality Score Trend</CardTitle>
+                  <CardTitle helpId="chart-quality-score-trend">Quality Score Trend</CardTitle>
                 </CardHeader>
                 <TimeSeriesChart
                   series={[

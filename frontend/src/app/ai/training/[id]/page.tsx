@@ -218,7 +218,7 @@ export default function TrainingJobDetailPage({
         {/* Train Loss + Val Loss */}
         <Card>
           <CardHeader>
-            <CardTitle>Loss Curve</CardTitle>
+            <CardTitle helpId="chart-loss-curve">Loss Curve</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -242,7 +242,7 @@ export default function TrainingJobDetailPage({
         {/* Train Accuracy + Val Accuracy */}
         <Card>
           <CardHeader>
-            <CardTitle>Accuracy Curve</CardTitle>
+            <CardTitle helpId="chart-accuracy-curve">Accuracy Curve</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -266,7 +266,7 @@ export default function TrainingJobDetailPage({
         {/* GPU Utilization Timeline */}
         <Card>
           <CardHeader>
-            <CardTitle>GPU Utilization</CardTitle>
+            <CardTitle helpId="chart-training-gpu-util">GPU Utilization</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -286,7 +286,7 @@ export default function TrainingJobDetailPage({
         {/* Learning Rate Schedule */}
         <Card>
           <CardHeader>
-            <CardTitle>Learning Rate Schedule</CardTitle>
+            <CardTitle helpId="chart-learning-rate">Learning Rate Schedule</CardTitle>
           </CardHeader>
           <TimeSeriesChart
             series={[
@@ -305,7 +305,7 @@ export default function TrainingJobDetailPage({
       {/* Checkpoint List */}
       <Card padding="none">
         <CardHeader>
-          <CardTitle>Checkpoints ({checkpoints.length})</CardTitle>
+          <CardTitle helpId="table-checkpoints">Checkpoints ({checkpoints.length})</CardTitle>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">

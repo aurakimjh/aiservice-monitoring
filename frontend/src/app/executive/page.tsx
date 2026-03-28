@@ -125,7 +125,7 @@ export default function ExecutiveDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* SLO Gauge */}
         <Card>
-          <CardHeader><CardTitle>SLO Compliance</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-exec-slo">SLO Compliance</CardTitle></CardHeader>
           <EChartsWrapper option={sloGauge} height={180} />
           <div className="space-y-1.5 mt-2">
             {slos.map((slo) => (
@@ -147,7 +147,7 @@ export default function ExecutiveDashboardPage() {
 
         {/* Cost Donut */}
         <Card>
-          <CardHeader><CardTitle>Cost Breakdown</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-exec-cost-breakdown">Cost Breakdown</CardTitle></CardHeader>
           <EChartsWrapper option={costDonut} height={180} />
           <div className="text-center mt-1">
             <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums">{formatCost(totalCost)}</span>
@@ -159,7 +159,7 @@ export default function ExecutiveDashboardPage() {
 
         {/* Top Issues */}
         <Card>
-          <CardHeader><CardTitle>Top Issues</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="table-exec-top-issues">Top Issues</CardTitle></CardHeader>
           <div className="space-y-2">
             {summary.topIssues.map((issue, i) => (
               <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-tertiary)]">
@@ -185,7 +185,7 @@ export default function ExecutiveDashboardPage() {
       {/* Trend Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card>
-          <CardHeader><CardTitle>Service Health Trend</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-exec-health-trend">Service Health Trend</CardTitle></CardHeader>
           <TimeSeriesChart
             series={[
               { name: 'Healthy', data: generateTimeSeries(7, 1, 30), type: 'area', color: '#3FB950' },
@@ -197,7 +197,7 @@ export default function ExecutiveDashboardPage() {
           />
         </Card>
         <Card>
-          <CardHeader><CardTitle>Cost Trend (30 days)</CardTitle></CardHeader>
+          <CardHeader><CardTitle helpId="chart-exec-cost-trend">Cost Trend (30 days)</CardTitle></CardHeader>
           <TimeSeriesChart
             series={[
               { name: 'Total Cost', data: generateTimeSeries(totalCost, totalCost * 0.08, 30), type: 'area', color: '#58A6FF' },

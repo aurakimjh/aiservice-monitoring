@@ -314,7 +314,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           {/* Time Series Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <Card>
-              <CardHeader><CardTitle>Latency</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-svc-latency">Latency</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
                   { name: 'P50', data: generateTimeSeries(service.latencyP50, service.latencyP50 * 0.2, 60), color: '#3FB950' },
@@ -326,7 +326,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Traffic (RPM)</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-svc-traffic">Traffic (RPM)</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
                   { name: 'RPM', data: generateTimeSeries(service.rpm, service.rpm * 0.15, 60), type: 'area', color: '#58A6FF' },
@@ -336,7 +336,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               />
             </Card>
             <Card>
-              <CardHeader><CardTitle>Error Rate</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-svc-error-rate">Error Rate</CardTitle></CardHeader>
               <TimeSeriesChart
                 series={[
                   { name: 'Error Rate', data: generateTimeSeries(service.errorRate, service.errorRate * 0.3, 60), type: 'area', color: '#F85149' },
@@ -351,7 +351,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           {/* XLog Scatter */}
           <Card>
             <CardHeader>
-              <CardTitle>XLog (Response Distribution)</CardTitle>
+              <CardTitle helpId="chart-xlog-scatter">XLog (Response Distribution)</CardTitle>
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>
@@ -465,7 +465,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-3">
           <Card>
             <CardHeader>
-              <CardTitle>XLog Scatter Plot</CardTitle>
+              <CardTitle helpId="chart-xlog-scatter">XLog Scatter Plot</CardTitle>
               <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#58A6FF]" /> Normal</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F85149]" /> Error</span>

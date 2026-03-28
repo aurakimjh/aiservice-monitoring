@@ -183,7 +183,7 @@ export default function TenantsPage() {
             <TenantDetail tenant={selectedTenant} onClose={() => setSelectedTenantId(null)} />
           ) : (
             <Card>
-              <CardHeader><CardTitle>Revenue by Plan</CardTitle></CardHeader>
+              <CardHeader><CardTitle helpId="chart-revenue-by-plan">Revenue by Plan</CardTitle></CardHeader>
               <EChartsWrapper option={revenuePie} height={220} />
               <div className="text-center mt-2 text-xs text-[var(--text-muted)]">
                 Total: {formatCost(stats.totalRevenue)}/month

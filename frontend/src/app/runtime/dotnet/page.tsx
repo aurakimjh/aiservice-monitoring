@@ -527,7 +527,7 @@ export default function DotNetRuntimePage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Cpu size={14} className="text-[#58A6FF]" />
-              <CardTitle className="text-sm">ThreadPool — Threads &amp; Queue Length</CardTitle>
+              <CardTitle className="text-sm" helpId="chart-dotnet-threadpool">ThreadPool — Threads &amp; Queue Length</CardTitle>
             </div>
           </CardHeader>
           <EChartsWrapper option={threadPoolOption} height={280} />
@@ -538,7 +538,7 @@ export default function DotNetRuntimePage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <MemoryStick size={14} className="text-[#3FB950]" />
-              <CardTitle className="text-sm">GC Collections by Generation</CardTitle>
+              <CardTitle className="text-sm" helpId="chart-dotnet-gc">GC Collections by Generation</CardTitle>
             </div>
           </CardHeader>
           <EChartsWrapper option={gcOption} height={280} />
@@ -551,7 +551,7 @@ export default function DotNetRuntimePage() {
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2">
               <Shield size={14} className="text-[#512BD4]" />
-              <CardTitle className="text-sm">AOT Restriction Warnings</CardTitle>
+              <CardTitle className="text-sm" helpId="table-dotnet-aot-warnings">AOT Restriction Warnings</CardTitle>
             </div>
             <span className="text-xs text-[var(--text-muted)]">
               {filteredWarnings.length} warning{filteredWarnings.length !== 1 ? 's' : ''}

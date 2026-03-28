@@ -95,7 +95,7 @@ export default function AnomaliesPage() {
         {thresholds[0] && (
           <Card>
             <CardHeader>
-              <CardTitle>Dynamic Threshold &mdash; TTFT P95</CardTitle>
+              <CardTitle helpId="chart-anomaly-ttft">Dynamic Threshold &mdash; TTFT P95</CardTitle>
             </CardHeader>
             <AnomalyChart threshold={thresholds[0]} />
           </Card>
@@ -103,7 +103,7 @@ export default function AnomaliesPage() {
         {thresholds[1] && (
           <Card>
             <CardHeader>
-              <CardTitle>Dynamic Threshold &mdash; Error Rate</CardTitle>
+              <CardTitle helpId="chart-anomaly-error-rate">Dynamic Threshold &mdash; Error Rate</CardTitle>
             </CardHeader>
             <AnomalyChart threshold={thresholds[1]} />
           </Card>

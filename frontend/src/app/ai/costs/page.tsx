@@ -234,7 +234,7 @@ export default function AICostOptimizationPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Cost vs Quality (bubble size = daily tokens)</CardTitle>
+              <CardTitle helpId="chart-cost-vs-quality">Cost vs Quality (bubble size = daily tokens)</CardTitle>
             </CardHeader>
             <EChartsWrapper option={scatterOption} height={320} />
           </Card>
@@ -274,13 +274,13 @@ export default function AICostOptimizationPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
               <CardHeader>
-                <CardTitle>Cache Hit Distribution</CardTitle>
+                <CardTitle helpId="chart-cache-hit-distribution">Cache Hit Distribution</CardTitle>
               </CardHeader>
               <EChartsWrapper option={cacheDonutOption} height={280} />
             </Card>
             <Card className="border-l-2 border-l-[var(--status-info)]">
               <CardHeader>
-                <CardTitle>Potential Savings</CardTitle>
+                <CardTitle helpId="chart-potential-savings">Potential Savings</CardTitle>
               </CardHeader>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
