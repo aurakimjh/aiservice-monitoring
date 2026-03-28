@@ -87,9 +87,10 @@ export default function TopologyPage() {
   );
 
   // Map discovered topology nodes/edges to ServiceMap-compatible types
+  const topoData = topology ?? { nodes: [], edges: [] };
   const nodes: TopologyNode[] = useMemo(
     () =>
-      topology.nodes.map((n) => ({
+      (topoData.nodes ?? []).map((n: TopologyNode) => ({
         id: n.id,
         name: n.name,
         layer: n.layer as TopologyNode['layer'],
@@ -99,19 +100,19 @@ export default function TopologyPage() {
         p95: n.p95,
         framework: n.framework,
       })),
-    [topology.nodes],
+    [topoData.nodes],
   );
 
   const edges: TopologyEdge[] = useMemo(
     () =>
-      topology.edges.map((e) => ({
+      (topoData.edges ?? []).map((e: TopologyEdge) => ({
         source: e.source,
         target: e.target,
         rpm: e.rpm,
         errorRate: e.errorRate,
         p95: e.p95,
       })),
-    [topology.edges],
+    [topoData.edges],
   );
 
   // ── Drill-down: Host-level and Instance-level topology ──
@@ -192,10 +193,11 @@ export default function TopologyPage() {
   }, [drillLevel, edges, hostNodes, instanceNodes]);
 
   // KPI computations
-  const totalServices = topology.nodes.length;
-  const activeConnections = topology.edges.filter((e) => !e.isRemoved).length;
-  const newIn24h = topology.edges.filter((e) => e.isNew).length;
-  const removedIn24h = topology.edges.filter((e) => e.isRemoved).length;
+  const changesData = changes ?? [];
+  const totalServices = (topoData.nodes ?? []).length;
+  const activeConnections = (topoData.edges ?? []).filter((e: TopologyEdge & { isRemoved?: boolean }) => !e.isRemoved).length;
+  const newIn24h = (topoData.edges ?? []).filter((e: TopologyEdge & { isNew?: boolean }) => e.isNew).length;
+  const removedIn24h = (topoData.edges ?? []).filter((e: TopologyEdge & { isRemoved?: boolean }) => e.isRemoved).length;
 
   return (
     <div className="space-y-4">
@@ -296,7 +298,7 @@ export default function TopologyPage() {
           </CardTitle>
         </CardHeader>
         <div className="px-4 pb-4 space-y-2">
-          {changes.map((change) => {
+          {changesData.map((change: { id: string; type: string; protocol?: string; timestamp: string; description: string; sourceService: string; targetService?: string }) => {
             const config = CHANGE_TYPE_CONFIG[change.type] ?? CHANGE_TYPE_CONFIG.service_added;
             const Icon = config.icon;
 
@@ -345,7 +347,7 @@ export default function TopologyPage() {
             );
           })}
 
-          {changes.length === 0 && (
+          {changesData.length === 0 && (
             <div className="py-8 text-center text-xs text-[var(--text-muted)]">
               <Database size={20} className="mx-auto mb-2 opacity-40" />
               No topology changes detected
