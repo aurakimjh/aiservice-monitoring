@@ -302,14 +302,14 @@ export default function AIServicesPage() {
                   </div>
 
                   {/* Pipeline Stage Flow */}
-                  {pipeline.service_ids.length > 0 ? (
+                  {(pipeline.service_ids ?? []).length > 0 ? (
                     <div className="flex items-center gap-1 flex-wrap mb-3">
-                      {pipeline.service_ids.map((svcName, i) => (
+                      {(pipeline.service_ids ?? []).map((svcName, i) => (
                         <div key={svcName} className="flex items-center gap-1">
                           <span className="px-2 py-1 bg-[var(--bg-tertiary)] rounded text-[10px] font-mono text-[var(--text-secondary)]">
                             {svcName}
                           </span>
-                          {i < pipeline.service_ids.length - 1 && (
+                          {i < (pipeline.service_ids ?? []).length - 1 && (
                             <ArrowRight size={10} className="text-[var(--text-muted)]" />
                           )}
                         </div>
@@ -323,15 +323,15 @@ export default function AIServicesPage() {
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <div className="text-[10px] text-[var(--text-muted)]">Total RPM</div>
-                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{pipeline.total_rpm > 0 ? pipeline.total_rpm.toFixed(1) : '-'}</div>
+                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{(pipeline.total_rpm ?? 0) > 0 ? (pipeline.total_rpm ?? 0).toFixed(1) : '-'}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-[var(--text-muted)]">Max P95</div>
-                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{pipeline.max_p95 > 0 ? `${pipeline.max_p95.toFixed(0)}ms` : '-'}</div>
+                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{(pipeline.max_p95 ?? 0) > 0 ? `${(pipeline.max_p95 ?? 0).toFixed(0)}ms` : '-'}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-[var(--text-muted)]">Error Rate</div>
-                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{pipeline.error_rate > 0 ? `${pipeline.error_rate.toFixed(2)}%` : '-'}</div>
+                      <div className="font-semibold text-[var(--text-primary)] tabular-nums">{(pipeline.error_rate ?? 0) > 0 ? `${(pipeline.error_rate ?? 0).toFixed(2)}%` : '-'}</div>
                     </div>
                   </div>
                 </Card>

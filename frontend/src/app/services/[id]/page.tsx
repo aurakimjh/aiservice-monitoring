@@ -108,7 +108,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
         name: String((liveService as Record<string, unknown>).name ?? id),
         framework: String((liveService as Record<string, unknown>).framework ?? '-'),
         language: String((liveService as Record<string, unknown>).language ?? '-'),
-        hostIds: ((liveService as Record<string, unknown>).host_ids as string[]) ?? [],
+        hostIds: ((liveService as Record<string, unknown>).host_ids as string[] | undefined) ?? [],
         latencyP50: 0, latencyP95: 0, latencyP99: 0, rpm: 0, errorRate: 0,
         status: 'healthy' as const,
       }
@@ -136,7 +136,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   const hosts = getProjectHosts(projectId);
   const serviceHosts = useMemo(
-    () => service ? hosts.filter((h) => service.hostIds.includes(h.id)) : [],
+    () => service ? hosts.filter((h) => (service.hostIds ?? []).includes(h.id)) : [],
     [service, hosts],
   );
 
@@ -285,7 +285,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             />
             <KPICard
               title="Traffic"
-              value={service.rpm.toLocaleString()}
+              value={(service.rpm ?? 0).toLocaleString()}
               unit="rpm"
               trend={{ direction: 'up', value: '+12%', positive: true }}
               status="healthy"
@@ -293,7 +293,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             />
             <KPICard
               title="Error Rate"
-              value={service.errorRate.toFixed(2)}
+              value={(service.errorRate ?? 0).toFixed(2)}
               unit="%"
               status={service.errorRate > 1 ? 'critical' : service.errorRate > 0.1 ? 'warning' : 'healthy'}
               sparkData={[0.1, 0.12, 0.08, 0.15, 0.11, 0.09, 0.13, 0.1, 0.12, service.errorRate]}

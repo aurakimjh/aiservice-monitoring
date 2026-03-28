@@ -97,7 +97,7 @@ export default function BatchJobDetailPage() {
   const timelineOption = useMemo<EChartsOption>(() => {
     const data = executions.map(e => {
       const startMs = new Date(e.started_at).getTime();
-      const durationMin = e.duration_ms / 60_000;
+      const durationMin = (e.duration_ms ?? 0) / 60_000;
       const isSlow = e.state === 'COMPLETED' && durationMin > (job?.avg_duration_ms ?? 0) / 60_000 * 1.5;
       const color = e.state === 'FAILED' ? '#F85149' : isSlow ? '#D29922' : '#3FB950';
       return {
@@ -207,7 +207,7 @@ export default function BatchJobDetailPage() {
             <div className="text-sm font-medium mt-0.5" style={{
               color: job.success_rate >= 95 ? '#3FB950' : job.success_rate >= 80 ? '#D29922' : '#F85149',
             }}>
-              {job.success_rate.toFixed(1)}%
+              {(job.success_rate ?? 0).toFixed(1)}%
             </div>
           </div>
           <div>
@@ -328,13 +328,13 @@ export default function BatchJobDetailPage() {
                       {exec.exit_code}
                     </td>
                     <td className="px-4 py-2.5 text-right text-xs tabular-nums text-[var(--text-secondary)]">
-                      {exec.cpu_avg.toFixed(1)}% / {exec.cpu_max.toFixed(1)}%
+                      {(exec.cpu_avg ?? 0).toFixed(1)}% / {(exec.cpu_max ?? 0).toFixed(1)}%
                     </td>
                     <td className="px-4 py-2.5 text-right text-xs tabular-nums text-[var(--text-secondary)]">
-                      {formatBytes(exec.memory_max)}
+                      {formatBytes(exec.memory_max ?? 0)}
                     </td>
                     <td className="px-4 py-2.5 text-right text-xs tabular-nums text-[var(--text-secondary)]">
-                      {formatBytes(exec.io_read_total + exec.io_write_total)}
+                      {formatBytes((exec.io_read_total ?? 0) + (exec.io_write_total ?? 0))}
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <Link

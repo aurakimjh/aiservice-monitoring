@@ -65,9 +65,9 @@ export default function BatchPage() {
 
   const totalJobs = jobs.length;
   const runningNow = jobs.filter(j => j.status === 'running').length;
-  const failedCount24h = jobs.reduce((s, j) => s + j.failed_count_24h, 0);
+  const failedCount24h = jobs.reduce((s, j) => s + (j.failed_count_24h ?? 0), 0);
   const avgSuccessRate = jobs.length > 0
-    ? Math.round(jobs.reduce((s, j) => s + j.success_rate, 0) / jobs.length * 10) / 10
+    ? Math.round(jobs.reduce((s, j) => s + (j.success_rate ?? 0), 0) / jobs.length * 10) / 10
     : 0;
 
   const filtered = useMemo(() => {
@@ -103,7 +103,7 @@ export default function BatchPage() {
           return `<div style="font-size:12px">
             <strong>${e.job_name}</strong><br/>
             State: ${e.state}<br/>
-            Duration: ${formatDuration(e.duration_ms)}<br/>
+            Duration: ${formatDuration(e.duration_ms ?? 0)}<br/>
             ${new Date(e.started_at).toLocaleString()}
           </div>`;
         },
@@ -279,7 +279,7 @@ export default function BatchPage() {
                             : '#F85149',
                         }}
                       >
-                        {job.success_rate.toFixed(1)}%
+                        {(job.success_rate ?? 0).toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-[var(--text-muted)]">

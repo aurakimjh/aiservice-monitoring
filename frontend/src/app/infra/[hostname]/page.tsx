@@ -128,7 +128,7 @@ export default function HostDetailPage({ params }: { params: Promise<{ hostname:
             <span>{host.os}</span>
             <span>CPU: {host.cpuCores}C</span>
             <span>MEM: {host.memoryGB}GB</span>
-            {host.gpus && <span>GPU: {host.gpus[0].model} x{host.gpus.length}</span>}
+            {host.gpus && host.gpus.length > 0 && <span>GPU: {host.gpus[0].model} x{host.gpus.length}</span>}
           </div>
           {host.agent && (
             <div className="flex items-center gap-2 mt-1.5">

@@ -101,7 +101,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-1">{project.description}</p>
           <div className="flex items-center gap-3 mt-2">
-            {Object.entries(project.tags).map(([k, v]) => (
+            {Object.entries(project.tags ?? {}).map(([k, v]) => (
               <Badge key={k}>{k}: {v}</Badge>
             ))}
           </div>
@@ -134,17 +134,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             />
             <KPICard
               title="Error Rate"
-              value={project.errorRate.toFixed(2)}
+              value={(project.errorRate ?? 0).toFixed(2)}
               unit="%"
               trend={{ direction: 'down', value: '0.03%', positive: true }}
-              status={project.errorRate < 0.5 ? 'healthy' : project.errorRate < 1 ? 'warning' : 'critical'}
+              status={(project.errorRate ?? 0) < 0.5 ? 'healthy' : (project.errorRate ?? 0) < 1 ? 'warning' : 'critical'}
             />
             <KPICard
               title="P95 Latency"
-              value={project.p95Latency}
+              value={project.p95Latency ?? 0}
               unit="ms"
               trend={{ direction: 'down', value: '15ms', positive: true }}
-              status={project.p95Latency < 500 ? 'healthy' : project.p95Latency < 2000 ? 'warning' : 'critical'}
+              status={(project.p95Latency ?? 0) < 500 ? 'healthy' : (project.p95Latency ?? 0) < 2000 ? 'warning' : 'critical'}
               sparkData={[280, 265, 270, 255, 248, 260, 252, 245]}
             />
             <KPICard
@@ -156,10 +156,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             />
             <KPICard
               title="SLO Compliance"
-              value={project.sloCompliance.toFixed(1)}
+              value={(project.sloCompliance ?? 0).toFixed(1)}
               unit="%"
               subtitle="Target: 99.5%"
-              status={project.sloCompliance >= 99.5 ? 'healthy' : project.sloCompliance >= 99 ? 'warning' : 'critical'}
+              status={(project.sloCompliance ?? 0) >= 99.5 ? 'healthy' : (project.sloCompliance ?? 0) >= 99 ? 'warning' : 'critical'}
             />
           </div>
 
@@ -170,7 +170,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <TimeSeriesChart
                 series={[
                   { name: 'P50', data: generateTimeSeries(180, 30, 60), type: 'area' },
-                  { name: 'P95', data: generateTimeSeries(project.p95Latency, 50, 60), color: '#D29922' },
+                  { name: 'P95', data: generateTimeSeries(project.p95Latency ?? 0, 50, 60), color: '#D29922' },
                 ]}
                 yAxisLabel="ms"
                 thresholdLine={{ value: 500, label: 'SLO', color: '#F85149' }}

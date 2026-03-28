@@ -329,9 +329,9 @@ export default function LogsPage() {
                         </div>
                       )}
 
-                      {Object.keys(log.attributes).length > 0 && (
+                      {Object.keys(log.attributes ?? {}).length > 0 && (
                         <div className="flex items-center gap-2 flex-wrap">
-                          {Object.entries(log.attributes).map(([key, value]) => (
+                          {Object.entries(log.attributes ?? {}).map(([key, value]) => (
                             <span key={key} className="px-1.5 py-0.5 bg-[var(--bg-overlay)] rounded text-[10px] font-mono text-[var(--text-secondary)]">
                               {key}={String(value)}
                             </span>

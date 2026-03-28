@@ -60,7 +60,7 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
   const [activeTab, setActiveTab] = useState('overview');
 
   const hosts = getProjectHosts(projectId);
-  const svcHosts = useMemo(() => svc ? hosts.filter((h) => svc.hostIds.includes(h.id)) : [], [svc, hosts]);
+  const svcHosts = useMemo(() => svc ? hosts.filter((h) => (svc.hostIds ?? []).includes(h.id)) : [], [svc, hosts]);
   const gpus = useMemo(() => svcHosts.flatMap((h) => h.gpus ?? []), [svcHosts]);
 
   const tabs = useMemo(() => {
