@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { generateTrace, getMethodProfile } from '@/lib/demo-data';
 import { formatDuration } from '@/lib/utils';
 import { MethodCallTree } from '@/components/monitoring';
@@ -98,6 +99,55 @@ function flattenTree(nodes: SpanNode[]): SpanNode[] {
   return result;
 }
 
+// Transform Jaeger trace response → { traceId, duration, service, spans: TraceSpan[] }
+interface JaegerSpanTag { key: string; type: string; value: unknown }
+interface JaegerSpanRef { refType: string; traceID: string; spanID: string }
+interface JaegerSpan {
+  traceID: string; spanID: string; operationName: string;
+  startTime: number; duration: number;
+  references?: JaegerSpanRef[];
+  tags?: JaegerSpanTag[];
+  process?: { serviceName: string };
+}
+
+function transformJaegerTrace(raw: unknown, traceId: string) {
+  const resp = raw as { data?: Array<{ traceID: string; spans: JaegerSpan[] }> };
+  const traceData = resp?.data?.[0];
+  if (!traceData || !traceData.spans?.length) return null;
+
+  const rootSpan = traceData.spans.find(s =>
+    !s.references?.some(r => r.refType === 'CHILD_OF' && traceData.spans.some(p => p.spanID === r.spanID))
+  ) ?? traceData.spans[0];
+
+  const rootStart = rootSpan.startTime;
+
+  const spans: TraceSpan[] = traceData.spans.map(s => {
+    const parentRef = s.references?.find(r => r.refType === 'CHILD_OF');
+    const attrs: Record<string, string | number> = {};
+    (s.tags ?? []).forEach(t => { attrs[t.key] = t.value as string | number; });
+
+    return {
+      spanId: s.spanID,
+      parentSpanId: parentRef?.spanID ?? '',
+      traceId: s.traceID,
+      service: s.process?.serviceName ?? 'unknown',
+      operation: s.operationName,
+      startTime: s.startTime / 1000, // μs → ms
+      duration: s.duration / 1000,
+      status: attrs['otel.status_code'] === 'ERROR' || attrs['error'] ? 'error' : 'ok',
+      kind: String(attrs['span.kind'] ?? 'internal'),
+      attributes: attrs,
+    };
+  });
+
+  return {
+    traceId: traceData.traceID,
+    duration: Math.round(rootSpan.duration / 1000),
+    service: rootSpan.process?.serviceName ?? 'unknown',
+    spans,
+  };
+}
+
 export default function TraceDetailPage({ params }: { params: Promise<{ traceId: string }> }) {
   const { traceId } = use(params);
   const router = useRouter();
@@ -106,9 +156,23 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
   const [collapsedSpans, setCollapsedSpans] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'waterfall' | 'method-profile'>('waterfall');
 
-  const trace = useMemo(() => generateTrace(traceId), [traceId]);
+  // Live: Jaeger API / Demo: generateTrace fallback
+  const demoTrace = useCallback(() => generateTrace(traceId), [traceId]);
+  const { data: liveTrace, source } = useDataSource(
+    `/proxy/jaeger/traces/${traceId}`,
+    demoTrace,
+    { transform: (raw) => transformJaegerTrace(raw, traceId) },
+  );
+  const trace = liveTrace ?? generateTrace(traceId);
 
-  const spanTree = useMemo(() => buildSpanTree(trace.spans), [trace.spans]);
+  // Normalize trace properties (live vs demo may have different shapes)
+  const traceSpans = trace?.spans ?? [];
+  const traceDuration = trace?.duration ?? (traceSpans.length > 0 ? Math.max(...traceSpans.map((s: TraceSpan) => s.startTime + s.duration)) - Math.min(...traceSpans.map((s: TraceSpan) => s.startTime)) : 0);
+  const traceStartTime = trace?.startTime ?? (traceSpans.length > 0 ? Math.min(...traceSpans.map((s: TraceSpan) => s.startTime)) : 0);
+  const traceErrorCount = trace?.errorCount ?? traceSpans.filter((s: TraceSpan) => s.status === 'error').length;
+  const traceServiceCount = trace?.serviceCount ?? new Set(traceSpans.map((s: TraceSpan) => s.service)).size;
+
+  const spanTree = useMemo(() => buildSpanTree(traceSpans), [traceSpans]);
   const flatSpans = useMemo(() => {
     // Filter out collapsed children
     const result: SpanNode[] = [];
@@ -122,7 +186,7 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
     return result;
   }, [spanTree, collapsedSpans]);
 
-  const selectedSpan = trace.spans.find((s) => s.spanId === selectedSpanId) ?? null;
+  const selectedSpan = traceSpans.find((s: TraceSpan) => s.spanId === selectedSpanId) ?? null;
 
   const services = useMemo(() => {
     const svcSet = new Set<string>();
@@ -158,18 +222,19 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
       {/* Header */}
       <div>
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">{trace.rootEndpoint}</h1>
-          {trace.errorCount > 0 && (
-            <Badge variant="status" status="critical">{trace.errorCount} error{trace.errorCount > 1 && 's'}</Badge>
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">{trace.rootEndpoint ?? trace.service}</h1>
+          <DataSourceBadge source={source} />
+          {traceErrorCount > 0 && (
+            <Badge variant="status" status="critical">{traceErrorCount} error{traceErrorCount > 1 && 's'}</Badge>
           )}
-          {trace.errorCount === 0 && (
+          {traceErrorCount === 0 && (
             <Badge variant="status" status="healthy">OK</Badge>
           )}
         </div>
         <div className="flex items-center gap-4 mt-1 text-xs text-[var(--text-muted)]">
           <span className="flex items-center gap-1">
             <Clock size={11} />
-            {formatDuration(trace.duration)}
+            {formatDuration(traceDuration)}
           </span>
           <span className="flex items-center gap-1">
             <Layers size={11} />
@@ -177,7 +242,7 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
           </span>
           <span className="flex items-center gap-1">
             <Server size={11} />
-            {trace.serviceCount} services
+            {traceServiceCount} services
           </span>
           <button onClick={copyTrace} className="flex items-center gap-1 text-[var(--accent-primary)] hover:underline">
             Trace: {trace.traceId.slice(0, 16)}...
@@ -239,7 +304,7 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
           <div className="w-[280px] shrink-0 font-medium">Service / Operation</div>
           <div className="flex-1 flex justify-between px-1">
             {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
-              <span key={pct} className="tabular-nums">{formatDuration(Math.round(trace.duration * pct))}</span>
+              <span key={pct} className="tabular-nums">{formatDuration(Math.round(traceDuration * pct))}</span>
             ))}
           </div>
           <div className="w-[70px] shrink-0 text-right font-medium">Duration</div>
@@ -249,8 +314,8 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
         <div className="divide-y divide-[var(--border-muted)]">
           {flatSpans.map((node) => {
             const { span } = node;
-            const leftPct = ((span.startTime - trace.startTime) / trace.duration) * 100;
-            const widthPct = Math.max((span.duration / trace.duration) * 100, 0.3);
+            const leftPct = traceDuration > 0 ? ((span.startTime - traceStartTime) / traceDuration) * 100 : 0;
+            const widthPct = traceDuration > 0 ? Math.max((span.duration / traceDuration) * 100, 0.3) : 100;
             const barColor = span.status === 'error'
               ? '#E74C3C'
               : SPAN_NAME_COLORS[span.name] ?? SERVICE_COLORS[span.service] ?? '#8B949E';
