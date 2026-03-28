@@ -62,7 +62,9 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) migrate() error {
-	_, err := s.db.Exec(`
+	// Execute each CREATE TABLE separately (modernc/sqlite may not handle multiple statements in one Exec)
+	tables := []string{
+		`
 		CREATE TABLE IF NOT EXISTS projects (
 			id          TEXT PRIMARY KEY,
 			name        TEXT NOT NULL,
@@ -70,8 +72,7 @@ func (s *Store) migrate() error {
 			environment TEXT DEFAULT 'production',
 			created_at  TEXT DEFAULT (datetime('now')),
 			updated_at  TEXT DEFAULT (datetime('now'))
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS agents (
 			id            TEXT PRIMARY KEY,
 			hostname      TEXT NOT NULL,
@@ -87,8 +88,7 @@ func (s *Store) migrate() error {
 			registered_at TEXT DEFAULT (datetime('now')),
 			last_heartbeat TEXT DEFAULT (datetime('now')),
 			FOREIGN KEY (project_id) REFERENCES projects(id)
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS services (
 			id             TEXT PRIMARY KEY,
 			name           TEXT NOT NULL UNIQUE,
@@ -103,8 +103,7 @@ func (s *Store) migrate() error {
 			created_at     TEXT DEFAULT (datetime('now')),
 			updated_at     TEXT DEFAULT (datetime('now')),
 			FOREIGN KEY (project_id) REFERENCES projects(id)
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS service_groups (
 			id           TEXT PRIMARY KEY,
 			name         TEXT NOT NULL,
@@ -115,8 +114,7 @@ func (s *Store) migrate() error {
 			created_at   TEXT DEFAULT (datetime('now')),
 			updated_at   TEXT DEFAULT (datetime('now')),
 			FOREIGN KEY (project_id) REFERENCES projects(id)
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS evals (
 			id         TEXT PRIMARY KEY,
 			trace_id   TEXT DEFAULT '',
@@ -126,8 +124,7 @@ func (s *Store) migrate() error {
 			scores     TEXT DEFAULT '{}',
 			feedback   TEXT DEFAULT '',
 			created_at TEXT DEFAULT (datetime('now'))
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS prompt_versions (
 			id         TEXT PRIMARY KEY,
 			name       TEXT NOT NULL,
@@ -135,8 +132,7 @@ func (s *Store) migrate() error {
 			template   TEXT DEFAULT '',
 			model      TEXT DEFAULT '',
 			created_at TEXT DEFAULT (datetime('now'))
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS security_events (
 			id         TEXT PRIMARY KEY,
 			type       TEXT NOT NULL,
@@ -145,16 +141,14 @@ func (s *Store) migrate() error {
 			service    TEXT DEFAULT '',
 			detail     TEXT DEFAULT '',
 			created_at TEXT DEFAULT (datetime('now'))
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS model_prices (
 			id                TEXT PRIMARY KEY,
 			provider          TEXT NOT NULL,
 			model             TEXT NOT NULL,
 			input_per_million REAL DEFAULT 0,
 			output_per_million REAL DEFAULT 0
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS token_usage (
 			trace_id      TEXT,
 			span_id       TEXT,
@@ -167,8 +161,7 @@ func (s *Store) migrate() error {
 			latency_ms    REAL DEFAULT 0,
 			timestamp     TEXT DEFAULT (datetime('now')),
 			PRIMARY KEY (trace_id, span_id)
-		);
-
+		)`, `
 		CREATE TABLE IF NOT EXISTS instances (
 			id          TEXT PRIMARY KEY,
 			service_id  TEXT NOT NULL,
@@ -182,10 +175,12 @@ func (s *Store) migrate() error {
 			cpu_pct     REAL DEFAULT 0,
 			mem_mb      REAL DEFAULT 0,
 			FOREIGN KEY (service_id) REFERENCES services(id)
-		);
-	`)
-	if err != nil {
-		return err
+		)`,
+	}
+	for _, stmt := range tables {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
 	}
 	// Seed default model prices
 	defaults := []ModelPrice{

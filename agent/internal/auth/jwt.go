@@ -254,9 +254,14 @@ func Middleware(jwtMgr *JWTManager, publicPaths []string) func(http.Handler) htt
 				next.ServeHTTP(w, r)
 				return
 			}
-			// Allow proxy/realdata endpoints (Phase 41-3)
+			// Allow proxy/realdata/genai/projects/services/instances endpoints
 			if strings.HasPrefix(r.URL.Path, "/api/v1/proxy/") ||
-				strings.HasPrefix(r.URL.Path, "/api/v1/realdata/") {
+				strings.HasPrefix(r.URL.Path, "/api/v1/realdata/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/genai/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/projects") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/services") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/service-groups") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/instances") {
 				next.ServeHTTP(w, r)
 				return
 			}
