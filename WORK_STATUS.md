@@ -3,7 +3,7 @@
 > **프로젝트**: AITOP — AI Service Monitoring Platform
 > **경로**: `C:\workspace\aiservice-monitoring`
 > **Git 사용자**: Aura Kim `<aura.kimjh@gmail.com>`
-> **최종 업데이트**: 2026-03-28 (Session 54 — v1.2+v1.3 + L1+L2 + Q 완료: 완성도 90%)
+> **최종 업데이트**: 2026-03-28 (Session 54 — v0.9.0-rc.1 상용 패키징 + 위젯 도움말 296건 + AI 실데이터: 완성도 99%)
 > **이전 이력**: [WORK_STATUS_OLD.md](WORK_STATUS_OLD.md) — Phase 1~22 세션별 상세 기록
 > **참고**: 이 파일을 기준으로 작업을 이어가며, 각 세션 완료 시 상태를 업데이트한다.
 
@@ -2075,6 +2075,55 @@ API: `GET/POST /fleet/plugins`, `GET/DELETE /fleet/plugins/{name}`, `POST deploy
 - `frontend/src/lib/i18n.ts` — ko/en/ja 번역 키 4개 추가
 - `frontend/src/types/monitoring.ts` — Phase 40 타입 13개 추가
 - `agent/cmd/collection-server/main.go` — `registerPhase40Routes()` 호출 추가
+
+---
+
+═══════════════════════════════════════════════════════════════════════
+  Session 54 후반 — v0.9.0-rc.1 상용 패키징 + 위젯 도움말 + AI 실데이터
+═══════════════════════════════════════════════════════════════════════
+
+── 위젯 도움말 (WidgetHelp) 전수 적용 ✅ (2026-03-28) ──────────────────────
+[WH-1] WidgetHelp 컴포넌트 생성                                     [██████████] 100%  ✅
+     · HelpCircle(?) 아이콘 → 팝오버 (8초 자동닫힘, 외부 클릭 닫힘)
+     · WIDGET_DESCRIPTIONS 사전: ko/en/ja 3개 언어
+[WH-2] KPICard helpId prop 추가 + 전수 적용                          [██████████] 100%  ✅
+     · 213/213 KPICard 전부 helpId 적용 (46개 페이지)
+[WH-3] CardTitle helpId prop 추가 + 차트/맵/테이블 적용               [██████████] 100%  ✅
+     · 83개 차트/맵/테이블 위젯 (25개 페이지)
+     · chart-*, map-*, table-* prefix 체계
+[WH-4] 커스텀 대시보드 위젯 헤더                                      [██████████] 100%  ✅
+     · 11종 APM/AI 위젯 타이틀 옆 도움말
+총 296개 위젯 도움말 적용
+
+── Phase P: 상용 패키징 v0.9.0-rc.1 ✅ (2026-03-28) ────────────────────────
+[P-1] 버전 통일 (VERSION, package.json, Chart.yaml, Dockerfile, nfpm)  [██████████] 100%  ✅
+[P-2] docker-compose.production.yaml (AGPL-free 상용 스택)              [██████████] 100%  ✅
+[P-3] Helm chart v0.9.0 (appVersion 0.9.0-rc.1)                       [██████████] 100%  ✅
+[P-4] 설치 가이드 현행화 (INSTALLATION_GUIDE.md)                        [██████████] 100%  ✅
+[P-5] CHANGELOG.md + RELEASE_NOTES_v0.9.0-rc.1.md                     [██████████] 100%  ✅
+[P-6] THIRD_PARTY_LICENSES 검증                                        [██████████] 100%  ✅
+
+── 완성도 100% 마무리 ✅ (2026-03-28) ──────────────────────────────────────
+[FIN-1] LICENSE 파일 (Apache-2.0)                                     [██████████] 100%  ✅
+[FIN-2] error.tsx + not-found.tsx (에러 바운더리)                       [██████████] 100%  ✅
+[FIN-3] infra/docker/.env.example                                     [██████████] 100%  ✅
+[FIN-4] README.md 현행화 (v0.9.0-rc.1, Quick Start)                  [██████████] 100%  ✅
+[FIN-5] Agent TODO 7건 해소 (Windows 배치 + Spring Batch Actuator)    [██████████] 100%  ✅
+[FIN-6] 전체 문서 현행화 (18파일 37건)                                 [██████████] 100%  ✅
+[FIN-7] 실검증 가이드 전면 재작성 (macOS 릴리스 판정용)                [██████████] 100%  ✅
+
+── AI 실데이터 연동 ✅ (2026-03-28) ──────────────────────────────────────────
+[AI-R1] RAG 서비스 OTel GenAI span + Prometheus 메트릭 내보내기       [██████████] 100%  ✅
+      · gen_ai_client_operation, gen_ai_client_token_usage, gen_ai_client_operation_duration
+[AI-R2] Collection Server /ai/services API Prometheus 실데이터 전환   [██████████] 100%  ✅
+      · reqCount > 0 → model=gemma3:4b, provider=ollama, 실측 tokens/duration
+[AI-R3] Ollama nomic-embed-text + gemma3:4b 연동                     [██████████] 100%  ✅
+[AI-R4] /api/v1/agents auth bypass 수정                               [██████████] 100%  ✅
+
+── 남은 작업 (macOS 실검증 후) ───────────────────────────────────────────────
+[ ] macOS 실검증 수행 (DOCS/demo/DEMO_SETUP_GUIDE_MAC.md)
+[ ] MUST PASS 10항목 전수 통과 확인
+[ ] 이슈 수정 후 v0.9.0-rc.2 또는 v1.0.0 태그
 
 ---
 
