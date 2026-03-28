@@ -142,7 +142,7 @@ export default function AlertsPage() {
                     <td className="px-4 py-2.5"><Badge>{p.thresholdType}</Badge></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1">
-                        {p.channels.map((ch) => (
+                        {(p.channels ?? []).map((ch) => (
                           <span key={ch} className="px-1.5 py-0.5 bg-[var(--bg-tertiary)] rounded text-[10px] text-[var(--text-secondary)]">{ch}</span>
                         ))}
                       </div>
@@ -275,11 +275,11 @@ function IncidentTimeline({ incident, onClose }: { incident: IncidentDetail; onC
 
       {/* Timeline */}
       <div className="space-y-0 mb-4">
-        {incident.timeline.map((event, idx) => (
+        {(incident.timeline ?? []).map((event, idx) => (
           <div key={idx} className="flex items-start gap-3 py-2">
             <div className="flex flex-col items-center">
               <span className="text-sm">{event.icon}</span>
-              {idx < incident.timeline.length - 1 && (
+              {idx < (incident.timeline ?? []).length - 1 && (
                 <div className="w-px h-full min-h-[16px] bg-[var(--border-muted)] mt-1" />
               )}
             </div>
