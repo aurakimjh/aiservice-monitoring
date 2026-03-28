@@ -47,6 +47,11 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
   teams: <MessageSquare size={12} />,
 };
 
+// Stable transform functions (outside component to avoid re-creation)
+const transformPolicies = (raw: unknown) => (raw as { items?: AlertPolicy[] }).items ?? raw as AlertPolicy[];
+const transformIncidents = (raw: unknown) => (raw as { items?: IncidentDetail[] }).items ?? raw as IncidentDetail[];
+const transformChannels = (raw: unknown) => (raw as { items?: NotificationChannel[] }).items ?? raw as NotificationChannel[];
+
 export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState('policies');
 
@@ -59,17 +64,17 @@ export default function AlertsPage() {
   const { data: policiesData, source } = useDataSource<AlertPolicy[]>(
     '/alerts/policies',
     demoPolicies,
-    { refreshInterval: 30_000, transform: (raw) => (raw as { items?: AlertPolicy[] }).items ?? raw as AlertPolicy[] },
+    { refreshInterval: 30_000, transform: transformPolicies },
   );
   const { data: incidentsData } = useDataSource<IncidentDetail[]>(
     '/alerts/incidents',
     demoIncidents,
-    { refreshInterval: 15_000, transform: (raw) => (raw as { items?: IncidentDetail[] }).items ?? raw as IncidentDetail[] },
+    { refreshInterval: 15_000, transform: transformIncidents },
   );
   const { data: channelsData } = useDataSource<NotificationChannel[]>(
     '/alerts/channels',
     demoChannels,
-    { refreshInterval: 60_000, transform: (raw) => (raw as { items?: NotificationChannel[] }).items ?? raw as NotificationChannel[] },
+    { refreshInterval: 60_000, transform: transformChannels },
   );
 
   const policies = policiesData ?? [];

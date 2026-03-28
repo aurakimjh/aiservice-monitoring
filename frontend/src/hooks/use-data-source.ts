@@ -63,10 +63,16 @@ export function useDataSource<T>(
   const [error, setError] = useState<string | null>(null);
   const prevSourceRef = useRef<DataSource>('demo');
 
+  // Stabilize transform/demoFallback refs to prevent infinite loops
+  const transformRef = useRef(options?.transform);
+  transformRef.current = options?.transform;
+  const demoRef = useRef(demoFallback);
+  demoRef.current = demoFallback;
+
   const fetchData = useCallback(async () => {
     // Demo mode — 즉시 fallback 사용
     if (mode === 'demo') {
-      setData(demoFallback());
+      setData(demoRef.current());
       setSource('demo');
       setLoading(false);
       setError(null);
@@ -87,14 +93,14 @@ export function useDataSource<T>(
       }
 
       const raw = await res.json();
-      const transformed = options?.transform ? options.transform(raw) : raw as T;
+      const transformed = transformRef.current ? transformRef.current(raw) : raw as T;
       setData(transformed);
       setSource('live');
       setError(null);
     } catch (err) {
       if (mode === 'auto') {
         // Auto mode: 실패 시 demo fallback
-        setData(demoFallback());
+        setData(demoRef.current());
         setSource('demo');
         setError(null);
       } else {
@@ -106,7 +112,7 @@ export function useDataSource<T>(
     } finally {
       setLoading(false);
     }
-  }, [apiPath, mode, demoFallback, options?.transform]);
+  }, [apiPath, mode]); // demoFallback and transform are stabilized via refs
 
   // Update global counters
   useEffect(() => {
