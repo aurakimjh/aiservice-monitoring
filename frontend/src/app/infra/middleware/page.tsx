@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getMiddlewareRuntimes, getConnPoolAlertEvents } from '@/lib/demo-data';
-import type { MiddlewareRuntime, ConnectionPoolMetrics, VirtualThreadSnapshot, VTAlertRecord, VTPinnedStack } from '@/types/monitoring';
+import type { MiddlewareRuntime, ConnectionPoolMetrics, VirtualThreadSnapshot, VTAlertRecord, VTPinnedStack, ConnPoolAlertEvent } from '@/types/monitoring';
 import { Server, Layers, Activity, AlertTriangle, ExternalLink, Cpu, Zap, Pin, Clock } from 'lucide-react';
 
 const LANG_LABELS: Record<string, string> = {
@@ -617,8 +618,13 @@ function RuntimeCard({ runtime }: { runtime: MiddlewareRuntime }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MiddlewarePage() {
   const [langFilter, setLangFilter] = useState<LangFilter>('all');
-  const runtimes = getMiddlewareRuntimes();
-  const alerts = getConnPoolAlertEvents();
+
+  const demoRuntimes = useCallback(() => getMiddlewareRuntimes(), []);
+  const demoAlerts = useCallback(() => getConnPoolAlertEvents(), []);
+  const { data: runtimesData, source } = useDataSource('/infra/middleware/metrics', demoRuntimes, { refreshInterval: 30_000 });
+  const { data: alertsData } = useDataSource('/infra/middleware/alerts', demoAlerts, { refreshInterval: 30_000 });
+  const runtimes: MiddlewareRuntime[] = Array.isArray(runtimesData) ? runtimesData : (runtimesData as any)?.items ?? getMiddlewareRuntimes();
+  const alerts: ConnPoolAlertEvent[] = Array.isArray(alertsData) ? alertsData : (alertsData as any)?.items ?? getConnPoolAlertEvents();
 
   const filtered = langFilter === 'all' ? runtimes : runtimes.filter((r) => r.language === langFilter);
 
@@ -641,7 +647,10 @@ export default function MiddlewarePage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Middleware Runtime Monitoring</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Middleware Runtime Monitoring</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <div className="flex items-center gap-3">
           <a href="/infra/middleware/thread-dump" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors">
             <Cpu size={12} />Thread Dump Viewer

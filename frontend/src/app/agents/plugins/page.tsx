@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card } from '@/components/ui';
+import { Card, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { Button } from '@/components/ui/button';
 import { KPICard } from '@/components/monitoring';
 import { DeployStrategyModal } from '@/components/monitoring/deploy-strategy-modal';
@@ -52,8 +53,12 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function FleetPluginsPage() {
-  const plugins = useMemo(() => getPluginRegistry(), []);
-  const history = useMemo(() => getPluginDeployHistory(), []);
+  const demoPlugins = useCallback(() => getPluginRegistry(), []);
+  const demoHistory = useCallback(() => getPluginDeployHistory(), []);
+  const { data: pluginsData, source } = useDataSource('/fleet/plugins', demoPlugins, { refreshInterval: 30_000 });
+  const { data: historyData } = useDataSource('/fleet/plugins/history', demoHistory, { refreshInterval: 30_000 });
+  const plugins: PluginRegistryItem[] = Array.isArray(pluginsData) ? pluginsData : (pluginsData as any)?.items ?? getPluginRegistry();
+  const history: PluginDeployHistory[] = Array.isArray(historyData) ? historyData : (historyData as any)?.items ?? getPluginDeployHistory();
 
   const [deployTarget, setDeployTarget] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -79,9 +84,12 @@ export default function FleetPluginsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Plugin Registry
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Plugin Registry
+            </h1>
+            <DataSourceBadge source={source} />
+          </div>
           <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             Central plugin deployment and lifecycle management
           </p>

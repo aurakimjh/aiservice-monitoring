@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getRedisMetrics, getRedisClusterMetrics, getCacheAlertRules, getCacheAlertEvents } from '@/lib/demo-data';
 import { Server, Database, Zap, Network, AlertTriangle, ShieldAlert } from 'lucide-react';
-import type { RedisClusterMetrics, CacheAlertRule, CacheAlertEvent } from '@/types/monitoring';
+import type { RedisMetrics, RedisClusterMetrics, CacheAlertRule, CacheAlertEvent } from '@/types/monitoring';
 
 const ENGINE_COLORS: Record<string, string> = {
   redis: 'red',
@@ -170,10 +171,19 @@ type CacheTab = 'instances' | 'cluster' | 'alerts';
 
 export default function CachePage() {
   const [activeTab, setActiveTab] = useState<CacheTab>('instances');
-  const instances = getRedisMetrics();
-  const clusters = getRedisClusterMetrics();
-  const alertRules = getCacheAlertRules();
-  const alertEvents = getCacheAlertEvents();
+
+  const demoFallback = useCallback(() => ({
+    instances: getRedisMetrics(),
+    clusters: getRedisClusterMetrics(),
+    alertRules: getCacheAlertRules(),
+    alertEvents: getCacheAlertEvents(),
+  }), []);
+  const { data: cacheData, source } = useDataSource('/infra/cache/metrics', demoFallback, { refreshInterval: 30_000 });
+  const resolved = cacheData ?? demoFallback();
+  const instances: RedisMetrics[] = Array.isArray(resolved) ? getRedisMetrics() : (resolved as any)?.instances ?? getRedisMetrics();
+  const clusters: RedisClusterMetrics[] = Array.isArray(resolved) ? getRedisClusterMetrics() : (resolved as any)?.clusters ?? getRedisClusterMetrics();
+  const alertRules: CacheAlertRule[] = Array.isArray(resolved) ? getCacheAlertRules() : (resolved as any)?.alertRules ?? getCacheAlertRules();
+  const alertEvents: CacheAlertEvent[] = Array.isArray(resolved) ? getCacheAlertEvents() : (resolved as any)?.alertEvents ?? getCacheAlertEvents();
 
   const totalInstances = instances.length;
   const avgHitRate = +(instances.reduce((s, i) => s + i.hitRate, 0) / instances.length).toFixed(1);
@@ -194,7 +204,10 @@ export default function CachePage() {
         { label: 'Cache', icon: <Database size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Redis / Cache Monitoring</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Redis / Cache Monitoring</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -1,12 +1,14 @@
 'use client';
 
+import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getMiddlewareRuntimes, getConnPoolAlertEvents } from '@/lib/demo-data';
-import type { ConnectionPoolMetrics } from '@/types/monitoring';
+import type { ConnectionPoolMetrics, ConnPoolAlertEvent } from '@/types/monitoring';
 import { Server, Layers, Activity, AlertTriangle, Database } from 'lucide-react';
 
 const VENDOR_LABELS: Record<string, string> = {
@@ -195,8 +197,12 @@ function PoolCard({ pool }: { pool: FlatPool }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ConnectionPoolPage() {
-  const pools = flattenPools();
-  const alerts = getConnPoolAlertEvents();
+  const demoPools = useCallback(() => flattenPools(), []);
+  const demoAlerts = useCallback(() => getConnPoolAlertEvents(), []);
+  const { data: poolsData, source } = useDataSource('/infra/middleware/pools', demoPools, { refreshInterval: 30_000 });
+  const { data: alertsData } = useDataSource('/infra/middleware/pool-alerts', demoAlerts, { refreshInterval: 30_000 });
+  const pools: FlatPool[] = Array.isArray(poolsData) ? poolsData : (poolsData as any)?.items ?? flattenPools();
+  const alerts: ConnPoolAlertEvent[] = Array.isArray(alertsData) ? alertsData : (alertsData as any)?.items ?? getConnPoolAlertEvents();
 
   const totalPools = pools.length;
   const avgUtil = pools.length > 0
@@ -214,7 +220,10 @@ export default function ConnectionPoolPage() {
         { label: 'Connection Pool', icon: <Activity size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Connection Pool Dashboard</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Connection Pool Dashboard</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

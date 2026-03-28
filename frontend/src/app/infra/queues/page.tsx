@@ -1,11 +1,14 @@
 'use client';
 
+import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getMessageQueues } from '@/lib/demo-data';
+import type { MessageQueueMetrics } from '@/types/monitoring';
 import { Server, MessageSquare, Layers, Activity, AlertTriangle } from 'lucide-react';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -21,7 +24,9 @@ function formatNumber(n: number): string {
 }
 
 export default function QueuesPage() {
-  const queues = getMessageQueues();
+  const demoFallback = useCallback(() => getMessageQueues(), []);
+  const { data: queuesData, source } = useDataSource('/infra/queues', demoFallback, { refreshInterval: 30_000 });
+  const queues: MessageQueueMetrics[] = Array.isArray(queuesData) ? queuesData : (queuesData as any)?.items ?? getMessageQueues();
 
   const totalQueues = queues.length;
   const totalMessages = queues.reduce((s, q) => s + q.totalMessages, 0);
@@ -36,7 +41,10 @@ export default function QueuesPage() {
         { label: 'Message Queues', icon: <MessageSquare size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Message Queue Monitoring</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Message Queue Monitoring</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
