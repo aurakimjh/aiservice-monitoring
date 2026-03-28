@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, SearchInput, Select, Tabs, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { DBInstance, DBSlowQuery, DBLock, DBWaitEvent } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -50,8 +51,7 @@ const STATUS_OPTIONS = [
 ];
 
 // ─── Demo data ─────────────────────────────────────────────────
-function useDemoData() {
-  return useMemo(() => {
+function generateDemoData() {
     const instances: DBInstance[] = [
       {
         id: 'db-pg-01',
@@ -299,7 +299,6 @@ function useDemoData() {
     ];
 
     return { instances, slowQueries, locks, waitEvents };
-  }, []);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -341,7 +340,13 @@ const TAB_DEFS = [
 // Page Component
 // ═══════════════════════════════════════════════════════════════
 export default function DatabasePage() {
-  const { instances, slowQueries, locks, waitEvents } = useDemoData();
+  const demoFallback = useCallback(() => generateDemoData(), []);
+  const { data: rawData, source } = useDataSource('/database/instances', demoFallback, { refreshInterval: 30_000 });
+  const parsed = rawData && typeof rawData === 'object' && !Array.isArray(rawData) ? rawData as any : { instances: [], slowQueries: [], locks: [], waitEvents: [] };
+  const instances: DBInstance[] = parsed.instances ?? (Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? []);
+  const slowQueries: DBSlowQuery[] = parsed.slowQueries ?? [];
+  const locks: DBLock[] = parsed.locks ?? [];
+  const waitEvents: DBWaitEvent[] = parsed.waitEvents ?? [];
   const [activeTab, setActiveTab] = useState('instances');
   const [search, setSearch] = useState('');
   const [engineFilter, setEngineFilter] = useState('');
@@ -936,7 +941,7 @@ export default function DatabasePage() {
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">Database Monitoring</h1>
-          <DataSourceBadge source="demo" />
+          <DataSourceBadge source={source} />
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Query-level performance analysis, lock detection, and connection pool monitoring across all database instances

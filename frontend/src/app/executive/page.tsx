@@ -1,15 +1,16 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard, StatusIndicator } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { getExecutiveSummary, getSLODefinitions, getCostBreakdowns, getProjectServices, getProjectAIServices, getIncidents, generateTimeSeries } from '@/lib/demo-data';
 import { formatCost } from '@/lib/utils';
-import type { Severity } from '@/types/monitoring';
+import type { Severity, ExecutiveSummary, SLODefinition, CostBreakdown, Service, AIService, IncidentDetail } from '@/types/monitoring';
 import {
   LayoutDashboard,
   Target,
@@ -31,12 +32,22 @@ const SEV_COLOR: Record<Severity, string> = {
 };
 
 export default function ExecutiveDashboardPage() {
-  const summary = useMemo(() => getExecutiveSummary(), []);
-  const slos = useMemo(() => getSLODefinitions(), []);
-  const costs = useMemo(() => getCostBreakdowns(), []);
-  const services = getProjectServices('proj-ai-prod');
-  const aiServices = getProjectAIServices('proj-ai-prod');
-  const incidents = useMemo(() => getIncidents(), []);
+  const demoFallback = useCallback(() => ({
+    summary: getExecutiveSummary(),
+    slos: getSLODefinitions(),
+    costs: getCostBreakdowns(),
+    services: getProjectServices('proj-ai-prod'),
+    aiServices: getProjectAIServices('proj-ai-prod'),
+    incidents: getIncidents(),
+  }), []);
+  const { data: rawData, source } = useDataSource('/executive/summary', demoFallback, { refreshInterval: 30_000 });
+  const parsed = rawData && typeof rawData === 'object' && !Array.isArray(rawData) ? rawData as any : {};
+  const summary: ExecutiveSummary = parsed.summary ?? getExecutiveSummary();
+  const slos: SLODefinition[] = parsed.slos ?? getSLODefinitions();
+  const costs: CostBreakdown[] = parsed.costs ?? getCostBreakdowns();
+  const services: Service[] = parsed.services ?? getProjectServices('proj-ai-prod');
+  const aiServices: AIService[] = parsed.aiServices ?? getProjectAIServices('proj-ai-prod');
+  const incidents: IncidentDetail[] = parsed.incidents ?? getIncidents();
 
   const totalCost = costs.reduce((s, c) => s + c.amount, 0);
   const sloMet = slos.filter((s) => s.status === 'met').length;
@@ -96,7 +107,10 @@ export default function ExecutiveDashboardPage() {
         { label: 'Executive Dashboard', icon: <LayoutDashboard size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Executive Dashboard</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Executive Dashboard</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* Top KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

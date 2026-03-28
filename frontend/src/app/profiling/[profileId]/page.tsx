@@ -1,8 +1,9 @@
 'use client';
 
-import { use, useMemo } from 'react';
+import { use, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { FlameGraph } from '@/components/charts/flame-graph';
 import { getFlameGraphData, getProfilingProfiles } from '@/lib/demo-data';
 import Link from 'next/link';
@@ -24,8 +25,10 @@ const LANG_BADGE: Record<string, { color: string; label: string }> = {
 
 export default function ProfileDetailPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = use(params);
-  const profiles = useMemo(() => getProfilingProfiles(), []);
-  const profile = useMemo(() => profiles.find((p) => p.profile_id === profileId), [profiles, profileId]);
+  const demoProfiles = useCallback(() => getProfilingProfiles(), []);
+  const { data: profilesResult, source } = useDataSource(`/profiling/${profileId}`, demoProfiles, { refreshInterval: 30_000 });
+  const profiles = Array.isArray(profilesResult) ? profilesResult : (profilesResult as any)?.items ?? getProfilingProfiles();
+  const profile = useMemo(() => profiles.find((p: any) => p.profile_id === profileId), [profiles, profileId]);
   const flameData = useMemo(() => getFlameGraphData(profileId), [profileId]);
 
   if (!profile) {
@@ -56,7 +59,10 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ profil
             <ArrowLeft size={16} className="text-[var(--text-muted)]" />
           </Link>
           <div>
-            <h1 className="text-lg font-semibold text-[var(--text-primary)]">{profile.service_name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-[var(--text-primary)]">{profile.service_name}</h1>
+              <DataSourceBadge source={source} />
+            </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="px-1.5 py-0.5 rounded text-white text-[10px] font-medium" style={{ background: lang.color }}>
                 {lang.label}

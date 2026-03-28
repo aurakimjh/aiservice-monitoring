@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Tabs, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Tabs, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts/time-series-chart';
 import { AISubNav } from '@/components/ai';
@@ -50,7 +51,9 @@ export default function TrainingPage() {
   const [activeTab, setActiveTab] = useState('jobs');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
-  const jobs = useMemo(() => getTrainingJobs(), []);
+  const demoJobs = useCallback(() => getTrainingJobs(), []);
+  const { data: jobsResult, source } = useDataSource('/genai/training/jobs', demoJobs, { refreshInterval: 30_000 });
+  const jobs = Array.isArray(jobsResult) ? jobsResult : (jobsResult as any)?.items ?? getTrainingJobs();
   const checkpoints = useMemo(
     () => (expandedJobId ? getTrainingCheckpoints(expandedJobId) : []),
     [expandedJobId],
@@ -121,9 +124,12 @@ export default function TrainingPage() {
       <AISubNav />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          Fine-tuning Monitoring
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+            Fine-tuning Monitoring
+          </h1>
+          <DataSourceBadge source={source} />
+        </div>
       </div>
 
       {/* KPI Cards */}

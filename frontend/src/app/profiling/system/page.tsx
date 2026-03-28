@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, SearchInput } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, SearchInput, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { SystemFlamegraph } from '@/components/charts/system-flamegraph';
 import { FlameGraphDiff } from '@/components/charts/flame-graph-diff';
@@ -35,7 +36,9 @@ const TYPE_TABS = [
 type TabKey = (typeof TYPE_TABS)[number]['key'];
 
 export default function SystemProfilingPage() {
-  const profiles = useMemo(() => getSystemProfilingProfiles(), []);
+  const demoProfiles = useCallback(() => getSystemProfilingProfiles(), []);
+  const { data: profilesResult, source } = useDataSource('/profiling/system', demoProfiles, { refreshInterval: 30_000 });
+  const profiles = Array.isArray(profilesResult) ? profilesResult : (profilesResult as any)?.items ?? getSystemProfilingProfiles();
   const [activeTab, setActiveTab] = useState<TabKey>('cpu');
   const [search, setSearch] = useState('');
   const [agentFilter, setAgentFilter] = useState('');
@@ -102,7 +105,10 @@ export default function SystemProfilingPage() {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">System Profiling</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-[var(--text-primary)]">System Profiling</h1>
+            <DataSourceBadge source={source} />
+          </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             perf/eBPF system-level flamegraphs with on-CPU, off-CPU, and memory profiling
           </p>

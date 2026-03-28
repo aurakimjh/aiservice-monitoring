@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { RUMSession, RUMPageMetrics, RUMGeoMetrics } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -59,7 +60,7 @@ function cwvColor(status: 'good' | 'needs-improvement' | 'poor'): string {
 export default function RUMPage() {
   const [activeTab, setActiveTab] = useState<TabId>('vitals');
 
-  const sessions = useMemo<RUMSession[]>(() => [
+  const demoSessions = useCallback((): RUMSession[] => [
     { id: 'rum-s01', user_id: 'usr_8a3f21', page_url: '/dashboard', device: 'desktop', browser: 'Chrome 122', country: 'KR', lcp_ms: 1820, fid_ms: 45, cls: 0.04, inp_ms: 120, ttfb_ms: 280, fcp_ms: 950, session_duration_ms: 342000, page_views: 8, error_count: 0, started_at: '2026-03-26T09:14:00Z' },
     { id: 'rum-s02', user_id: 'usr_c5d912', page_url: '/services', device: 'mobile', browser: 'Safari 17', country: 'JP', lcp_ms: 3200, fid_ms: 120, cls: 0.18, inp_ms: 280, ttfb_ms: 450, fcp_ms: 1400, session_duration_ms: 128000, page_views: 3, error_count: 1, started_at: '2026-03-26T09:22:00Z' },
     { id: 'rum-s03', user_id: 'usr_7ef4b0', page_url: '/traces', device: 'desktop', browser: 'Firefox 124', country: 'US', lcp_ms: 2100, fid_ms: 62, cls: 0.06, inp_ms: 150, ttfb_ms: 320, fcp_ms: 1050, session_duration_ms: 520000, page_views: 14, error_count: 0, started_at: '2026-03-26T08:45:00Z' },
@@ -69,6 +70,8 @@ export default function RUMPage() {
     { id: 'rum-s07', user_id: 'usr_93e5a1', page_url: '/topology', device: 'desktop', browser: 'Chrome 122', country: 'US', lcp_ms: 1950, fid_ms: 55, cls: 0.05, inp_ms: 135, ttfb_ms: 300, fcp_ms: 980, session_duration_ms: 410000, page_views: 11, error_count: 0, started_at: '2026-03-26T08:20:00Z' },
     { id: 'rum-s08', user_id: 'usr_0b6f48', page_url: '/copilot', device: 'mobile', browser: 'Safari 17', country: 'JP', lcp_ms: 3500, fid_ms: 145, cls: 0.15, inp_ms: 310, ttfb_ms: 490, fcp_ms: 1550, session_duration_ms: 165000, page_views: 5, error_count: 1, started_at: '2026-03-26T09:18:00Z' },
   ], []);
+  const { data: rawSessions, source } = useDataSource('/rum/sessions', demoSessions, { refreshInterval: 30_000 });
+  const sessions: RUMSession[] = Array.isArray(rawSessions) ? rawSessions : (rawSessions as any)?.items ?? [];
 
   const pageMetrics = useMemo<RUMPageMetrics[]>(() => [
     { page_url: '/dashboard', avg_lcp_ms: 1780, avg_fid_ms: 42, avg_cls: 0.03, avg_inp_ms: 110, sample_count: 2450, good_pct: 82, needs_improvement_pct: 14, poor_pct: 4 },
@@ -194,7 +197,7 @@ export default function RUMPage() {
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">Real User Monitoring</h1>
-          <DataSourceBadge source="demo" />
+          <DataSourceBadge source={source} />
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Core Web Vitals, page performance, and user experience metrics from real browser sessions

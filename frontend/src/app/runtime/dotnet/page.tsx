@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, SearchInput, Select } from '@/components/ui';
+import { Card, CardHeader, CardTitle, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { EChartsOption } from 'echarts';
 import type { DotNetAOTMetrics } from '@/types/monitoring';
@@ -207,7 +208,9 @@ const AGENT_COLORS = ['#58A6FF', '#3FB950', '#F85149', '#D29922', '#A371F7'];
 // Page Component
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function DotNetRuntimePage() {
-  const agents = useMemo(() => generateDemoAgents(), []);
+  const demoAgents = useCallback(() => generateDemoAgents(), []);
+  const { data: agentsResult, source } = useDataSource('/runtime/dotnet/metrics', demoAgents, { refreshInterval: 30_000 });
+  const agents = Array.isArray(agentsResult) ? agentsResult : (agentsResult as any)?.items ?? generateDemoAgents();
   const warnings = useMemo(() => generateAOTWarnings(), []);
   const tpSeries = useMemo(() => generateThreadPoolTimeSeries(), []);
 
@@ -371,7 +374,10 @@ export default function DotNetRuntimePage() {
 
       {/* ── Title ──────────────────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">.NET Runtime Monitor</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">.NET Runtime Monitor</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Native AOT compilation analysis, ThreadPool starvation detection, and GC suspension monitoring
         </p>

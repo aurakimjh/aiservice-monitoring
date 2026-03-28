@@ -1,16 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle } from '@/components/ui';
+import { Card, CardHeader, CardTitle, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { getCostBreakdowns, generateTimeSeries } from '@/lib/demo-data';
+import type { CostBreakdown } from '@/types/monitoring';
 import { DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 
 export default function CostsPage() {
-  const costs = useMemo(() => getCostBreakdowns(), []);
+  const demoFallback = useCallback(() => getCostBreakdowns(), []);
+  const { data: rawData, source } = useDataSource('/costs', demoFallback, { refreshInterval: 30_000 });
+  const costs: CostBreakdown[] = Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? [];
 
   const totalPerDay = useMemo(() => costs.reduce((s, c) => s + c.amount, 0), [costs]);
   const grouped = useMemo(() => {
@@ -55,7 +59,10 @@ export default function CostsPage() {
         { label: 'Cost Analysis', icon: <DollarSign size={14} /> },
       ]} />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Cost Analysis</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Cost Analysis</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard title="Total Cost" value={`$${totalPerDay.toFixed(0)}`} unit="/day" trend={{ direction: 'up', value: '+4.2%', positive: false }} status="healthy" />

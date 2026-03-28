@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { GoldenSignalService, GoldenSignalTimeSeries } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -261,7 +262,9 @@ function buildSaturationChart(data: LatencyTimeSeries[]): EChartsOption {
 /* ─── page component ─── */
 
 export default function GoldenSignalsPage() {
-  const demoData = useMemo(() => generateDemoData(), []);
+  const demoFallback = useCallback(() => generateDemoData(), []);
+  const { data: rawData, source } = useDataSource('/golden-signals', demoFallback, { refreshInterval: 30_000 });
+  const demoData: ServiceDemoData[] = Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? [];
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -320,7 +323,7 @@ export default function GoldenSignalsPage() {
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">SRE Golden Signals</h1>
-          <DataSourceBadge source="demo" />
+          <DataSourceBadge source={source} />
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Real-time overview of Latency, Traffic, Errors, and Saturation across all services

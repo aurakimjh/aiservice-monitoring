@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card } from '@/components/ui';
+import { Card, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getBatchJobs, getBatchExecutions } from '@/lib/demo-data';
 import { getRelativeTime, formatDuration, formatBytes } from '@/lib/utils';
 import type { EChartsOption } from 'echarts';
-import type { BatchExecution } from '@/types/monitoring';
+import type { BatchExecution, BatchJob } from '@/types/monitoring';
 import {
   Timer,
   Calendar,
@@ -50,9 +51,14 @@ export default function BatchJobDetailPage() {
   const params = useParams();
   const jobName = decodeURIComponent(params.name as string);
 
-  const jobs = useMemo(() => getBatchJobs(), []);
-  const job = useMemo(() => jobs.find(j => j.name === jobName), [jobs, jobName]);
-  const executions = useMemo(() => getBatchExecutions(jobName), [jobName]);
+  const demoFallback = useCallback(() => ({
+    job: getBatchJobs().find(j => j.name === jobName),
+    executions: getBatchExecutions(jobName),
+  }), [jobName]);
+  const { data: rawData, source } = useDataSource(`/batch/jobs/${encodeURIComponent(jobName)}`, demoFallback, { refreshInterval: 30_000 });
+  const parsed = rawData && typeof rawData === 'object' && !Array.isArray(rawData) ? rawData as any : {};
+  const job: BatchJob | null = parsed.job ?? null;
+  const executions: BatchExecution[] = Array.isArray(parsed.executions) ? parsed.executions : (parsed as any)?.items ?? [];
 
   const [sortField, setSortField] = useState<SortField>('started_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -163,6 +169,7 @@ export default function BatchJobDetailPage() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-lg font-semibold text-[var(--text-primary)]">{job.name}</h1>
+              <DataSourceBadge source={source} />
               <span
                 className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                 style={{ backgroundColor: statusCfg.bg, color: statusCfg.text }}

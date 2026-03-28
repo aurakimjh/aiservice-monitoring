@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, SearchInput, Select } from '@/components/ui';
+import { Card, CardHeader, CardTitle, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { GoSchedulerMetrics, GoSchedHistogramBucket } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -184,7 +185,9 @@ export default function GoRuntimePage() {
   const [search, setSearch] = useState('');
   const [versionFilter, setVersionFilter] = useState('');
 
-  const agents = useMemo(() => DEMO_AGENTS, []);
+  const demoAgents = useCallback(() => DEMO_AGENTS, []);
+  const { data: agentsResult, source } = useDataSource('/runtime/go/metrics', demoAgents, { refreshInterval: 30_000 });
+  const agents = Array.isArray(agentsResult) ? agentsResult : (agentsResult as any)?.items ?? DEMO_AGENTS;
 
   const filtered = useMemo(() => {
     return agents.filter(a => {
@@ -356,7 +359,10 @@ export default function GoRuntimePage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Go Runtime Monitor</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Go Runtime Monitor</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           Go 1.24 scheduler latency histograms, GC STW pause tracking, goroutine analysis and heap profiling
         </p>

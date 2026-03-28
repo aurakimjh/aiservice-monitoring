@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts/time-series-chart';
 import { AISubNav } from '@/components/ai';
@@ -52,8 +53,10 @@ export default function TrainingJobDetailPage({
 }) {
   const { id } = use(params);
 
-  const jobs = useMemo(() => getTrainingJobs(), []);
-  const job = jobs.find((j) => j.id === id);
+  const demoJobs = useCallback(() => getTrainingJobs(), []);
+  const { data: jobsResult, source } = useDataSource(`/genai/training/${id}`, demoJobs, { refreshInterval: 30_000 });
+  const jobs = Array.isArray(jobsResult) ? jobsResult : (jobsResult as any)?.items ?? getTrainingJobs();
+  const job = jobs.find((j: any) => j.id === id);
 
   const lossCurve = useMemo(() => getTrainingLossCurve(id), [id]);
   const accCurve = useMemo(() => getTrainingAccuracyCurve(id), [id]);
@@ -143,6 +146,7 @@ export default function TrainingJobDetailPage({
           <div className="flex items-center gap-2">
             <Brain size={18} className="text-[var(--accent-primary)]" />
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">{job.name}</h1>
+            <DataSourceBadge source={source} />
             <span
               className={cn(
                 'inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full border',

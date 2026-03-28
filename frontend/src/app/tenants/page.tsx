@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button, SearchInput, Select } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard, StatusIndicator } from '@/components/monitoring';
 import { EChartsWrapper } from '@/components/charts';
 import { getTenants } from '@/lib/demo-data';
@@ -44,7 +45,9 @@ const PLAN_OPTIONS = [
 ];
 
 export default function TenantsPage() {
-  const tenants = useMemo(() => getTenants(), []);
+  const demoFallback = useCallback(() => getTenants(), []);
+  const { data: rawData, source } = useDataSource('/tenants', demoFallback, { refreshInterval: 30_000 });
+  const tenants: Tenant[] = Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? [];
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('all');
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
@@ -95,7 +98,10 @@ export default function TenantsPage() {
       ]} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Multi-Tenant Management</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Multi-Tenant Management</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <Button variant="primary" size="md"><Building2 size={14} /> Add Tenant</Button>
       </div>
 

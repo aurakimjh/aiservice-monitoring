@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Breadcrumb, Card, CardHeader, CardTitle, Tabs, Badge, SearchInput, Select, Button, Modal } from '@/components/ui';
+import { Breadcrumb, Card, CardHeader, CardTitle, Tabs, Badge, SearchInput, Select, Button, Modal, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart } from '@/components/charts';
 import { AISubNav } from '@/components/ai';
@@ -48,7 +49,9 @@ function qualityColor(score: number): string {
 }
 
 export default function PromptHubPage() {
-  const prompts = getPromptEntries();
+  const demoPrompts = useCallback(() => getPromptEntries(), []);
+  const { data: promptsResult, source } = useDataSource('/genai/prompt-versions', demoPrompts, { refreshInterval: 30_000 });
+  const prompts = Array.isArray(promptsResult) ? promptsResult : (promptsResult as any)?.items ?? getPromptEntries();
 
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('all');
@@ -132,7 +135,10 @@ export default function PromptHubPage() {
 
       <AISubNav />
 
-      <h1 className="text-lg font-semibold text-[var(--text-primary)]">Prompt Hub</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Prompt Hub</h1>
+        <DataSourceBadge source={source} />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

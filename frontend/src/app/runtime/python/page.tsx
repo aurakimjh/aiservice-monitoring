@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, SearchInput, Select } from '@/components/ui';
+import { Card, SearchInput, Select, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { KPICard } from '@/components/monitoring';
 import type { PythonRuntimeMetrics } from '@/types/monitoring';
 import type { EChartsOption } from 'echarts';
@@ -129,7 +130,9 @@ function generateDemoData(): PythonRuntimeMetrics[] {
 }
 
 export default function PythonRuntimePage() {
-  const agents = useMemo(() => generateDemoData(), []);
+  const demoData = useCallback(() => generateDemoData(), []);
+  const { data: agentsResult, source } = useDataSource('/runtime/python/metrics', demoData, { refreshInterval: 30_000 });
+  const agents = Array.isArray(agentsResult) ? agentsResult : (agentsResult as any)?.items ?? generateDemoData();
   const [search, setSearch] = useState('');
   const [versionFilter, setVersionFilter] = useState('');
 
@@ -301,7 +304,10 @@ export default function PythonRuntimePage() {
       />
 
       <div>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Python Runtime Monitor</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Python Runtime Monitor</h1>
+          <DataSourceBadge source={source} />
+        </div>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
           GIL contention analysis and Free-Threaded mode monitoring for Python 3.13+ runtimes
         </p>

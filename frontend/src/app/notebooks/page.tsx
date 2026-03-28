@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Card, CardHeader, CardTitle, Badge, Button } from '@/components/ui';
+import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
+import { useDataSource } from '@/hooks/use-data-source';
 import { TimeSeriesChart } from '@/components/charts';
 import { getSampleNotebooks, executeMetricQuery, METRIC_CATALOG } from '@/lib/demo-data';
 import { getRelativeTime } from '@/lib/utils';
@@ -40,8 +41,17 @@ let cellCounter = 200;
 function newCellId() { return `c-${++cellCounter}`; }
 
 export default function NotebooksPage() {
-  const sampleNotebooks = useMemo(() => getSampleNotebooks(), []);
+  const demoFallback = useCallback(() => getSampleNotebooks(), []);
+  const { data: rawData, source } = useDataSource('/notebooks', demoFallback, { refreshInterval: 30_000 });
+  const sampleNotebooks: Notebook[] = Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? [];
   const [notebooks, setNotebooks] = useState<Notebook[]>(sampleNotebooks);
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (sampleNotebooks.length > 0 && !initializedRef.current) {
+      initializedRef.current = true;
+      setNotebooks(sampleNotebooks);
+    }
+  }, [sampleNotebooks]);
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
 
@@ -115,7 +125,10 @@ export default function NotebooksPage() {
         <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Notebooks', icon: <BookOpen size={14} /> }]} />
 
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">Investigation Notebooks</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-[var(--text-primary)]">Investigation Notebooks</h1>
+            <DataSourceBadge source={source} />
+          </div>
           <Button variant="primary" size="md" onClick={createNotebook}><Plus size={14} /> New Notebook</Button>
         </div>
 
