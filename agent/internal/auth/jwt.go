@@ -261,7 +261,16 @@ func Middleware(jwtMgr *JWTManager, publicPaths []string) func(http.Handler) htt
 				strings.HasPrefix(r.URL.Path, "/api/v1/projects") ||
 				strings.HasPrefix(r.URL.Path, "/api/v1/services") ||
 				strings.HasPrefix(r.URL.Path, "/api/v1/service-groups") ||
-				strings.HasPrefix(r.URL.Path, "/api/v1/instances") {
+				strings.HasPrefix(r.URL.Path, "/api/v1/instances") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/fleet/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/alerts/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/logs") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/ai/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/slo/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/diagnostics/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/profiling/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/topology/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/metrics/") {
 				next.ServeHTTP(w, r)
 				return
 			}
