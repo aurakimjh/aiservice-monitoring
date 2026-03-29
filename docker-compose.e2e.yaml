@@ -306,6 +306,42 @@ services:
       aitop.monitored: "true"
 
   # ═══════════════════════════════════════════════════════════
+  # 9-1. 멀티 런타임 데모 서비스 — C:\workspace\demo-site 에서 관리
+  #
+  #  demo-site 저장소에서 5개 언어 앱 + 배치 + AI 서비스를 제공합니다.
+  #  이 파일에서는 인프라(Qdrant, Redis 등)만 추가 정의합니다.
+  #
+  #  포트 매핑 (demo-site 기준):
+  #    Java   Spring Boot  :8081  (OTel Java Agent)
+  #    .NET   ASP.NET Core :8082  (OTel SDK + EventPipe)
+  #    Go     Gin          :8083  (OTel SDK + pprof)
+  #    Python FastAPI      :8084  (OTel SDK)
+  #    Node.js Express     :8085  (OTel Auto)
+  #    RAG    FastAPI      :8093  (LLM + Qdrant)
+  #    Guard  FastAPI      :8094  (가드레일)
+  #    Java Batch          :8091  (Spring Batch)
+  #    Python Batch        :8092  (Celery + Flower :5555)
+  #
+  #  부하 발생 (demo-site/k6):
+  #    k6 run demo-site/k6/load-test.js        # 5개 앱 정상 부하
+  #    k6 run demo-site/k6/error-injection.js   # 장애 시나리오
+  #    k6 run demo-site/k6/rag-load-test.js     # RAG 부하
+  #    k6 run demo-site/k6/light-load.js        # 경량 지속 부하
+  # ═══════════════════════════════════════════════════════════
+
+  # ═══════════════════════════════════════════════════════════
+  # 9-2. AI 인프라 — demo-site/docker-compose.yaml 에서 관리
+  #
+  #  demo-site 에서 이미 아래 서비스를 제공합니다:
+  #    PostgreSQL :5432   Redis :6379   MinIO :9000/:9001
+  #    Qdrant     :6333   Ollama :11434
+  #
+  #  AITOP e2e 스택과 동시 사용 시 포트 충돌 방지를 위해
+  #  demo-site 인프라가 우선하며, 아래 서비스는 demo-site 미기동 시
+  #  단독 테스트용으로만 활성화합니다 (profiles: standalone).
+  # ═══════════════════════════════════════════════════════════
+
+  # ═══════════════════════════════════════════════════════════
   # 10. Locust 부하 테스트 실행기 (선택적 — profile로 활성화)
   # ═══════════════════════════════════════════════════════════
   locust:

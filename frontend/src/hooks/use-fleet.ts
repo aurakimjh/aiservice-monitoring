@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FleetAgent, CollectionJob, AgentPlugin, AgentGroup, UpdateStatus, CollectionSchedule } from '@/types/monitoring';
 import { fleetApi } from '@/lib/api-client';
 import { getProjectHosts, getCollectionJobs, getAgentPlugins, getAgentGroups, getUpdateStatuses, getCollectionSchedules } from '@/lib/demo-data';
+import { useUIStore } from '@/stores/ui-store';
 
 export interface FleetState {
   agents: FleetAgent[];
@@ -21,6 +22,7 @@ export interface FleetState {
 const POLL_INTERVAL_MS = 30_000;
 
 export function useFleet(projectId?: string): FleetState {
+  const mode = useUIStore((s) => s.dataSourceMode);
   const [agents, setAgents] = useState<FleetAgent[]>([]);
   const [jobs, setJobs] = useState<CollectionJob[]>([]);
   const [plugins, setPlugins] = useState<AgentPlugin[]>([]);
@@ -31,7 +33,33 @@ export function useFleet(projectId?: string): FleetState {
   const [isLive, setIsLive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const loadDemoData = useCallback(() => {
+    const hosts = getProjectHosts(projectId ?? 'proj-ai-prod');
+    setAgents(
+      hosts
+        .filter((h) => h.agent)
+        .map((h) => ({
+          ...h.agent!,
+          hostname: h.hostname,
+          os: h.os,
+        })),
+    );
+    setJobs(getCollectionJobs());
+    setPlugins(getAgentPlugins());
+    setGroups(getAgentGroups());
+    setUpdateStatuses(getUpdateStatuses());
+    setSchedules(getCollectionSchedules());
+    setIsLive(false);
+  }, [projectId]);
+
   const loadData = useCallback(async () => {
+    // Demo mode — 즉시 fallback
+    if (mode === 'demo') {
+      loadDemoData();
+      setLoading(false);
+      return;
+    }
+
     try {
       const [agentsRes, jobsRes, pluginsRes, groupsRes, updatesRes, schedulesRes] = await Promise.all([
         fleetApi.listAgents(projectId),
@@ -49,27 +77,17 @@ export function useFleet(projectId?: string): FleetState {
       setSchedules(schedulesRes.items);
       setIsLive(true);
     } catch {
-      // Collection Server가 아직 기동되지 않은 경우 demo 데이터로 fallback
-      const hosts = getProjectHosts(projectId ?? 'proj-ai-prod');
-      setAgents(
-        hosts
-          .filter((h) => h.agent)
-          .map((h) => ({
-            ...h.agent!,
-            hostname: h.hostname,
-            os: h.os,
-          })),
-      );
-      setJobs(getCollectionJobs());
-      setPlugins(getAgentPlugins());
-      setGroups(getAgentGroups());
-      setUpdateStatuses(getUpdateStatuses());
-      setSchedules(getCollectionSchedules());
-      setIsLive(false);
+      if (mode === 'auto') {
+        // Auto mode: 실패 시 demo fallback
+        loadDemoData();
+      } else {
+        // Live mode: 빈 상태 유지 (fallback 없음)
+        setIsLive(false);
+      }
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, mode, loadDemoData]);
 
   useEffect(() => {
     void loadData();

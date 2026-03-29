@@ -80,6 +80,11 @@ export function getProjectHosts(projectId: string): Host[] {
       { id: 'h-gpu-02', hostname: 'prod-gpu-02', os: 'Ubuntu 22.04', cpuCores: 32, memoryGB: 128, status: 'warning', cpuPercent: 92, memPercent: 88, diskPercent: 60, netIO: '310MB/s', middlewares: [{ type: 'llm', name: 'vLLM', version: '0.4.2', port: 8000, status: 'running' }], gpus: [{ index: 0, model: 'A100 80GB', vendor: 'nvidia' as const, vramTotal: 80, vramUsed: 71.2, vramPercent: 89, temperature: 71, powerDraw: 310, smOccupancy: 92, isVirtual: true }, { index: 1, model: 'A100 80GB', vendor: 'nvidia' as const, vramTotal: 80, vramUsed: 65.6, vramPercent: 82, temperature: 65, powerDraw: 290, smOccupancy: 88 }], agent: { id: 'a-04', hostId: 'h-gpu-02', version: '1.1.9', status: 'degraded', plugins: [{ id: 'ai-gpu-serving', name: 'GPU/Serving', version: '1.0.0', status: 'active', itemsCovered: ['ITEM0207', 'ITEM0220'] }], lastHeartbeat: new Date(Date.now() - 120_000).toISOString(), lastCollection: new Date(Date.now() - 120_000).toISOString(), mode: 'full' } },
       { id: 'h-gpu-03', hostname: 'prod-gpu-03', os: 'Ubuntu 22.04', cpuCores: 64, memoryGB: 256, status: 'healthy', cpuPercent: 55, memPercent: 62, diskPercent: 48, netIO: '180MB/s', middlewares: [{ type: 'llm', name: 'vLLM', version: '0.4.2', port: 8000, status: 'running' }], gpus: [{ index: 0, model: 'AMD Instinct MI250X', vendor: 'amd' as const, vramTotal: 128, vramUsed: 76.8, vramPercent: 60, temperature: 55, powerDraw: 420, smOccupancy: 72 }, { index: 1, model: 'AMD Instinct MI250X', vendor: 'amd' as const, vramTotal: 128, vramUsed: 89.6, vramPercent: 70, temperature: 58, powerDraw: 450, smOccupancy: 78 }], agent: { id: 'a-07', hostId: 'h-gpu-03', version: '1.2.0', status: 'healthy', plugins: [{ id: 'ai-gpu-serving', name: 'GPU/Serving', version: '2.0.0', status: 'active', itemsCovered: ['ITEM0207', 'ITEM0220'] }], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
       { id: 'h-gpu-04', hostname: 'dev-gpu-04', os: 'Ubuntu 22.04', cpuCores: 16, memoryGB: 64, status: 'healthy', cpuPercent: 32, memPercent: 44, diskPercent: 38, netIO: '60MB/s', middlewares: [{ type: 'llm', name: 'Ollama', version: '0.1.30', port: 11434, status: 'running' }], gpus: [{ index: 0, model: 'Intel Arc A770', vendor: 'intel' as const, vramTotal: 16, vramUsed: 6.4, vramPercent: 40, temperature: 48, powerDraw: 120, smOccupancy: 35, coreFreqMHz: 2100 }], agent: { id: 'a-08', hostId: 'h-gpu-04', version: '1.2.0', status: 'healthy', plugins: [{ id: 'ai-gpu-serving', name: 'GPU/Serving', version: '2.0.0', status: 'active', itemsCovered: ['ITEM0207'] }], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
+      { id: 'h-java-01', hostname: 'demo-java-app', os: 'Ubuntu 22.04 (JDK 21)', cpuCores: 4, memoryGB: 2, status: 'healthy', cpuPercent: 28, memPercent: 41, diskPercent: 25, netIO: '12MB/s', middlewares: [{ type: 'was', name: 'Spring Boot', version: '3.3.6', port: 8081, status: 'running' }], agent: { id: 'a-java-01', hostId: 'h-java-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
+      { id: 'h-dotnet-01', hostname: 'demo-dotnet-app', os: 'Ubuntu 22.04 (.NET 8)', cpuCores: 4, memoryGB: 2, status: 'healthy', cpuPercent: 22, memPercent: 35, diskPercent: 20, netIO: '10MB/s', middlewares: [{ type: 'was', name: 'ASP.NET Core', version: '8.0', port: 8082, status: 'running' }], agent: { id: 'a-dotnet-01', hostId: 'h-dotnet-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
+      { id: 'h-go-01', hostname: 'demo-go-app', os: 'Ubuntu 22.04', cpuCores: 4, memoryGB: 1, status: 'healthy', cpuPercent: 12, memPercent: 15, diskPercent: 18, netIO: '8MB/s', middlewares: [{ type: 'was', name: 'Gin', version: '1.10.0', port: 8083, status: 'running' }], agent: { id: 'a-go-01', hostId: 'h-go-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
+      { id: 'h-python-01', hostname: 'demo-python-app', os: 'Ubuntu 22.04 (Python 3.10)', cpuCores: 4, memoryGB: 2, status: 'healthy', cpuPercent: 32, memPercent: 38, diskPercent: 22, netIO: '11MB/s', middlewares: [{ type: 'was', name: 'FastAPI', version: '0.104', port: 8084, status: 'running' }], agent: { id: 'a-python-01', hostId: 'h-python-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
+      { id: 'h-node-01', hostname: 'demo-node-app', os: 'Ubuntu 22.04 (Node 20)', cpuCores: 4, memoryGB: 1, status: 'healthy', cpuPercent: 18, memPercent: 28, diskPercent: 15, netIO: '9MB/s', middlewares: [{ type: 'was', name: 'Express', version: '4.19.0', port: 8085, status: 'running' }], agent: { id: 'a-node-01', hostId: 'h-node-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
       { id: 'h-db-01', hostname: 'prod-db-01', os: 'RHEL 9', cpuCores: 8, memoryGB: 32, status: 'healthy', cpuPercent: 35, memPercent: 75, diskPercent: 72, netIO: '80MB/s', middlewares: [{ type: 'db', name: 'PostgreSQL', version: '16.2', port: 5432, status: 'running' }], agent: { id: 'a-05', hostId: 'h-db-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
       { id: 'h-redis-01', hostname: 'prod-redis-01', os: 'Ubuntu 22.04', cpuCores: 4, memoryGB: 16, status: 'healthy', cpuPercent: 18, memPercent: 45, diskPercent: 22, netIO: '50MB/s', middlewares: [{ type: 'cache', name: 'Redis', version: '7.2', port: 6379, status: 'running' }], agent: { id: 'a-06', hostId: 'h-redis-01', version: '1.2.0', status: 'healthy', plugins: [], lastHeartbeat: new Date().toISOString(), lastCollection: new Date().toISOString(), mode: 'full' } },
     ],
@@ -90,10 +95,15 @@ export function getProjectHosts(projectId: string): Host[] {
 export function getProjectServices(projectId: string): Service[] {
   const sets: Record<string, Service[]> = {
     'proj-ai-prod': [
-      { id: 's-apigw', name: 'api-gateway', framework: 'Express', language: 'Node.js', hostIds: ['h-api-01', 'h-api-02'], latencyP50: 85, latencyP95: 245, latencyP99: 420, rpm: 1200, errorRate: 0.12, status: 'healthy' },
+      // demo-site 5개 런타임 앱 (OTel 계측 → Jaeger/Prometheus 연동)
+      { id: 's-java', name: 'java-demo-app', framework: 'Spring Boot 3.3', language: 'Java', hostIds: ['h-java-01'], latencyP50: 25, latencyP95: 85, latencyP99: 180, rpm: 850, errorRate: 0.08, status: 'healthy' },
+      { id: 's-dotnet', name: 'dotnet-demo-app', framework: 'ASP.NET Core 8', language: '.NET', hostIds: ['h-dotnet-01'], latencyP50: 30, latencyP95: 95, latencyP99: 210, rpm: 720, errorRate: 0.05, status: 'healthy' },
+      { id: 's-go', name: 'go-demo-app', framework: 'Gin 1.10', language: 'Go', hostIds: ['h-go-01'], latencyP50: 12, latencyP95: 45, latencyP99: 110, rpm: 1500, errorRate: 0.03, status: 'healthy' },
+      { id: 's-python', name: 'python-demo-app', framework: 'FastAPI 0.104', language: 'Python', hostIds: ['h-python-01'], latencyP50: 42, latencyP95: 150, latencyP99: 380, rpm: 620, errorRate: 0.15, status: 'healthy' },
+      { id: 's-node', name: 'nodejs-demo-app', framework: 'Express 4.19', language: 'Node.js', hostIds: ['h-node-01'], latencyP50: 35, latencyP95: 120, latencyP99: 290, rpm: 980, errorRate: 0.10, status: 'healthy' },
+      // AI 서비스 (RAG + 가드레일)
       { id: 's-rag', name: 'rag-service', framework: 'FastAPI', language: 'Python', hostIds: ['h-gpu-01', 'h-gpu-02'], latencyP50: 820, latencyP95: 1800, latencyP99: 3200, rpm: 450, errorRate: 0.22, status: 'healthy' },
-      { id: 's-embed', name: 'embedding-service', framework: 'FastAPI', language: 'Python', hostIds: ['h-gpu-01'], latencyP50: 45, latencyP95: 120, latencyP99: 200, rpm: 800, errorRate: 0.05, status: 'healthy' },
-      { id: 's-auth', name: 'auth-service', framework: 'Spring Boot', language: 'Java', hostIds: ['h-api-01'], latencyP50: 25, latencyP95: 45, latencyP99: 80, rpm: 600, errorRate: 0.01, status: 'healthy' },
+      { id: 's-guardrail', name: 'guardrail-service', framework: 'FastAPI', language: 'Python', hostIds: ['h-gpu-01'], latencyP50: 15, latencyP95: 45, latencyP99: 120, rpm: 450, errorRate: 0.01, status: 'healthy' },
     ],
   };
   return sets[projectId] ?? sets['proj-ai-prod'];
@@ -174,31 +184,45 @@ export const LAYER_CONFIG: Record<ServiceLayer, { label: string; color: string; 
 };
 
 export function getServiceTopology(projectId: string): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
-  // Default: AI-Production topology
+  // demo-site 5개 런타임 앱 + AI 서비스 + 인프라 토폴로지
   const nodes: TopologyNode[] = [
-    { id: 'client', name: 'Client (Browser)', layer: 'ui', status: 'healthy', rpm: 1200, errorRate: 0, p95: 0, framework: 'Browser' },
-    { id: 'api-gw', name: 'api-gateway', layer: 'ui', status: 'healthy', rpm: 1200, errorRate: 0.12, p95: 245, framework: 'Express' },
+    { id: 'client', name: 'Client (Browser)', layer: 'ui', status: 'healthy', rpm: 4670, errorRate: 0, p95: 0, framework: 'Browser' },
+    // 5개 언어 데모 앱
+    { id: 'java-app', name: 'java-demo-app', layer: 'ui', status: 'healthy', rpm: 850, errorRate: 0.08, p95: 85, framework: 'Spring Boot 3.3' },
+    { id: 'dotnet-app', name: 'dotnet-demo-app', layer: 'ui', status: 'healthy', rpm: 720, errorRate: 0.05, p95: 95, framework: 'ASP.NET Core 8' },
+    { id: 'go-app', name: 'go-demo-app', layer: 'ui', status: 'healthy', rpm: 1500, errorRate: 0.03, p95: 45, framework: 'Gin 1.10' },
+    { id: 'python-app', name: 'python-demo-app', layer: 'ui', status: 'healthy', rpm: 620, errorRate: 0.15, p95: 150, framework: 'FastAPI 0.104' },
+    { id: 'node-app', name: 'nodejs-demo-app', layer: 'ui', status: 'healthy', rpm: 980, errorRate: 0.10, p95: 120, framework: 'Express 4.19' },
+    // AI 서비스
     { id: 'rag-svc', name: 'rag-service', layer: 'agent', status: 'healthy', rpm: 450, errorRate: 0.22, p95: 1800, framework: 'FastAPI' },
-    { id: 'auth-svc', name: 'auth-service', layer: 'ui', status: 'healthy', rpm: 600, errorRate: 0.01, p95: 45, framework: 'Spring Boot' },
-    { id: 'embed-svc', name: 'embedding-service', layer: 'agent', status: 'healthy', rpm: 800, errorRate: 0.05, p95: 120, framework: 'FastAPI' },
-    { id: 'vllm', name: 'vLLM Inference', layer: 'llm', status: 'healthy', rpm: 450, errorRate: 0.1, p95: 1200, framework: 'vLLM' },
-    { id: 'guardrail', name: 'Guardrail', layer: 'agent', status: 'healthy', rpm: 900, errorRate: 0.05, p95: 80, framework: 'NeMo' },
+    { id: 'guardrail', name: 'guardrail-service', layer: 'agent', status: 'healthy', rpm: 450, errorRate: 0.01, p95: 45, framework: 'FastAPI' },
+    // 인프라
     { id: 'qdrant', name: 'Qdrant', layer: 'data', status: 'healthy', rpm: 800, errorRate: 0.02, p95: 120, framework: 'Qdrant' },
-    { id: 'postgres', name: 'PostgreSQL', layer: 'data', status: 'healthy', rpm: 600, errorRate: 0.01, p95: 15, framework: 'PostgreSQL 16' },
-    { id: 'redis', name: 'Redis Cache', layer: 'data', status: 'healthy', rpm: 2000, errorRate: 0, p95: 3, framework: 'Redis 7.2' },
+    { id: 'postgres', name: 'PostgreSQL', layer: 'data', status: 'healthy', rpm: 3200, errorRate: 0.01, p95: 15, framework: 'PostgreSQL 16' },
+    { id: 'redis', name: 'Redis Cache', layer: 'data', status: 'healthy', rpm: 4500, errorRate: 0, p95: 3, framework: 'Redis 7.2' },
   ];
 
   const edges: TopologyEdge[] = [
-    { source: 'client', target: 'api-gw', rpm: 1200, errorRate: 0, p95: 245 },
-    { source: 'api-gw', target: 'rag-svc', rpm: 450, errorRate: 0.1, p95: 1800 },
-    { source: 'api-gw', target: 'auth-svc', rpm: 600, errorRate: 0.01, p95: 45 },
-    { source: 'rag-svc', target: 'guardrail', rpm: 900, errorRate: 0.02, p95: 80 },
-    { source: 'rag-svc', target: 'embed-svc', rpm: 450, errorRate: 0.03, p95: 120 },
-    { source: 'rag-svc', target: 'vllm', rpm: 450, errorRate: 0.1, p95: 1200 },
-    { source: 'embed-svc', target: 'qdrant', rpm: 800, errorRate: 0.02, p95: 120 },
-    { source: 'rag-svc', target: 'redis', rpm: 1200, errorRate: 0, p95: 3 },
-    { source: 'auth-svc', target: 'postgres', rpm: 600, errorRate: 0.01, p95: 15 },
-    { source: 'auth-svc', target: 'redis', rpm: 400, errorRate: 0, p95: 2 },
+    // Client → 5개 앱
+    { source: 'client', target: 'java-app', rpm: 850, errorRate: 0.08, p95: 85 },
+    { source: 'client', target: 'dotnet-app', rpm: 720, errorRate: 0.05, p95: 95 },
+    { source: 'client', target: 'go-app', rpm: 1500, errorRate: 0.03, p95: 45 },
+    { source: 'client', target: 'python-app', rpm: 620, errorRate: 0.15, p95: 150 },
+    { source: 'client', target: 'node-app', rpm: 980, errorRate: 0.10, p95: 120 },
+    // 모든 앱 → PostgreSQL + Redis
+    { source: 'java-app', target: 'postgres', rpm: 650, errorRate: 0.01, p95: 12 },
+    { source: 'java-app', target: 'redis', rpm: 850, errorRate: 0, p95: 2 },
+    { source: 'dotnet-app', target: 'postgres', rpm: 550, errorRate: 0.01, p95: 14 },
+    { source: 'go-app', target: 'postgres', rpm: 1200, errorRate: 0.01, p95: 8 },
+    { source: 'go-app', target: 'redis', rpm: 1500, errorRate: 0, p95: 2 },
+    { source: 'python-app', target: 'postgres', rpm: 480, errorRate: 0.02, p95: 18 },
+    { source: 'python-app', target: 'redis', rpm: 620, errorRate: 0, p95: 3 },
+    { source: 'node-app', target: 'postgres', rpm: 750, errorRate: 0.01, p95: 10 },
+    { source: 'node-app', target: 'redis', rpm: 980, errorRate: 0, p95: 2 },
+    // Python → RAG/Guardrail → Qdrant
+    { source: 'python-app', target: 'rag-svc', rpm: 200, errorRate: 0.1, p95: 1800 },
+    { source: 'rag-svc', target: 'guardrail', rpm: 200, errorRate: 0.01, p95: 45 },
+    { source: 'rag-svc', target: 'qdrant', rpm: 450, errorRate: 0.02, p95: 120 },
   ];
 
   return { nodes, edges };
@@ -209,63 +233,66 @@ export function getServiceTopology(projectId: string): { nodes: TopologyNode[]; 
 // ═══════════════════════════════════════════════════════════════
 
 export function getServiceEndpoints(serviceId: string): Endpoint[] {
+  // 공통 엔드포인트 (demo-site 모든 앱이 동일 패턴)
+  const commonEndpoints = (prefix: string, base: { rpm: number; lat: number }): Endpoint[] => [
+    { id: `${prefix}-1`, method: 'GET', path: '/api/health', rpm: Math.round(base.rpm * 0.1), latencyP50: 3, latencyP95: 8, latencyP99: 15, errorRate: 0, contribution: 10 },
+    { id: `${prefix}-2`, method: 'GET', path: '/api/products', rpm: Math.round(base.rpm * 0.25), latencyP50: base.lat, latencyP95: base.lat * 2.5, latencyP99: base.lat * 5, errorRate: 0.02, contribution: 25 },
+    { id: `${prefix}-3`, method: 'GET', path: '/api/users', rpm: Math.round(base.rpm * 0.2), latencyP50: base.lat * 1.2, latencyP95: base.lat * 3, latencyP99: base.lat * 6, errorRate: 0.03, contribution: 20 },
+    { id: `${prefix}-4`, method: 'POST', path: '/api/users', rpm: Math.round(base.rpm * 0.1), latencyP50: base.lat * 1.5, latencyP95: base.lat * 4, latencyP99: base.lat * 8, errorRate: 0.05, contribution: 10 },
+    { id: `${prefix}-5`, method: 'GET', path: '/api/orders', rpm: Math.round(base.rpm * 0.2), latencyP50: base.lat * 1.3, latencyP95: base.lat * 3, latencyP99: base.lat * 6, errorRate: 0.04, contribution: 20 },
+    { id: `${prefix}-6`, method: 'POST', path: '/api/orders', rpm: Math.round(base.rpm * 0.1), latencyP50: base.lat * 2, latencyP95: base.lat * 5, latencyP99: base.lat * 10, errorRate: 0.08, contribution: 10 },
+    { id: `${prefix}-7`, method: 'GET', path: '/api/slow', rpm: Math.round(base.rpm * 0.05), latencyP50: 1200, latencyP95: 3000, latencyP99: 5000, errorRate: 0, contribution: 5 },
+  ];
+
   const sets: Record<string, Endpoint[]> = {
-    's-apigw': [
-      { id: 'ep-1', method: 'GET', path: '/api/health', rpm: 120, latencyP50: 5, latencyP95: 12, latencyP99: 25, errorRate: 0, contribution: 10 },
-      { id: 'ep-2', method: 'POST', path: '/api/chat', rpm: 450, latencyP50: 120, latencyP95: 340, latencyP99: 580, errorRate: 0.15, contribution: 37.5 },
-      { id: 'ep-3', method: 'GET', path: '/api/conversations', rpm: 280, latencyP50: 45, latencyP95: 95, latencyP99: 180, errorRate: 0.05, contribution: 23.3 },
-      { id: 'ep-4', method: 'POST', path: '/api/auth/token', rpm: 200, latencyP50: 30, latencyP95: 55, latencyP99: 90, errorRate: 0.02, contribution: 16.7 },
-      { id: 'ep-5', method: 'GET', path: '/api/models', rpm: 80, latencyP50: 15, latencyP95: 28, latencyP99: 45, errorRate: 0, contribution: 6.7 },
-      { id: 'ep-6', method: 'DELETE', path: '/api/conversations/:id', rpm: 70, latencyP50: 35, latencyP95: 70, latencyP99: 120, errorRate: 0.01, contribution: 5.8 },
-    ],
+    's-java': commonEndpoints('java', { rpm: 850, lat: 20 }),
+    's-dotnet': commonEndpoints('dotnet', { rpm: 720, lat: 25 }),
+    's-go': commonEndpoints('go', { rpm: 1500, lat: 10 }),
+    's-python': commonEndpoints('python', { rpm: 620, lat: 35 }),
+    's-node': commonEndpoints('node', { rpm: 980, lat: 28 }),
     's-rag': [
       { id: 'ep-10', method: 'POST', path: '/api/chat', rpm: 200, latencyP50: 820, latencyP95: 1800, latencyP99: 3200, errorRate: 0.3, contribution: 44.4 },
       { id: 'ep-11', method: 'POST', path: '/api/search', rpm: 150, latencyP50: 350, latencyP95: 700, latencyP99: 1200, errorRate: 0.1, contribution: 33.3 },
       { id: 'ep-12', method: 'POST', path: '/api/embed', rpm: 60, latencyP50: 120, latencyP95: 280, latencyP99: 450, errorRate: 0.05, contribution: 13.3 },
       { id: 'ep-13', method: 'GET', path: '/api/health', rpm: 40, latencyP50: 3, latencyP95: 8, latencyP99: 15, errorRate: 0, contribution: 8.9 },
     ],
-    's-embed': [
-      { id: 'ep-20', method: 'POST', path: '/api/embed', rpm: 500, latencyP50: 42, latencyP95: 110, latencyP99: 190, errorRate: 0.03, contribution: 62.5 },
-      { id: 'ep-21', method: 'POST', path: '/api/embed/batch', rpm: 200, latencyP50: 180, latencyP95: 350, latencyP99: 500, errorRate: 0.08, contribution: 25 },
-      { id: 'ep-22', method: 'GET', path: '/api/health', rpm: 60, latencyP50: 2, latencyP95: 5, latencyP99: 10, errorRate: 0, contribution: 7.5 },
-      { id: 'ep-23', method: 'GET', path: '/api/models', rpm: 40, latencyP50: 8, latencyP95: 18, latencyP99: 30, errorRate: 0, contribution: 5 },
-    ],
-    's-auth': [
-      { id: 'ep-30', method: 'POST', path: '/api/auth/login', rpm: 180, latencyP50: 25, latencyP95: 45, latencyP99: 80, errorRate: 0.02, contribution: 30 },
-      { id: 'ep-31', method: 'POST', path: '/api/auth/token', rpm: 250, latencyP50: 15, latencyP95: 30, latencyP99: 55, errorRate: 0.01, contribution: 41.7 },
-      { id: 'ep-32', method: 'GET', path: '/api/auth/verify', rpm: 120, latencyP50: 10, latencyP95: 22, latencyP99: 40, errorRate: 0, contribution: 20 },
-      { id: 'ep-33', method: 'POST', path: '/api/auth/logout', rpm: 50, latencyP50: 8, latencyP95: 18, latencyP99: 30, errorRate: 0, contribution: 8.3 },
+    's-guardrail': [
+      { id: 'ep-40', method: 'POST', path: '/api/guardrail/check', rpm: 400, latencyP50: 12, latencyP95: 35, latencyP99: 80, errorRate: 0.01, contribution: 88.9 },
+      { id: 'ep-41', method: 'GET', path: '/api/health', rpm: 50, latencyP50: 2, latencyP95: 5, latencyP99: 10, errorRate: 0, contribution: 11.1 },
     ],
   };
-  return sets[serviceId] ?? sets['s-apigw'];
+  return sets[serviceId] ?? sets['s-java'];
 }
 
 export function getServiceDeployments(serviceId: string): DeploymentEvent[] {
   const now = Date.now();
   const sets: Record<string, DeploymentEvent[]> = {
-    's-apigw': [
-      { id: 'd-1', version: 'v2.4.1', timestamp: new Date(now - 2 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'a3f8c2d', description: 'Fix CORS headers for new client SDK', duration: 45 },
-      { id: 'd-2', version: 'v2.4.0', timestamp: new Date(now - 26 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'b7e1f90', description: 'Add rate limiting per API key', duration: 62 },
-      { id: 'd-3', version: 'v2.3.9', timestamp: new Date(now - 72 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'c4d2a11', description: 'Upgrade Express to 4.19', duration: 38 },
-      { id: 'd-4', version: 'v2.3.8', timestamp: new Date(now - 168 * 3600_000).toISOString(), status: 'failed', deployer: 'park.js', commitHash: 'e9f0b33', description: 'WebSocket connection pooling (rolled back)', duration: 120 },
+    's-java': [
+      { id: 'd-1', version: 'v1.3.0', timestamp: new Date(now - 2 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'a3f8c2d', description: 'Add OTel Java Agent auto-instrumentation', duration: 45 },
+      { id: 'd-2', version: 'v1.2.0', timestamp: new Date(now - 48 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'b7e1f90', description: 'Spring Boot 3.3.6 upgrade + Hikari pool tuning', duration: 62 },
+    ],
+    's-dotnet': [
+      { id: 'd-10', version: 'v2.1.0', timestamp: new Date(now - 5 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'f1a2b3c', description: 'Add EF Core OTel instrumentation', duration: 55 },
+      { id: 'd-11', version: 'v2.0.0', timestamp: new Date(now - 72 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'g4h5i6j', description: '.NET 8 migration + EventPipe diagnostics', duration: 95 },
+    ],
+    's-go': [
+      { id: 'd-20', version: 'v1.5.0', timestamp: new Date(now - 3 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'o1p2q3r', description: 'Add pprof endpoint + otelgin middleware', duration: 30 },
+      { id: 'd-21', version: 'v1.4.0', timestamp: new Date(now - 96 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 's4t5u6v', description: 'pgx + redisotel instrumentation', duration: 42 },
+    ],
+    's-python': [
+      { id: 'd-30', version: 'v1.4.0', timestamp: new Date(now - 8 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'a1b2c3d', description: 'FastAPI + psycopg + Redis OTel auto-instrumentation', duration: 40 },
+      { id: 'd-31', version: 'v1.3.0', timestamp: new Date(now - 120 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'e4f5g6h', description: 'Add RAG service integration', duration: 65 },
+    ],
+    's-node': [
+      { id: 'd-40', version: 'v1.2.0', timestamp: new Date(now - 6 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'i7j8k9l', description: 'OTel auto-instrumentations-node setup', duration: 35 },
+      { id: 'd-41', version: 'v1.1.0', timestamp: new Date(now - 168 * 3600_000).toISOString(), status: 'failed', deployer: 'park.js', commitHash: 'x9y0z1a', description: 'WebSocket upgrade (rolled back)', duration: 120 },
     ],
     's-rag': [
-      { id: 'd-10', version: 'v1.8.0', timestamp: new Date(now - 5 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'f1a2b3c', description: 'Upgrade to GPT-4-Turbo with streaming', duration: 180 },
-      { id: 'd-11', version: 'v1.7.5', timestamp: new Date(now - 48 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'g4h5i6j', description: 'Add context window overflow handling', duration: 95 },
-      { id: 'd-12', version: 'v1.7.4', timestamp: new Date(now - 120 * 3600_000).toISOString(), status: 'rolling-back', deployer: 'lee.ml', commitHash: 'k7l8m9n', description: 'Qdrant index migration (partial rollback)', duration: 300 },
-    ],
-    's-embed': [
-      { id: 'd-20', version: 'v3.1.0', timestamp: new Date(now - 8 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'o1p2q3r', description: 'Switch to text-embedding-3-large', duration: 55 },
-      { id: 'd-21', version: 'v3.0.9', timestamp: new Date(now - 96 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 's4t5u6v', description: 'Batch embedding optimization', duration: 42 },
-      { id: 'd-22', version: 'v3.0.8', timestamp: new Date(now - 240 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'w7x8y9z', description: 'Add embedding cache layer', duration: 68 },
-    ],
-    's-auth': [
-      { id: 'd-30', version: 'v5.2.0', timestamp: new Date(now - 12 * 3600_000).toISOString(), status: 'success', deployer: 'park.js', commitHash: 'a1b2c3d', description: 'Add MFA support for admin accounts', duration: 75 },
-      { id: 'd-31', version: 'v5.1.9', timestamp: new Date(now - 72 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'e4f5g6h', description: 'JWT rotation key update', duration: 30 },
-      { id: 'd-32', version: 'v5.1.8', timestamp: new Date(now - 168 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'i7j8k9l', description: 'Spring Boot 3.2 upgrade', duration: 90 },
+      { id: 'd-50', version: 'v1.8.0', timestamp: new Date(now - 5 * 3600_000).toISOString(), status: 'success', deployer: 'kim.aura', commitHash: 'f1a2b3c', description: 'Upgrade to GPT-4-Turbo with streaming', duration: 180 },
+      { id: 'd-51', version: 'v1.7.5', timestamp: new Date(now - 48 * 3600_000).toISOString(), status: 'success', deployer: 'ci-bot', commitHash: 'g4h5i6j', description: 'Add context window overflow handling', duration: 95 },
     ],
   };
-  return sets[serviceId] ?? sets['s-apigw'];
+  return sets[serviceId] ?? sets['s-java'];
 }
 
 export function getServiceDependencies(serviceId: string): ServiceDependency[] {
@@ -275,10 +302,13 @@ export function getServiceDependencies(serviceId: string): ServiceDependency[] {
   // Find edges where this service is source (downstream deps)
   // or target (upstream callers) using topology node names
   const nodeMap: Record<string, string> = {
-    's-apigw': 'api-gw',
+    's-java': 'java-app',
+    's-dotnet': 'dotnet-app',
+    's-go': 'go-app',
+    's-python': 'python-app',
+    's-node': 'node-app',
     's-rag': 'rag-svc',
-    's-embed': 'embed-svc',
-    's-auth': 'auth-svc',
+    's-guardrail': 'guardrail',
   };
   const reverseNodeMap: Record<string, string> = {};
   for (const [svcId, nodeId] of Object.entries(nodeMap)) {

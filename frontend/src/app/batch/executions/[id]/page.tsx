@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -9,6 +9,7 @@ import { Card, Tabs } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts/time-series-chart';
 import { SystemFlamegraph } from '@/components/charts/system-flamegraph';
 import { getBatchExecutionDetail, getBatchSQLProfile, getBatchMethodProfile } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { formatDuration, formatBytes } from '@/lib/utils';
 import type { FlameGraphNode, BatchSQLProfile, BatchMethodProfile } from '@/types/monitoring';
 import {
@@ -127,9 +128,12 @@ export default function BatchExecutionDetailPage() {
   const params = useParams();
   const executionId = params.id as string;
 
-  const detail = useMemo(() => getBatchExecutionDetail(executionId), [executionId]);
-  const sqlProfiles = useMemo(() => getBatchSQLProfile(executionId), [executionId]);
-  const methodProfiles = useMemo(() => getBatchMethodProfile(executionId), [executionId]);
+  const demoDetail = useCallback(() => getBatchExecutionDetail(executionId), [executionId]);
+  const demoSQL = useCallback(() => getBatchSQLProfile(executionId), [executionId]);
+  const demoMethods = useCallback(() => getBatchMethodProfile(executionId), [executionId]);
+  const { data: detail } = useDataSource(`/batch/executions/${executionId}`, demoDetail);
+  const { data: sqlProfiles } = useDataSource(`/batch/executions/${executionId}/profile/sql`, demoSQL);
+  const { data: methodProfiles } = useDataSource(`/batch/executions/${executionId}/profile/methods`, demoMethods);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [sqlSort, setSqlSort] = useState<{ field: SQLSortField; dir: 'asc' | 'desc' }>({ field: 'total_time_ms', dir: 'desc' });

@@ -21,6 +21,14 @@ import {
   Download,
   Plus,
   Clock,
+  Package,
+  Play,
+  Upload,
+  Terminal,
+  Loader2,
+  FolderArchive,
+  ScrollText,
+  Server,
 } from 'lucide-react';
 
 const SCOPE_LABELS: Record<string, string> = { full: 'Full Scan', ai: 'AI Services', infra: 'Infrastructure' };
@@ -37,6 +45,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const TABS = [
   { id: 'diagnostics', label: 'Diagnostics', icon: <Stethoscope size={14} /> },
+  { id: 'evidence', label: 'Evidence Collection', icon: <FileText size={14} /> },
   { id: 'reports', label: 'Reports', icon: <FileText size={14} /> },
 ] as const;
 
@@ -46,6 +55,287 @@ const REPORT_TYPE_COLORS: Record<string, string> = {
   diagnostic: 'bg-orange-500/15 text-orange-400',
   custom: 'bg-gray-500/15 text-gray-400',
 };
+
+// ── Evidence Collection Tab ──────────────────────────────────────────────────
+
+type EvidenceStatus = 'collected' | 'collecting' | 'failed' | 'pending';
+type ScriptStatus = 'idle' | 'running' | 'completed' | 'error';
+
+interface EvidenceBundle {
+  id: string;
+  runId: string;
+  agentId: string;
+  hostname: string;
+  collectedAt: string;
+  sizeKB: number;
+  status: EvidenceStatus;
+  items: string[];
+  mode: 'auto' | 'script' | 'full';
+}
+
+interface DiagScript {
+  name: string;
+  type: 'sh' | 'ps1' | 'py';
+  description: string;
+  timeout: number;
+  status: ScriptStatus;
+  lastOutput?: string;
+  lastRun?: string;
+}
+
+const DEMO_BUNDLES: EvidenceBundle[] = [
+  { id: 'ev-001', runId: 'diag-2026-03-29-001', agentId: 'agent-prod-01', hostname: 'prod-app-01', collectedAt: '2026-03-29T10:30:00Z', sizeKB: 2480, status: 'collected', items: ['os_info', 'cpu_profile', 'memory_dump', 'disk_usage', 'network_stats', 'java_thread_dump', 'jar_inventory'], mode: 'full' },
+  { id: 'ev-002', runId: 'diag-2026-03-29-001', agentId: 'agent-prod-02', hostname: 'prod-app-02', collectedAt: '2026-03-29T10:31:00Z', sizeKB: 1850, status: 'collected', items: ['os_info', 'cpu_profile', 'go_pprof', 'network_stats', 'process_list'], mode: 'auto' },
+  { id: 'ev-003', runId: 'diag-2026-03-29-001', agentId: 'agent-gpu-01', hostname: 'gpu-server-01', collectedAt: '2026-03-29T10:32:00Z', sizeKB: 3200, status: 'collected', items: ['os_info', 'gpu_info', 'nvidia_smi', 'cuda_version', 'llm_metrics', 'vram_usage', 'python_packages'], mode: 'script' },
+  { id: 'ev-004', runId: 'diag-2026-03-28-001', agentId: 'agent-prod-03', hostname: 'prod-db-01', collectedAt: '2026-03-28T14:00:00Z', sizeKB: 1420, status: 'collected', items: ['os_info', 'pg_stats', 'slow_queries', 'lock_info', 'disk_usage'], mode: 'auto' },
+  { id: 'ev-005', runId: 'diag-2026-03-29-002', agentId: 'agent-prod-04', hostname: 'prod-web-01', collectedAt: '2026-03-29T11:00:00Z', sizeKB: 0, status: 'collecting', items: [], mode: 'full' },
+];
+
+const DEMO_SCRIPTS: DiagScript[] = [
+  { name: 'collect_java_info.sh', type: 'sh', description: 'Collect JVM thread dumps, GC logs, heap histogram, JAR inventory', timeout: 300, status: 'completed', lastOutput: 'Collected: 3 thread dumps, GC log (1.2 MB), heap histogram, 47 JAR files', lastRun: '2026-03-29T10:30:15Z' },
+  { name: 'collect_gpu_metrics.py', type: 'py', description: 'NVIDIA GPU diagnostics: nvidia-smi, CUDA version, VRAM, temperature, power', timeout: 120, status: 'completed', lastOutput: 'GPU 0: A100 80GB, Util: 78%, VRAM: 62.4/80 GB, Temp: 67°C, Power: 285W', lastRun: '2026-03-29T10:32:10Z' },
+  { name: 'collect_network_diag.sh', type: 'sh', description: 'Network diagnostics: connections, routing table, DNS, latency checks', timeout: 180, status: 'idle', lastOutput: undefined, lastRun: undefined },
+  { name: 'collect_dotnet_diag.ps1', type: 'ps1', description: '.NET diagnostics: EventPipe trace, GC stats, thread pool info', timeout: 300, status: 'idle', lastOutput: undefined, lastRun: undefined },
+  { name: 'collect_container_info.sh', type: 'sh', description: 'Container runtime: docker ps, image list, resource limits, logs tail', timeout: 120, status: 'completed', lastOutput: 'Collected: 5 running containers, 12 images, resource limits for all', lastRun: '2026-03-29T10:31:00Z' },
+  { name: 'collect_python_env.py', type: 'py', description: 'Python environment: pip list, venv info, sys.path, installed packages', timeout: 60, status: 'idle', lastOutput: undefined, lastRun: undefined },
+];
+
+const EVIDENCE_STATUS_BADGE: Record<EvidenceStatus, { label: string; className: string }> = {
+  collected: { label: 'Collected', className: 'bg-[var(--status-healthy)]/15 text-[var(--status-healthy)]' },
+  collecting: { label: 'Collecting…', className: 'bg-blue-500/15 text-blue-400' },
+  failed: { label: 'Failed', className: 'bg-[var(--status-critical)]/15 text-[var(--status-critical)]' },
+  pending: { label: 'Pending', className: 'bg-[var(--text-muted)]/15 text-[var(--text-muted)]' },
+};
+
+const SCRIPT_STATUS_ICON: Record<ScriptStatus, { icon: React.ElementType; className: string }> = {
+  idle: { icon: Clock, className: 'text-[var(--text-muted)]' },
+  running: { icon: Loader2, className: 'text-blue-400 animate-spin' },
+  completed: { icon: CheckCircle2, className: 'text-[var(--status-healthy)]' },
+  error: { icon: XCircle, className: 'text-[var(--status-critical)]' },
+};
+
+function EvidenceCollectionTab() {
+  const [bundles] = useState(DEMO_BUNDLES);
+  const [scripts, setScripts] = useState(DEMO_SCRIPTS);
+  const [expandedBundle, setExpandedBundle] = useState<string | null>(null);
+  const [triggerMode, setTriggerMode] = useState<'auto' | 'script' | 'full'>('auto');
+  const [triggering, setTriggering] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState('all');
+
+  const handleRunScript = useCallback((scriptName: string) => {
+    setScripts((prev) =>
+      prev.map((s) => s.name === scriptName ? { ...s, status: 'running' as ScriptStatus } : s),
+    );
+    setTimeout(() => {
+      setScripts((prev) =>
+        prev.map((s) =>
+          s.name === scriptName
+            ? { ...s, status: 'completed' as ScriptStatus, lastRun: new Date().toISOString(), lastOutput: 'Diagnostic data collected successfully.' }
+            : s,
+        ),
+      );
+    }, 3000);
+  }, []);
+
+  const handleTriggerCollection = useCallback(async () => {
+    setTriggering(true);
+    await new Promise((r) => setTimeout(r, 2000));
+    setTriggering(false);
+  }, []);
+
+  const totalSize = bundles.filter((b) => b.status === 'collected').reduce((sum, b) => sum + b.sizeKB, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPICard helpId="evidence-total-bundles" title="Evidence Bundles" value={bundles.length} subtitle="total collected" status="healthy" />
+        <KPICard helpId="evidence-total-size" title="Total Size" value={`${(totalSize / 1024).toFixed(1)} MB`} subtitle="ZIP bundles" status="healthy" />
+        <KPICard helpId="evidence-scripts" title="Diagnostic Scripts" value={scripts.length} subtitle={`${scripts.filter((s) => s.status === 'completed').length} executed`} status="healthy" />
+        <KPICard helpId="evidence-agents" title="Agents Covered" value={new Set(bundles.map((b) => b.agentId)).size} subtitle="with evidence" status="healthy" />
+      </div>
+
+      {/* Trigger New Collection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Play size={14} />
+            Trigger Evidence Collection
+          </CardTitle>
+        </CardHeader>
+        <div className="px-4 pb-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">Target Agent</label>
+              <select
+                value={selectedAgent}
+                onChange={(e) => setSelectedAgent(e.target.value)}
+                className="w-full text-xs bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded px-2 py-1.5 text-[var(--text-primary)]"
+              >
+                <option value="all">All Agents</option>
+                <option value="agent-prod-01">agent-prod-01 (prod-app-01)</option>
+                <option value="agent-prod-02">agent-prod-02 (prod-app-02)</option>
+                <option value="agent-gpu-01">agent-gpu-01 (gpu-server-01)</option>
+                <option value="agent-prod-03">agent-prod-03 (prod-db-01)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">Collection Mode</label>
+              <select
+                value={triggerMode}
+                onChange={(e) => setTriggerMode(e.target.value as 'auto' | 'script' | 'full')}
+                className="w-full text-xs bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded px-2 py-1.5 text-[var(--text-primary)]"
+              >
+                <option value="auto">Auto — Built-in collectors only</option>
+                <option value="script">Script — Built-in + custom scripts</option>
+                <option value="full">Full — Built-in + scripts + manual</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleTriggerCollection}
+                disabled={triggering}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[var(--accent-primary)] text-white rounded hover:opacity-90 disabled:opacity-50 transition-colors"
+              >
+                {triggering ? <><Loader2 size={12} className="animate-spin" /> Collecting…</> : <><Upload size={12} /> Trigger Collection</>}
+              </button>
+            </div>
+          </div>
+          <p className="text-[10px] text-[var(--text-muted)]">
+            Evidence is collected as a ZIP bundle containing system info, logs, profiles, and diagnostic scripts output. Uploaded to S3 (MinIO) for review.
+          </p>
+        </div>
+      </Card>
+
+      {/* Evidence Bundles */}
+      <Card padding="none">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-default)]">
+          <div className="flex items-center gap-2">
+            <FolderArchive size={13} className="text-[var(--accent-primary)]" />
+            <span className="text-xs font-medium text-[var(--text-primary)]">Evidence Bundles</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                <th className="px-4 py-2 font-medium">Bundle ID</th>
+                <th className="px-4 py-2 font-medium">Agent / Host</th>
+                <th className="px-4 py-2 font-medium">Mode</th>
+                <th className="px-4 py-2 font-medium text-right">Items</th>
+                <th className="px-4 py-2 font-medium text-right">Size</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Collected At</th>
+                <th className="px-4 py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bundles.map((bundle) => {
+                const stBadge = EVIDENCE_STATUS_BADGE[bundle.status];
+                return (
+                  <>
+                    <tr
+                      key={bundle.id}
+                      onClick={() => setExpandedBundle(expandedBundle === bundle.id ? null : bundle.id)}
+                      className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors"
+                    >
+                      <td className="px-4 py-2 font-mono text-[var(--accent-primary)]">
+                        <ChevronRight size={11} className={cn('inline mr-1 transition-transform', expandedBundle === bundle.id && 'rotate-90')} />
+                        {bundle.id}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="text-[var(--text-primary)] font-medium">{bundle.hostname}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">{bundle.agentId}</div>
+                      </td>
+                      <td className="px-4 py-2"><Badge>{bundle.mode}</Badge></td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{bundle.items.length}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-[var(--text-secondary)]">{bundle.sizeKB > 0 ? `${(bundle.sizeKB / 1024).toFixed(1)} MB` : '—'}</td>
+                      <td className="px-4 py-2">
+                        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full', stBadge.className)}>
+                          {bundle.status === 'collecting' && <Loader2 size={9} className="animate-spin" />}
+                          {stBadge.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-[var(--text-muted)] tabular-nums">{getRelativeTime(new Date(bundle.collectedAt))}</td>
+                      <td className="px-4 py-2">
+                        {bundle.status === 'collected' && (
+                          <button className="p-1 text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors" title="Download ZIP bundle">
+                            <Download size={13} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedBundle === bundle.id && bundle.items.length > 0 && (
+                      <tr key={`${bundle.id}-detail`}>
+                        <td colSpan={8} className="px-8 py-3 bg-[var(--bg-tertiary)]">
+                          <div className="text-[10px] text-[var(--text-muted)] mb-1.5">Collected Evidence Items:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {bundle.items.map((item) => (
+                              <span key={item} className="px-2 py-0.5 text-[10px] font-mono bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded border border-[var(--border-default)]">
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Diagnostic Scripts */}
+      <Card padding="none">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-default)]">
+          <div className="flex items-center gap-2">
+            <ScrollText size={13} className="text-[var(--status-warning)]" />
+            <span className="text-xs font-medium text-[var(--text-primary)]">Diagnostic Scripts</span>
+          </div>
+          <span className="text-[10px] text-[var(--text-muted)]">Timeout: configurable per script | Output limit: 1 MiB</span>
+        </div>
+        <div className="divide-y divide-[var(--border-muted)]">
+          {scripts.map((script) => {
+            const stIcon = SCRIPT_STATUS_ICON[script.status];
+            const StIcon = stIcon.icon;
+            return (
+              <div key={script.name} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <StIcon size={13} className={stIcon.className} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-[var(--text-primary)]">{script.name}</span>
+                      <Badge>{script.type.toUpperCase()}</Badge>
+                      <span className="text-[10px] text-[var(--text-muted)]">timeout: {script.timeout}s</span>
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{script.description}</p>
+                    {script.lastOutput && (
+                      <div className="mt-1.5 px-2 py-1 text-[10px] font-mono bg-[var(--bg-secondary)] rounded border border-[var(--border-default)] text-[var(--text-secondary)]">
+                        {script.lastOutput}
+                      </div>
+                    )}
+                    {script.lastRun && (
+                      <span className="text-[10px] text-[var(--text-muted)] mt-0.5 inline-block">Last run: {getRelativeTime(new Date(script.lastRun))}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRunScript(script.name)}
+                    disabled={script.status === 'running'}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] rounded hover:bg-[var(--accent-primary)]/10 hover:text-[var(--accent-primary)] disabled:opacity-50 transition-colors"
+                  >
+                    {script.status === 'running' ? <><Loader2 size={11} className="animate-spin" /> Running…</> : <><Play size={11} /> Run</>}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 export default function DiagnosticsPage() {
   const demoRuns = useCallback(() => getDiagnosticRuns(), []);
@@ -194,6 +484,10 @@ export default function DiagnosticsPage() {
             </div>
           </Card>
         </div>
+      )}
+
+      {activeTab === 'evidence' && (
+        <EvidenceCollectionTab />
       )}
 
       {activeTab === 'diagnostics' && <>

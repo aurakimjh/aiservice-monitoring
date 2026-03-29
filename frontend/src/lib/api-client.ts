@@ -252,6 +252,61 @@ export const fleetApi = {
     apiFetch<{ status: string; queued_at: string }>(`/agents/${agentId}/restart`, { method: 'POST' }),
 };
 
+// ── Remote Terminal API ──
+export const terminalApi = {
+  openSession: (agentId: string) =>
+    apiFetch<{ session_id: string; state: string }>(`/agents/${agentId}/terminal/open`, { method: 'POST' }),
+
+  closeSession: (agentId: string, sessionId: string) =>
+    apiFetch<void>(`/agents/${agentId}/terminal/${sessionId}/close`, { method: 'POST' }),
+
+  sendInput: (agentId: string, sessionId: string, input: string) =>
+    apiFetch<{ output: string }>(`/agents/${agentId}/terminal/${sessionId}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+    }),
+
+  resize: (agentId: string, sessionId: string, cols: number, rows: number) =>
+    apiFetch<void>(`/agents/${agentId}/terminal/${sessionId}/resize`, {
+      method: 'POST',
+      body: JSON.stringify({ cols, rows }),
+    }),
+
+  getAuditLog: (agentId: string, sessionId: string) =>
+    apiFetch<{ items: { timestamp: string; type: string; content: string; user: string }[] }>(
+      `/agents/${agentId}/terminal/${sessionId}/audit`,
+    ),
+};
+
+// ── Evidence API ──
+export const evidenceApi = {
+  listBundles: (runId?: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(`/evidence${runId ? `?run_id=${runId}` : ''}`),
+
+  getBundle: (runId: string) =>
+    apiFetch<Record<string, unknown>>(`/evidence/${runId}`),
+
+  uploadBundle: (agentId: string, data: FormData) =>
+    fetch(`${API_BASE}/evidence/upload`, {
+      method: 'POST',
+      body: data,
+    }),
+
+  triggerCollection: (agentId: string, mode: 'auto' | 'script' | 'full') =>
+    apiFetch<{ run_id: string }>('/diagnostics/trigger', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, mode }),
+    }),
+
+  listScripts: (agentId: string) =>
+    apiFetch<{ items: Record<string, unknown>[] }>(`/agents/${agentId}/diagnostic/scripts`),
+
+  runScript: (agentId: string, scriptName: string) =>
+    apiFetch<{ output: string; exitCode: number }>(`/agents/${agentId}/diagnostic/scripts/${scriptName}/run`, {
+      method: 'POST',
+    }),
+};
+
 // ── Infrastructure API ──
 export const infraApi = {
   listHosts: (projectId?: string) =>

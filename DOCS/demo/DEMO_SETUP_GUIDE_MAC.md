@@ -35,18 +35,12 @@
 │   ├── docker-compose.production.yaml  ← 상용 스택
 │   └── helm/                     ← Kubernetes Helm chart
 │
-└── demo-site/                    ← 데모 앱 (별도 저장소)
-    ├── java-app/                 ← Spring Boot (port 8081)
-    ├── python-app/               ← FastAPI + RAG + 가드레일 (port 8082)
-    ├── go-app/                   ← Gin (port 8083)
-    ├── dotnet-app/               ← ASP.NET Core (port 8084)
-    ├── nodejs-app/               ← Express (port 8085)
-    ├── java-batch/               ← Spring Batch (port 8091)
-    ├── python-batch/             ← Celery + Redis (port 8092)
-    ├── k6/                       ← 부하 테스트 스크립트
-    ├── monitoring/               ← Agent 설정 + OTel Collector 설정
-    ├── docker-compose.yaml       ← 데모 인프라 (PostgreSQL, Redis, MinIO, Qdrant)
-    └── docker-compose.monitoring.yaml ← 모니터링 스택 (OTel, Prometheus, Jaeger)
+└── demo/                         ← 데모 앱 (docker-compose.e2e.yaml에서 빌드)
+    ├── java-app/                 ← Spring Boot + OTel Agent (port 8082)
+    ├── go-app/                   ← Gin + OTel SDK + pprof (port 8083, pprof 6060)
+    ├── dotnet-app/               ← ASP.NET Core + OTel SDK (port 8084)
+    ├── node-app/                 ← Express + OTel Auto (port 8085)
+    └── rag-service/              ← FastAPI + RAG + OTel (port 8000)
 ```
 
 ---
@@ -65,13 +59,15 @@
 | 6379 | Redis | Celery broker + 캐시 |
 | 6333 | Qdrant | 벡터 DB (RAG) |
 | 11434 | Ollama | 로컬 LLM |
-| 8081 | Java Spring Boot | 데모 앱 |
-| 8082 | Python FastAPI | 데모 앱 + RAG + 가드레일 |
-| 8083 | Go Gin | 데모 앱 |
-| 8084 | .NET ASP.NET Core | 데모 앱 |
-| 8085 | Node.js Express | 데모 앱 |
-| 8091 | Java Spring Batch | 배치 |
-| 8092 | Python Celery Worker | 배치 |
+| 8081 | Java Spring Boot | demo-site: OTel Java Agent 자동계측 |
+| 8082 | .NET ASP.NET Core | demo-site: OTel SDK + EventPipe |
+| 8083 | Go Gin | demo-site: OTel SDK + pprof |
+| 8084 | Python FastAPI | demo-site: OTel SDK |
+| 8085 | Node.js Express | demo-site: OTel Auto + CDP |
+| 8091 | Java Spring Batch | demo-site: 배치 |
+| 8092 | Python Celery | demo-site: 배치 |
+| 8093 | RAG Service | demo-site: LLM + Qdrant |
+| 8094 | Guardrail Service | demo-site: 입력 검증 |
 
 ---
 

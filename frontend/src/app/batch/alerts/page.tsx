@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, Tabs, Button, Modal, Input, Select } from '@/components/ui';
 import { getBatchAlertRules, getBatchAlertHistory, getBatchJobs } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { getRelativeTime } from '@/lib/utils';
 import type { BatchAlertRule, BatchAlertHistory } from '@/types/monitoring';
 import {
@@ -84,9 +85,15 @@ const EMPTY_FORM: RuleFormData = {
 };
 
 export default function BatchAlertsPage() {
-  const [rules, setRules] = useState(() => getBatchAlertRules());
-  const alertHistory = useMemo(() => getBatchAlertHistory(), []);
-  const jobs = useMemo(() => getBatchJobs(), []);
+  const demoRules = useCallback(() => getBatchAlertRules(), []);
+  const demoHistory = useCallback(() => getBatchAlertHistory(), []);
+  const demoJobs = useCallback(() => getBatchJobs(), []);
+  const { data: rulesData } = useDataSource('/batch/alerts/rules', demoRules);
+  const { data: historyData } = useDataSource('/batch/alerts/history', demoHistory);
+  const { data: jobsData } = useDataSource('/batch/jobs', demoJobs);
+  const [rules, setRules] = useState(rulesData ?? []);
+  const alertHistory = historyData ?? [];
+  const jobs = jobsData ?? [];
 
   const [activeTab, setActiveTab] = useState('rules');
   const [modalOpen, setModalOpen] = useState(false);

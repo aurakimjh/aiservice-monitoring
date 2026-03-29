@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, Select } from '@/components/ui';
 import { getBatchXLogData, getBatchJobs } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import type { EChartsOption } from 'echarts';
 import type { BatchXLogPoint } from '@/types/monitoring';
 import {
@@ -37,8 +38,10 @@ const LANG_OPTIONS = [
 
 export default function BatchXLogPage() {
   const router = useRouter();
-  const jobs = useMemo(() => getBatchJobs(), []);
-  const allData = useMemo(() => getBatchXLogData(), []);
+  const demoJobs = useCallback(() => getBatchJobs(), []);
+  const demoXLog = useCallback(() => getBatchXLogData(), []);
+  const { data: jobs } = useDataSource('/batch/jobs', demoJobs);
+  const { data: allData } = useDataSource('/batch/xlog', demoXLog);
 
   const [jobFilter, setJobFilter] = useState('');
   const [dateRange, setDateRange] = useState('7');

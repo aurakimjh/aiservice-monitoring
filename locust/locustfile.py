@@ -1,11 +1,13 @@
 """
-AITOP Phase 7'-2: 부하 테스트 — 4개 시나리오
+AITOP Phase 7'-2: 부하 테스트 — 6개 시나리오
 ==============================================
 시나리오:
-  1. APIQueryUser     — 대시보드 조회 (60% 비중)
-  2. AgentRegUser     — 에이전트 등록 (10% 비중)
-  3. HeartbeatUser    — 다수 에이전트 Heartbeat (20% 비중)
-  4. CollectTrigUser  — 수집 작업 트리거 (10% 비중)
+  1. APIQueryUser     — 대시보드 조회 (30% 비중)
+  2. AgentRegUser     — 에이전트 등록 (5% 비중)
+  3. HeartbeatUser    — 다수 에이전트 Heartbeat (10% 비중)
+  4. CollectTrigUser  — 수집 작업 트리거 (5% 비중)
+  5. DemoAppUser      — 5개 런타임 데모 앱 부하 (40% 비중) ★ 신규
+  6. DemoErrorUser    — 에러/슬로우 시나리오 (10% 비중) ★ 신규
 
 실행:
   locust -f locust/locustfile.py --host http://localhost:8080
@@ -16,8 +18,10 @@ AITOP Phase 7'-2: 부하 테스트 — 4개 시나리오
   - 200 concurrent users @ 1K RPS
   - p95 응답시간 < 2000ms (API Query)
   - Tail Sampling 보존율 검증
+  - 5개 런타임 앱 OTel 트레이스 생성 → XLog/히트맵/Jaeger에 표시
 """
 
+import os
 import random
 import string
 import time
@@ -72,7 +76,7 @@ class APIQueryUser(HttpUser):
     - 일반 SRE/운영자의 대시보드 조회 패턴
     """
 
-    weight = 60
+    weight = 30
     wait_time = between(1, 3)
 
     def on_start(self):
@@ -234,7 +238,7 @@ class AgentRegUser(HttpUser):
     - 에이전트 신규 설치 시의 API 패턴
     """
 
-    weight = 10
+    weight = 5
     wait_time = between(5, 15)
 
     def on_start(self):
@@ -341,7 +345,7 @@ class HeartbeatUser(HttpUser):
     - Collection Server의 Heartbeat 처리 성능 검증
     """
 
-    weight = 20
+    weight = 10
     wait_time = between(10, 20)  # 에이전트 Heartbeat 간격
 
     def on_start(self):
@@ -425,7 +429,7 @@ class CollectTrigUser(HttpUser):
     - 진단 보고서 생성 플로우
     """
 
-    weight = 10
+    weight = 5
     wait_time = between(10, 30)
 
     def on_start(self):
@@ -547,6 +551,134 @@ class CollectTrigUser(HttpUser):
 
 
 # ─────────────────────────────────────────────────────────
+# 시나리오 5: 데모 앱 부하 (40% 비중) ★ 신규
+# 5개 런타임 데모 앱에 REST 요청 → OTel 트레이스 생성
+# XLog, 히트맵, Jaeger에 데이터가 표시됨
+# ─────────────────────────────────────────────────────────
+
+# 데모 앱 호스트 (demo-site 저장소 포트 기준)
+# Docker 네트워크 내부: 컨테이너명 사용, 외부: localhost 사용
+# DEMO_APP_HOST 환경변수로 오버라이드 가능 (기본: localhost)
+_APP_HOST = os.environ.get("DEMO_APP_HOST", "localhost")
+
+DEMO_APPS = [
+    {"name": "java",   "host": f"http://{_APP_HOST}:8081",  "label": "Spring Boot (Java)"},
+    {"name": "dotnet", "host": f"http://{_APP_HOST}:8082",  "label": "ASP.NET (.NET)"},
+    {"name": "go",     "host": f"http://{_APP_HOST}:8083",  "label": "Gin (Go)"},
+    {"name": "python", "host": f"http://{_APP_HOST}:8084",  "label": "FastAPI (Python)"},
+    {"name": "node",   "host": f"http://{_APP_HOST}:8085",  "label": "Express (Node.js)"},
+]
+
+
+class DemoAppUser(HttpUser):
+    """
+    시나리오 5: 데모 앱 정상 부하
+    - 5개 런타임 앱에 순차적으로 REST API 호출
+    - 각 앱의 OTel 계측이 트레이스를 생성 → Jaeger/XLog에 표시
+    - /api/hello, /api/items GET/POST를 균등 분배
+    """
+
+    weight = 40
+    wait_time = between(0.5, 2)
+
+    # Locust host(Collection Server)가 아닌 데모 앱을 직접 호출하므로
+    # self.client 대신 requests를 사용하거나, 절대 URL로 호출
+    def on_start(self):
+        self.app = random.choice(DEMO_APPS)
+
+    def _call(self, method: str, path: str, name: str, **kwargs):
+        """데모 앱 직접 호출 (Locust 통계에 기록)"""
+        url = f"{self.app['host']}{path}"
+        with self.client.request(
+            method,
+            url,
+            name=f"[{self.app['name']}] {name}",
+            catch_response=True,
+            **kwargs,
+        ) as resp:
+            if resp.status_code < 500:
+                resp.success()
+            else:
+                resp.failure(f"{self.app['name']} {resp.status_code}")
+
+    @task(5)
+    def get_hello(self):
+        """인사 엔드포인트 (가장 가벼운 호출)"""
+        self._call("GET", "/api/hello", "/api/hello")
+
+    @task(4)
+    def get_items(self):
+        """아이템 목록 조회 (DB 시뮬레이션 포함)"""
+        self._call("GET", "/api/items", "/api/items [GET]")
+
+    @task(2)
+    def post_item(self):
+        """아이템 생성 (쓰기 시뮬레이션)"""
+        payload = {"name": f"item-{generate_random_id('', 6)}", "value": random.randint(1, 1000)}
+        self._call(
+            "POST", "/api/items", "/api/items [POST]",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+    @task(2)
+    def health_check(self):
+        """데모 앱 헬스체크"""
+        self._call("GET", "/health", "/health")
+
+    @task(1)
+    def switch_app(self):
+        """다른 런타임 앱으로 전환 (트래픽 분산)"""
+        self.app = random.choice(DEMO_APPS)
+
+
+# ─────────────────────────────────────────────────────────
+# 시나리오 6: 에러/슬로우 부하 (10% 비중) ★ 신규
+# /api/slow, /api/error 호출 → XLog에 빨간 점, 알림 발생
+# ─────────────────────────────────────────────────────────
+class DemoErrorUser(HttpUser):
+    """
+    시나리오 6: 데모 앱 이상 트래픽
+    - /api/slow → XLog 상단에 빨간 점 (느린 요청)
+    - /api/error → 에러율 상승 → 알림 발생
+    - 시연 중 장애 감지 데모에 필수
+    """
+
+    weight = 10
+    wait_time = between(2, 5)
+
+    def on_start(self):
+        self.app = random.choice(DEMO_APPS)
+
+    def _call(self, method: str, path: str, name: str, **kwargs):
+        url = f"{self.app['host']}{path}"
+        with self.client.request(
+            method,
+            url,
+            name=f"[{self.app['name']}] {name}",
+            catch_response=True,
+            **kwargs,
+        ) as resp:
+            # /api/error는 의도적으로 500을 반환하므로 실패로 간주하지 않음
+            resp.success()
+
+    @task(5)
+    def hit_slow_endpoint(self):
+        """느린 엔드포인트 호출 → XLog 빨간 점 생성"""
+        self._call("GET", "/api/slow", "/api/slow")
+
+    @task(3)
+    def hit_error_endpoint(self):
+        """에러 엔드포인트 호출 → 에러율 상승"""
+        self._call("GET", "/api/error", "/api/error")
+
+    @task(2)
+    def switch_app(self):
+        """다른 런타임 앱으로 전환"""
+        self.app = random.choice(DEMO_APPS)
+
+
+# ─────────────────────────────────────────────────────────
 # Locust 이벤트 훅 — 테스트 시작/종료 리포트
 # ─────────────────────────────────────────────────────────
 @events.test_start.add_listener
@@ -555,10 +687,16 @@ def on_test_start(environment, **kwargs):
     print("AITOP Phase 7'-2: 부하 테스트 시작")
     print("="*60)
     print("시나리오:")
-    print("  1. APIQueryUser     — 대시보드 조회 (60%)")
-    print("  2. AgentRegUser     — 에이전트 등록 (10%)")
-    print("  3. HeartbeatUser    — Heartbeat Storm (20%)")
-    print("  4. CollectTrigUser  — 수집 트리거 (10%)")
+    print("  1. APIQueryUser     — 대시보드 조회 (30%)")
+    print("  2. AgentRegUser     — 에이전트 등록 (5%)")
+    print("  3. HeartbeatUser    — Heartbeat Storm (10%)")
+    print("  4. CollectTrigUser  — 수집 트리거 (5%)")
+    print("  5. DemoAppUser      — 5개 런타임 앱 부하 (40%) ★")
+    print("  6. DemoErrorUser    — 에러/슬로우 시나리오 (10%) ★")
+    print("-"*60)
+    print("데모 앱 대상:")
+    for app in DEMO_APPS:
+        print(f"  - {app['label']:24s} → {app['host']}")
     print("="*60 + "\n")
 
 

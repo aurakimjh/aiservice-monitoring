@@ -15,6 +15,7 @@ import { useFleet } from '@/hooks/use-fleet';
 import { fleetApi } from '@/lib/api-client';
 import { getRelativeTime } from '@/lib/utils';
 import { getAgentConfig, getConfigHistory, getSDKDetections } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import type { AgentGroup, UpdatePhase } from '@/types/monitoring';
 import {
   Cpu,
@@ -383,9 +384,12 @@ export default function AgentsPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const { agents, jobs, plugins, groups, updateStatuses, schedules, loading, isLive, refresh } = useFleet(currentProjectId ?? undefined);
 
-  const agentConfig = getAgentConfig();
-  const configHistory = getConfigHistory();
-  const sdkDetections = getSDKDetections();
+  const demoConfig = useCallback(() => getAgentConfig(), []);
+  const demoHistory = useCallback(() => getConfigHistory(), []);
+  const demoSDK = useCallback(() => getSDKDetections(), []);
+  const { data: agentConfig } = useDataSource('/agents/config', demoConfig);
+  const { data: configHistory } = useDataSource('/agents/config/history', demoHistory);
+  const { data: sdkDetections } = useDataSource('/fleet/sdk-detections', demoSDK);
 
   const [activeTab, setActiveTab] = useState('agents');
 
@@ -547,16 +551,34 @@ export default function AgentsPage() {
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastHeartbeat)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{getRelativeTime(agent.lastCollection)}</td>
-                      {/* 25-4-2: Per-agent restart button */}
+                      {/* Per-agent actions: Terminal, Profiling, Restart */}
                       <td className="px-4 py-2.5">
-                        <button
-                          onClick={() => setRestartTarget({ id: agent.id, hostname: agent.hostname })}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--status-warning)] hover:border-[var(--status-warning)]/50 transition-colors"
-                          title="Restart agent"
-                        >
-                          <PowerOff size={10} />
-                          Restart
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/agents/${agent.id}/terminal`}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)]/50 transition-colors"
+                            title="Remote Terminal"
+                          >
+                            <Scan size={10} />
+                            Terminal
+                          </Link>
+                          <Link
+                            href={`/agents/${agent.id}/profiling`}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)]/50 transition-colors"
+                            title="Runtime Profiling"
+                          >
+                            <Cpu size={10} />
+                            Profile
+                          </Link>
+                          <button
+                            onClick={() => setRestartTarget({ id: agent.id, hostname: agent.hostname })}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--status-warning)] hover:border-[var(--status-warning)]/50 transition-colors"
+                            title="Restart agent"
+                          >
+                            <PowerOff size={10} />
+                            Restart
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

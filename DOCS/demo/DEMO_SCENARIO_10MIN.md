@@ -3,7 +3,7 @@
 > **목적**: 핵심 기능만 빠르게 임팩트 있게 전달
 > **대상 청중**: 의사결정자, 기술 리더, 구매 담당자
 > **사전 조건**: [DEMO_SETUP_GUIDE_MAC.md](./DEMO_SETUP_GUIDE_MAC.md) 환경 구성 완료 + k6 부하 발생 중
-> **최종 업데이트**: 2026-03-28
+> **최종 업데이트**: 2026-03-29
 
 ---
 
@@ -23,14 +23,22 @@
 ## 시연 전 준비사항
 
 ```bash
-# 시연 5분 전 — 부하 발생
-k6 run ~/demo/load/k6-demo.js &
+# 시연 10분 전 — 데모 서비스 기동 확인
+# demo-site 저장소의 앱들이 실행 중이어야 합니다 (C:\workspace\demo-site)
+curl -s http://localhost:8081/api/health        # Java Spring Boot OK
+curl -s http://localhost:8082/api/health        # .NET ASP.NET Core OK
+curl -s http://localhost:8083/api/health        # Go Gin OK
+curl -s http://localhost:8084/api/health        # Python FastAPI OK
+curl -s http://localhost:8085/api/health        # Node.js Express OK
+
+# 시연 5분 전 — 부하 발생 (demo-site/k6 스크립트 사용)
+k6 run C:/workspace/demo-site/k6/load-test.js &
 
 # 브라우저 탭 순서대로 열기
 # 탭 1: http://localhost:3000/xlog          (XLog 대시보드)
 # 탭 2: http://localhost:3000/heatmap       (히트맵)
 # 탭 3: http://localhost:16686             (Jaeger UI)
-# 탭 4: http://localhost:3000/fleet        (Fleet 관리)
+# 탭 4: http://localhost:3000/agents        (Fleet 관리 — 5개 런타임 서비스)
 # 탭 5: http://localhost:3000/ai-monitor   (AI 모니터링)
 
 # 화면 해상도: 1920×1080 권장, 브라우저 줌 90%
@@ -162,10 +170,21 @@ k6 run ~/demo/load/k6-demo.js &
 > **말할 내용:**
 >
 > "지금 화면에 서비스 5개가 보입니다. Java, .NET, Go, Python, Node.js.
-> 각각 상태가 실시간으로 업데이트됩니다.
+> 실제 Docker에서 5개 언어 데모 앱이 돌아가고 있고, 각각 OTel 계측이 걸려 있습니다.
+> 상태가 실시간으로 업데이트됩니다.
 >
 > Fleet 관리는 100개 서버, 50개 서비스가 있어도 이 한 화면에서 봅니다.
-> 어떤 서버가 문제인지 5초 안에 파악합니다."
+> 어떤 서버가 문제인지 5초 안에 파악합니다.
+>
+> 여기서 중요한 기능 두 가지 —
+> **원격 터미널**로 서버에 직접 접속해서 진단 명령을 실행할 수 있고,
+> **런타임 프로파일링**으로 실행 중인 프로세스에 재시작 없이 Attach해서 CPU/메모리 프로파일을 뜰 수 있습니다."
+
+**[화면 조작]**: 에이전트 목록에서 Terminal 버튼 클릭 → 원격 셸 데모
+
+> "이 원격 터미널은 RBAC 보안 정책이 적용되어 있습니다.
+> 위험한 명령은 자동 차단되고, 모든 입력/출력이 감사 로그에 기록됩니다.
+> 서버에 SSH 접속하지 않아도 됩니다."
 
 **[화면 조작]**: 서비스 중 하나 클릭 → 해당 서비스 상세 드릴다운
 

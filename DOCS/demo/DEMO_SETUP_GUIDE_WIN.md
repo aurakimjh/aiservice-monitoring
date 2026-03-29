@@ -748,18 +748,20 @@ http://localhost:5555          — Flower
 ## 10. 동작 확인 체크리스트
 
 ```
-[ ] docker compose -f docker-compose.demo-win.yaml ps — 모두 Up(healthy)
-[ ] curl http://localhost:8080/health — AITOP 서버 OK
+[ ] docker compose -f docker-compose.e2e.yaml ps — 모두 Up(healthy)
+[ ] curl http://localhost:8080/health — AITOP Collection Server OK
 [ ] curl http://localhost:3000 — 프론트엔드 OK
-[ ] curl http://localhost:8081/api/hello — Java OK
-[ ] curl http://localhost:8082/weatherforecast — .NET OK
-[ ] curl http://localhost:8083/api/hello — Go OK
-[ ] curl http://localhost:8084/api/hello — Python OK
-[ ] curl http://localhost:8085/api/hello — Node.js OK
-[ ] curl http://localhost:11434/api/tags — Ollama OK
-[ ] curl http://localhost:8093/docs — RAG 서비스 OK
-[ ] http://localhost:5555 — Flower UI OK
-[ ] AITOP 대시보드에서 5개 앱 메트릭 확인
+[ ] curl http://localhost:8000/health — Python FastAPI RAG OK
+[ ] curl http://localhost:8082/health — Java Spring Boot OK
+[ ] curl http://localhost:8083/health — Go Gin OK
+[ ] curl http://localhost:8084/health — .NET ASP.NET Core OK
+[ ] curl http://localhost:8085/health — Node.js Express OK
+[ ] curl http://localhost:6333/healthz — Qdrant VectorDB OK
+[ ] redis-cli -p 6379 ping — Redis OK
+[ ] AITOP 대시보드에서 5개 런타임 앱 메트릭 확인
+[ ] Fleet 관리 > Terminal 버튼 클릭 → 원격 셸 연결 확인
+[ ] Fleet 관리 > Profile 버튼 클릭 → 런타임 감지 확인
+[ ] Diagnostics > Evidence Collection → 번들 수집 테스트
 [ ] k6 실행 → XLog에 데이터 수신 확인
 [ ] 작업 관리자에서 메모리 총 사용량 확인 (50GB 이하 권장)
 ```

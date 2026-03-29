@@ -8,6 +8,7 @@ import { KPICard } from '@/components/monitoring';
 import { TimeSeriesChart, EChartsWrapper } from '@/components/charts';
 import { useDashboardStore } from '@/stores/dashboard-store';
 import { getDashboardTemplates, METRIC_CATALOG, executeMetricQuery } from '@/lib/demo-data';
+import { useDataSource } from '@/hooks/use-data-source';
 import { useUIStore } from '@/stores/ui-store';
 import type { WidgetConfig, WidgetType, WidgetSize, DashboardConfig, WidgetViewMode } from '@/types/monitoring';
 import { APM_WIDGET_MAP } from '@/components/dashboards/apm-widgets';
@@ -89,7 +90,8 @@ export default function DashboardBuilderPage() {
 
   const dashboards = store.dashboards;
   const activeDb = dashboards.find((d) => d.id === store.activeDashboardId) ?? dashboards[0];
-  const templates = useMemo(() => getDashboardTemplates(), []);
+  const demoTemplates = useCallback(() => getDashboardTemplates(), []);
+  const { data: templates } = useDataSource('/dashboards/templates', demoTemplates);
 
   const [viewMode, setViewMode] = useState<'builder' | 'templates' | 'list'>('builder');
   const [showAddPanel, setShowAddPanel] = useState(false);

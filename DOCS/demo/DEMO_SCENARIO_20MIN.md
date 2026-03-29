@@ -3,7 +3,7 @@
 > **목적**: 전 기능 상세 데모 — 기술 담당자·아키텍트 대상
 > **대상 청중**: CTO, 인프라 엔지니어, 개발 팀장, 아키텍트
 > **사전 조건**: [DEMO_SETUP_GUIDE_MAC.md](./DEMO_SETUP_GUIDE_MAC.md) 환경 구성 완료 + k6 부하 발생 중
-> **최종 업데이트**: 2026-03-28
+> **최종 업데이트**: 2026-03-29
 
 ---
 
@@ -16,11 +16,12 @@
 | 4:00 – 7:00 | 트레이스 + 프로파일링 + 플레임그래프 | 병목 원인 드릴다운 |
 | 7:00 – 9:30 | AI 서비스 모니터링 (LLM + RAG + 가드레일) | LLM 전용 메트릭 심층 |
 | 9:30 – 12:00 | 배치 모니터링 (Java Batch + Celery) | 배치 작업 가시성 |
-| 12:00 – 14:30 | 진단 모드 (Diagnostic Mode) | 라이브 진단 데모 |
-| 14:30 – 16:30 | Fleet 관리 + 알림 | 멀티 서비스 통합 |
-| 16:30 – 17:30 | GPU 모니터링 | GPU 코어별 실시간 |
-| 17:30 – 18:30 | AI Observability (v1.3) | AI 진단 5종 + LLM Traces + RAG Pipeline Waterfall + 토큰 비용 |
-| 18:30 – 20:00 | 클로징 + Q&A | 다음 단계 제안 |
+| 12:00 – 14:00 | 진단 모드 + 증거 수집 (Evidence Collection) | 라이브 진단 + 번들 다운로드 |
+| 14:00 – 15:30 | 원격 터미널 + 런타임 Attach | 보안 셸 + 5개 언어 프로파일링 |
+| 15:30 – 17:00 | Fleet 관리 + 알림 | 멀티 서비스 통합 |
+| 17:00 – 18:00 | GPU 모니터링 | GPU 코어별 실시간 |
+| 18:00 – 19:00 | AI Observability (v1.3) | AI 진단 5종 + LLM Traces + RAG Pipeline Waterfall + 토큰 비용 |
+| 19:00 – 20:00 | 클로징 + Q&A | 다음 단계 제안 |
 
 ---
 
@@ -28,29 +29,36 @@
 
 ```bash
 # 시연 10분 전 — 모든 서비스 기동 확인
-docker compose -f docker-compose.demo.yaml ps    # 모두 Up(healthy)
-curl -s http://localhost:8081/api/hello           # Java OK
-curl -s http://localhost:8084/api/hello           # Python OK
+# AITOP 플랫폼 (docker-compose.e2e.yaml)
+docker compose -f docker-compose.e2e.yaml ps     # 모두 Up(healthy)
+
+# demo-site 5개 언어 데모 앱 (C:\workspace\demo-site)
+curl -s http://localhost:8081/api/health          # Java Spring Boot OK
+curl -s http://localhost:8082/api/health          # .NET ASP.NET Core OK
+curl -s http://localhost:8083/api/health          # Go Gin OK
+curl -s http://localhost:8084/api/health          # Python FastAPI OK
+curl -s http://localhost:8085/api/health          # Node.js Express OK
+
+# AI 인프라 확인 (demo-site docker-compose.yaml)
 curl -s http://localhost:11434/api/tags | jq '.models|length'  # Ollama 모델 수
+curl -s http://localhost:6333/healthz             # Qdrant VectorDB OK
+redis-cli -p 6379 ping                           # Redis OK
 
-# 부하 발생 (시연 5분 전)
-k6 run ~/demo/load/k6-demo.js &
-k6 run ~/demo/load/k6-rag.js &
-
-# Celery 배치 워커 실행 확인
-curl http://localhost:5555  # Flower UI
+# 부하 발생 (시연 5분 전, demo-site/k6 스크립트)
+k6 run C:/workspace/demo-site/k6/load-test.js &
+k6 run C:/workspace/demo-site/k6/rag-load-test.js &
 
 # 브라우저 탭 순서 준비
-# 탭 1: http://localhost:3000              (AITOP 메인)
-# 탭 2: http://localhost:3000/xlog         (XLog)
-# 탭 3: http://localhost:3000/heatmap      (히트맵)
-# 탭 4: http://localhost:16686             (Jaeger)
-# 탭 5: http://localhost:3000/flame        (플레임그래프)
-# 탭 6: http://localhost:3000/ai-monitor   (AI 모니터링)
-# 탭 7: http://localhost:5555              (Flower - 배치)
-# 탭 8: http://localhost:3000/diagnostic   (진단 모드)
-# 탭 9: http://localhost:3000/fleet        (Fleet)
-# 탭 10: http://localhost:3000/gpu         (GPU)
+# 탭  1: http://localhost:3000              (AITOP 메인)
+# 탭  2: http://localhost:3000/xlog         (XLog)
+# 탭  3: http://localhost:3000/heatmap      (히트맵)
+# 탭  4: http://localhost:16686             (Jaeger)
+# 탭  5: http://localhost:3000/flame        (플레임그래프)
+# 탭  6: http://localhost:3000/ai-monitor   (AI 모니터링)
+# 탭  7: http://localhost:3000/diagnostics  (진단 + 증거수집)
+# 탭  8: http://localhost:3000/agents       (Fleet 관리 + 터미널/프로파일링)
+# 탭  9: http://localhost:3000/gpu          (GPU)
+# 탭 10: http://localhost:3000/ai/overview  (AI Observability)
 ```
 
 ---
@@ -67,9 +75,10 @@ curl http://localhost:5555  # Flower UI
 >
 > "안녕하세요. 오늘은 20분 동안 AITOP의 모든 기능을 직접 보여드리겠습니다.
 > 지금 이 환경에는:
-> - Java, .NET, Go, Python, Node.js — 5개 언어 데모 앱
-> - Ollama LLM (llama3.2:3b), RAG 서비스, AI 가드레일
-> - Java Spring Batch, Python Celery 배치 작업
+> - **Java** (Spring Boot :8082), **Go** (Gin :8083), **.NET** (ASP.NET :8084), **Node.js** (Express :8085), **Python** (FastAPI RAG :8000) — 5개 언어 데모 앱
+> - 모든 앱에 **OpenTelemetry 계측** 적용 (자동/수동)
+> - **Qdrant** VectorDB, **Redis** 캐시, **Ollama** LLM (ai-full 프로파일)
+> - Agent **원격 터미널**, **런타임 Attach 프로파일링**, **증거 수집** 기능
 > - k6로 실시간 부하 발생 중
 >
 > 실제 운영 환경과 동일하게 구성되어 있습니다.
@@ -158,7 +167,7 @@ curl http://localhost:5555  # Flower UI
 > 마이크로서비스 환경에서 요청이 5개 서비스를 거쳐가면
 > 이렇게 워터폴 뷰로 각 서비스별 소요시간을 보여줍니다."
 
-**[화면 조작]**: Jaeger에서 서비스 `demo-java-springboot` 선택 → 트레이스 목록 표시
+**[화면 조작]**: Jaeger에서 서비스 `demo-java-app` 선택 → 트레이스 목록 표시
 
 **[화면: 플레임그래프 탭으로 전환]**
 
@@ -274,16 +283,16 @@ curl http://localhost:5555  # Flower UI
 
 ---
 
-### 12:00 – 14:30 | 진단 모드 (Diagnostic Mode)
+### 12:00 – 14:00 | 진단 모드 + 증거 수집 (Evidence Collection)
 
-**[화면: 진단 모드 탭]**
+**[화면: 진단 모드 탭 — http://localhost:3000/diagnostics]**
 
 > **말할 내용:**
 >
 > "진단 모드는 AITOP의 고급 기능입니다.
 > 특정 서비스에 대해 실시간 진단을 시작할 수 있습니다."
 
-**[화면 조작]**: Java 서비스 선택 → 진단 모드 시작 버튼 클릭
+**[화면 조작]**: 진단 모드 시작 버튼 클릭
 
 > "진단이 시작되면 더 세밀한 데이터 수집이 활성화됩니다.
 > 평소에는 1초에 한 번 수집하던 걸 100ms에 한 번으로 올리고,
@@ -304,12 +313,97 @@ curl http://localhost:5555  # Flower UI
 
 **[화면 조작]**: ❌ 항목 클릭 → 해당 요청 트레이스 목록으로 자동 필터링
 
-> "타임아웃이 발생한 요청들이 바로 XLog에 표시됩니다.
-> 어떤 외부 API에서 타임아웃이 나는지 클릭 한 번으로 확인됩니다."
+> "타임아웃이 발생한 요청들이 바로 XLog에 표시됩니다."
+
+**[화면: Evidence Collection 탭으로 전환]**
+
+> **말할 내용:**
+>
+> "진단 결과만으로는 부족할 때가 있습니다.
+> 증거 수집(Evidence Collection) 기능으로 서버의 상세 진단 정보를 원클릭으로 수집합니다."
+
+**[화면 조작]**: Evidence Collection 탭 → Trigger Collection 버튼 클릭
+
+> "수집 모드는 세 가지입니다:
+> - **Auto**: OS 정보, CPU, 메모리, 디스크, 네트워크 — 기본 수집
+> - **Script**: 커스텀 진단 스크립트 실행 (Java 스레드 덤프, GPU 진단, Python 패키지 목록 등)
+> - **Full**: Auto + Script + 수동 첨부
+>
+> 지금 Script 모드로 실행하면..."
+
+**[화면 조작]**: Script 모드 선택 → Trigger → 진행 상태 표시
+
+> "진단 스크립트가 순차적으로 실행됩니다.
+> `collect_java_info.sh` — JVM 스레드 덤프, GC 로그, JAR 목록 수집
+> `collect_gpu_metrics.py` — NVIDIA GPU 전체 진단
+> 결과는 ZIP 번들로 묶여서 S3(MinIO)에 업로드됩니다."
+
+**[화면 조작]**: Evidence Bundles 테이블에서 수집 완료된 번들 클릭 → 상세 항목 펼치기
+
+> "번들을 클릭하면 수집된 항목들이 보입니다.
+> 여기서 ZIP 파일을 다운로드해서 개발팀에 전달할 수 있습니다.
+> 고객 사이트에서 장애 발생 시 이 Evidence를 원격으로 수집하면
+> SSH 접속 없이도 진단 정보를 확보할 수 있습니다."
 
 ---
 
-### 14:30 – 16:30 | Fleet 관리 + 알림
+### 14:00 – 15:30 | 원격 터미널 + 런타임 Attach
+
+**[화면: Agent 목록 → Terminal 버튼 클릭]**
+
+> **말할 내용:**
+>
+> "원격 터미널(Remote Shell) 기능입니다.
+> 서버에 SSH 접속하지 않고 AITOP 웹 UI에서 직접 명령을 실행합니다."
+
+**[화면 조작]**: Connect 버튼 클릭 → 터미널 세션 열기
+
+> "PTY 기반 실시간 셸입니다. 몇 가지 명령을 쳐보겠습니다."
+
+**[화면 조작]**: 터미널에서 다음 명령 실행
+```
+ps aux --sort=-%cpu | head -10
+docker ps
+systemctl status aitop-agent
+```
+
+> "서버 프로세스, Docker 컨테이너, 에이전트 상태를 바로 확인할 수 있습니다.
+>
+> 여기서 중요한 것은 **보안**입니다."
+
+**[화면 조작]**: `rm -rf /` 실행 → 차단 메시지 표시
+
+> "위험한 명령은 RBAC 정책으로 자동 차단됩니다.
+> 오른쪽 Audit Log 패널을 보시면 모든 명령과 출력이 기록됩니다.
+> 누가, 언제, 어떤 명령을 실행했는지 추적이 가능합니다.
+> 감사 로그는 다운로드할 수 있어서 보안 감사에 바로 활용됩니다."
+
+**[화면: Runtime Attach 프로파일링 — /agents/{id}/profiling]**
+
+> **말할 내용:**
+>
+> "런타임 Attach 프로파일링입니다.
+> 실행 중인 프로세스에 **재시작 없이** 붙어서 CPU, 메모리, 스레드 프로파일을 뜹니다."
+
+**[화면 조작]**: 프로세스 목록 확인 — Java, Python, Go, .NET, Node.js 5개 프로세스 표시
+
+> "지금 5개 런타임이 감지되었습니다. 각 언어별 Attach 방식이 다릅니다:
+> - **Java**: JVM Attach API (`VirtualMachine.attach`)
+> - **Python**: py-spy 외부 샘플링
+> - **Go**: pprof HTTP 폴링 (포트 6060)
+> - **.NET**: EventPipe IPC
+> - **Node.js**: Chrome DevTools Protocol (V8 Inspector)
+>
+> Java 프로세스를 선택해서 CPU 프로파일을 30초간 수집해보겠습니다."
+
+**[화면 조작]**: Java 프로세스 클릭 → CPU 선택 → Start Profiling
+
+> "Attach 모드는 앱 재시작 없이 오버헤드 1-3%로 프로파일링합니다.
+> 프로덕션 환경에서 안전하게 사용할 수 있습니다."
+
+---
+
+### 15:30 – 17:00 | Fleet 관리 + 알림
 
 **[화면: Fleet 탭]**
 
@@ -353,7 +447,7 @@ curl http://localhost:5555  # Flower UI
 
 ---
 
-### 16:30 – 18:30 | GPU 모니터링
+### 17:00 – 18:00 | GPU 모니터링
 
 **[화면: GPU 모니터링 탭]**
 
@@ -379,7 +473,7 @@ curl http://localhost:5555  # Flower UI
 
 ---
 
-### 17:30 – 18:30 | AI Observability (v1.3)
+### 18:00 – 19:00 | AI Observability (v1.3)
 
 **[화면: /ai/overview → AI Overview Dashboard]**
 
@@ -424,7 +518,7 @@ curl http://localhost:5555  # Flower UI
 
 ---
 
-### 18:30 – 20:00 | 클로징
+### 19:00 – 20:00 | 클로징
 
 **[화면: AITOP 메인 대시보드]**
 
@@ -434,12 +528,13 @@ curl http://localhost:5555  # Flower UI
 >
 > **개발팀에게 드리는 가치:**
 > - XLog + 플레임그래프로 장애 원인 분석 시간 **2시간 → 15분**
-> - 프로덕션 프로파일링 상시 가용 (재배포 불필요)
+> - **런타임 Attach 프로파일링** — 재시작 없이 Java/Python/Go/.NET/Node.js 프로파일링
 > - 5개 언어 모두 동일한 관찰 경험
 >
 > **운영팀에게 드리는 가치:**
 > - AI 서비스 전용 지표 (TTFT, TPS, 토큰 비용)
-> - 배치 작업 진행 상황 실시간 추적
+> - **원격 터미널** — SSH 없이 웹에서 서버 진단, RBAC + 감사 로그
+> - **증거 수집(Evidence Collection)** — 진단 번들 자동 생성, ZIP 다운로드
 > - Fleet 통합 관리 — 서버 100개도 한 화면에서
 > - **커스텀 대시보드 빌더** — 팀별 맞춤 대시보드 + APM 가젯 8종
 >
@@ -520,7 +615,7 @@ curl http://localhost:5555  # Flower UI
 
 ```bash
 # 1. Java 앱의 /api/error 엔드포인트에 집중 부하
-k6 run -u 100 -d 30s ~/demo/load/k6-error.js
+k6 run -u 100 -d 30s C:/workspace/demo-site/k6/error-injection.js
 
 # 2. AITOP 알림 발생 확인 (에러율 급등)
 # 3. XLog에서 에러 요청 클릭
@@ -532,11 +627,11 @@ k6 run -u 100 -d 30s ~/demo/load/k6-error.js
 
 ```bash
 # Qdrant 일시 중단 → RAG 서비스 응답 시간 폭증 재현
-docker compose -f docker-compose.demo.yaml pause qdrant
+docker compose -f docker-compose.e2e.yaml pause qdrant
 
 # AITOP에서 RAG 서비스 TTFT 급등 + 알림 발생 확인
 # qdrant 재시작 → 회복 확인
-docker compose -f docker-compose.demo.yaml unpause qdrant
+docker compose -f docker-compose.e2e.yaml unpause qdrant
 ```
 
 ---

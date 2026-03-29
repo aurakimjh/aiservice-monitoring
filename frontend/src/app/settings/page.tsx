@@ -171,25 +171,28 @@ export default function SettingsPage() {
 // Data Source Settings — 데이터 소스 모드 전환 UI
 // ═══════════════════════════════════════════════════════════════
 
-const DATA_MODES: { id: DataSourceMode; label: string; desc: string; icon: React.ReactNode; color: string }[] = [
+const DATA_MODES: { id: DataSourceMode; label: string; desc: string; detail: string; icon: React.ReactNode; color: string }[] = [
   {
     id: 'auto',
     label: 'Auto (Recommended)',
-    desc: 'API 연결을 시도하고, 실패 시 자동으로 데모 데이터로 전환합니다. 에이전트가 설치되면 실데이터가 자동으로 표시됩니다.',
+    desc: '실데이터를 먼저 시도하고, 연결이 안 되면 자동으로 데모 데이터를 보여줍니다.',
+    detail: '처음 설치하거나 일부 서비스만 연결된 상태에서 가장 적합합니다. 예를 들어 Prometheus는 연결되어 있지만 Jaeger는 아직 설치 전이라면, 메트릭 위젯은 실데이터(초록 LIVE 배지)로, 트레이스 위젯은 샘플 데이터(노란 DEMO 배지)로 표시됩니다. 에이전트나 서비스를 추가 연결하면 해당 위젯이 자동으로 LIVE로 전환됩니다.',
     icon: <Wifi size={16} />,
     color: '#58A6FF',
   },
   {
     id: 'live',
     label: 'Live Only',
-    desc: 'Collection Server + Agent의 실데이터만 표시합니다. 연결이 없으면 에러를 표시합니다. 프로덕션 운영 환경에 적합합니다.',
+    desc: '실제 서버에서 수집한 데이터만 표시합니다. 연결이 안 되면 빈 화면이 나옵니다.',
+    detail: '운영 환경에서 사용하세요. Collection Server, Agent, Prometheus, Jaeger 등이 모두 연결된 상태에서 정확한 실데이터만 보고 싶을 때 선택합니다. 데모 데이터가 절대 섞이지 않으므로 화면에 보이는 모든 수치가 실제 시스템 상태입니다. 연결이 끊기면 에러 메시지가 표시됩니다.',
     icon: <Radio size={16} />,
     color: '#3FB950',
   },
   {
     id: 'demo',
     label: 'Demo Mode',
-    desc: '인프라 연동 없이 내장 샘플 데이터를 표시합니다. 영업 시연, UI 개발, 고객 교육에 적합합니다.',
+    desc: '서버 연결 없이 내장된 샘플 데이터로 모든 화면을 바로 볼 수 있습니다.',
+    detail: '영업 시연, UI 확인, 신규 사용자 교육에 적합합니다. 백엔드 서버가 실행되지 않아도 모든 대시보드, 차트, 테이블이 샘플 데이터로 채워집니다. 이 모드에서 보이는 데이터는 실제 시스템과 무관한 고정된 예시 데이터입니다.',
     icon: <AlertTriangle size={16} />,
     color: '#D29922',
   },
@@ -204,7 +207,8 @@ function DataSourceSettings() {
       <Card padding="lg">
         <h2 className="text-sm font-medium text-[var(--text-primary)] mb-1">Data Source Mode</h2>
         <p className="text-xs text-[var(--text-muted)] mb-4">
-          대시보드에 표시되는 데이터의 출처를 선택합니다. Auto 모드에서는 연결 가능한 소스는 실데이터를, 아닌 소스는 데모 데이터를 자동으로 혼합합니다.
+          대시보드에 표시되는 데이터를 어디에서 가져올지 선택합니다.
+          각 위젯마다 데이터 출처가 <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded bg-[#3FB950]/10 text-[#3FB950] text-[10px] font-medium"><span className="w-1 h-1 rounded-full bg-[#3FB950]" />LIVE</span> 또는 <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded bg-[#D29922]/10 text-[#D29922] text-[10px] font-medium"><span className="w-1 h-1 rounded-full bg-[#D29922]" />DEMO</span> 배지로 표시됩니다.
         </p>
 
         <div className="space-y-2">
@@ -219,7 +223,7 @@ function DataSourceSettings() {
               }`}
             >
               <div className="flex items-center gap-3">
-                <div style={{ color: mode.color }}>{mode.icon}</div>
+                <div className="shrink-0" style={{ color: mode.color }}>{mode.icon}</div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-medium text-[var(--text-primary)]">{mode.label}</span>
@@ -229,10 +233,11 @@ function DataSourceSettings() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{mode.desc}</p>
+                  <p className="text-[11px] font-medium text-[var(--text-secondary)] mt-0.5">{mode.desc}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1 leading-relaxed">{mode.detail}</p>
                 </div>
                 <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
                     currentMode === mode.id ? 'border-[var(--accent-primary)]' : 'border-[var(--border-default)]'
                   }`}
                 >
@@ -247,24 +252,27 @@ function DataSourceSettings() {
       </Card>
 
       <Card padding="lg">
-        <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Data Source Indicators</h2>
+        <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">배지 읽는 법</h2>
         <div className="space-y-3 text-[12px]">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#3FB950]/10 text-[#3FB950] text-[10px] font-medium">
+          <div className="flex items-start gap-3">
+            <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#3FB950]/10 text-[#3FB950] text-[10px] font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3FB950]" /> LIVE
             </span>
-            <span className="text-[var(--text-secondary)]">Agent/Prometheus/Jaeger 연동 실데이터</span>
+            <span className="text-[var(--text-secondary)]">이 위젯은 실제 서버(Prometheus, Jaeger, Collection Server)에서 수집한 진짜 데이터를 보여주고 있습니다.</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#D29922]/10 text-[#D29922] text-[10px] font-medium">
+          <div className="flex items-start gap-3">
+            <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#D29922]/10 text-[#D29922] text-[10px] font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-[#D29922]" /> DEMO
             </span>
-            <span className="text-[var(--text-secondary)]">내장 샘플 데이터 (연동 안 됨)</span>
+            <span className="text-[var(--text-secondary)]">이 위젯은 서버 연결이 안 되어 내장된 샘플 데이터를 보여주고 있습니다. 해당 서비스를 연결하면 자동으로 LIVE로 바뀝니다.</span>
           </div>
-          <p className="text-[var(--text-muted)] mt-2">
-            각 가젯, KPI 카드, 차트 우측 상단에 배지가 표시됩니다.
-            하단 상태바에서 현재 페이지의 Live/Demo 데이터 카운트를 확인할 수 있습니다.
-          </p>
+          <div className="mt-2 px-3 py-2 rounded bg-[var(--bg-tertiary)] border border-[var(--border-default)]">
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+              <strong>확인 방법:</strong> 각 카드, 차트, 테이블의 오른쪽 상단에 작은 배지가 붙어 있습니다.
+              화면 맨 아래 상태바에서는 현재 페이지에서 LIVE 위젯과 DEMO 위젯이 각각 몇 개인지 숫자로 보여줍니다.
+              모든 위젯이 LIVE가 되면 데모 데이터 없이 완전한 실데이터 모니터링 상태입니다.
+            </p>
+          </div>
         </div>
       </Card>
     </div>
