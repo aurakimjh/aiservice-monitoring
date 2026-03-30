@@ -207,10 +207,15 @@ func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {
 // ── S2-6: Dependency graph ────────────────────────────────────────────────────
 
 func (h *Handler) handleDeps(w http.ResponseWriter, r *http.Request) {
-	edges := h.store.DependencyGraph()
+	// Service-to-service edges from trace parent-child.
+	svcEdges := h.store.DependencyGraph()
+	// Service-to-database edges from db.* span attributes (E3-1 enhancement).
+	dbEdges := h.store.ServiceDBEdges()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"edges": edges,
-		"count": len(edges),
+		"edges":   svcEdges,
+		"dbEdges": dbEdges,
+		"count":   len(svcEdges) + len(dbEdges),
 	})
 }
 

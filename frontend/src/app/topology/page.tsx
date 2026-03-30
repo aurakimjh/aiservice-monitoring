@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge, DataSourceBadge, Tabs } from '@/components/ui';
 import { KPICard } from '@/components/monitoring';
@@ -24,6 +25,7 @@ import {
   Server,
   Layers,
   FolderOpen,
+  X,
 } from 'lucide-react';
 
 const CHANGE_TYPE_CONFIG: Record<
@@ -71,6 +73,13 @@ const DRILL_TABS = [
 export default function TopologyPage() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const [drillLevel, setDrillLevel] = useState<DrillLevel>('service');
+
+  // E3-3: Edge click → trace list between two services
+  const [selectedEdge, setSelectedEdge] = useState<{ source: string; target: string } | null>(null);
+
+  const handleEdgeClick = useCallback((source: string, target: string) => {
+    setSelectedEdge({ source, target });
+  }, []);
 
   const demoTopology = useCallback(() => getDiscoveredTopology(), []);
   const demoChanges = useCallback(() => getTopologyChanges(), []);
@@ -285,12 +294,41 @@ export default function TopologyPage() {
             </div>
           </div>
         </CardHeader>
-        <ServiceMap nodes={drillNodes} edges={drillEdges} />
+        <ServiceMap nodes={drillNodes} edges={drillEdges} onEdgeClick={handleEdgeClick} />
         <div className="mt-2 pt-2 border-t border-[var(--border-muted)] text-[10px] text-[var(--text-muted)] px-4 pb-2">
-          {drillLevel === 'service' && 'Node = Service · Edge = API call dependency · Size = throughput'}
+          {drillLevel === 'service' && 'Node = Service · Edge = API call (클릭 가능) · Size = throughput'}
           {drillLevel === 'host' && 'Node = Host (Agent) · Edge = network connection · Color = health status'}
           {drillLevel === 'instance' && 'Node = Service instance (host:port) · Edge = same-service instances'}
         </div>
+
+        {/* E3-3: Edge click → trace list between two services */}
+        {selectedEdge && (
+          <div className="mx-4 mb-4 mt-2 p-3 border border-[var(--border-default)] rounded-[var(--radius-md)] bg-[var(--bg-tertiary)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-[var(--text-primary)]">
+                  {selectedEdge.source} → {selectedEdge.target}
+                </span>
+                <span className="text-[var(--text-muted)]">트레이스 조회</span>
+              </div>
+              <button onClick={() => setSelectedEdge(null)} className="p-0.5 hover:bg-[var(--bg-overlay)] rounded">
+                <X size={12} className="text-[var(--text-muted)]" />
+              </button>
+            </div>
+            <Link
+              href={`/traces?service=${encodeURIComponent(selectedEdge.source)}`}
+              className="text-xs text-[var(--accent-primary)] hover:underline mr-4"
+            >
+              {selectedEdge.source} 트레이스 보기 →
+            </Link>
+            <Link
+              href={`/traces?service=${encodeURIComponent(selectedEdge.target)}`}
+              className="text-xs text-[var(--accent-primary)] hover:underline"
+            >
+              {selectedEdge.target} 트레이스 보기 →
+            </Link>
+          </div>
+        )}
       </Card>
 
       {/* Topology Changes Panel */}

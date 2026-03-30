@@ -14,6 +14,7 @@ interface ServiceMapProps {
   layerFilter?: ServiceLayer[];
   className?: string;
   onNodeClick?: (nodeId: string) => void;
+  onEdgeClick?: (source: string, target: string) => void; // E3-3
 }
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -42,7 +43,7 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
   p95: number;
 }
 
-export function ServiceMap({ nodes, edges, layerFilter, className, onNodeClick }: ServiceMapProps) {
+export function ServiceMap({ nodes, edges, layerFilter, className, onNodeClick, onEdgeClick }: ServiceMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node?: SimNode; edge?: SimEdge } | null>(null);
@@ -152,7 +153,13 @@ export function ServiceMap({ nodes, edges, layerFilter, className, onNodeClick }
       .on('mouseenter', (event, d) => {
         setTooltip({ x: event.clientX, y: event.clientY, edge: d });
       })
-      .on('mouseleave', () => setTooltip(null));
+      .on('mouseleave', () => setTooltip(null))
+      // E3-3: Edge click → show traces between two services
+      .on('click', (_, d) => {
+        const src = typeof d.source === 'object' ? (d.source as SimNode).id : d.source;
+        const tgt = typeof d.target === 'object' ? (d.target as SimNode).id : d.target;
+        onEdgeClick?.(src as string, tgt as string);
+      });
 
     // Nodes
     const nodeGroup = g.append('g').attr('class', 'nodes');
@@ -224,7 +231,7 @@ export function ServiceMap({ nodes, edges, layerFilter, className, onNodeClick }
     });
 
     return () => simulation.stop();
-  }, [nodes, edges, layerFilter, onNodeClick]);
+  }, [nodes, edges, layerFilter, onNodeClick, onEdgeClick]);
 
   useEffect(() => {
     const cleanup = draw();

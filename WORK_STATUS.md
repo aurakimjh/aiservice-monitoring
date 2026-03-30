@@ -136,10 +136,10 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| E3-1 | 자체 Dependency Graph 엔진 (Trace 기반) | ☐ | Jaeger 의존 제거 |
-| E3-2 | Service Map 시각화 (트래픽 두께, 에러 색상, DB 노드) | ☐ | |
-| E3-3 | 화살표 클릭 → 두 서비스 간 트레이스 목록 | ☐ | |
-| E3-4 | 시간 범위 변경 시 토폴로지 변화 표시 | ☐ | |
+| E3-1 | 자체 Dependency Graph 엔진 (Trace 기반) | ✅ | ServiceIndex parent-child 기반, Jaeger 의존 없음. DB 엣지 추가 |
+| E3-2 | Service Map 시각화 (트래픽 두께, 에러 색상, DB 노드) | ✅ | D3 force sim, RPM→크기/두께, errorRate→색상, data 레이어 DB 노드 |
+| E3-3 | 화살표 클릭 → 두 서비스 간 트레이스 목록 | ✅ | onEdgeClick 핸들러 + 서비스별 트레이스 링크 패널 |
+| E3-4 | 시간 범위 변경 시 토폴로지 변화 표시 | ✅ | isNew/isRemoved 플래그 + 변경 이력 패널 (기존 구현 확인) |
 
 ### WS-2.4 Business Transaction (Phase E4) — 1주
 
