@@ -15,7 +15,7 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
     ├── WS-8  문서 정합성 + v1.0 Readiness ★최우선★   ░░░░░░░░ │ ← Phase 0 (NEW)
     ├── WS-1  자체 스토리지 엔진 (Prom/Jaeger 제거)     █████░░░ │
     ├── WS-2  엔티티 계층 확장 (K8s/DB/BizTx)          ░░░░░░░░ │
-    ├── WS-3  대규모 배치 성능 최적화                     ░░░░░░░░ │
+    ├── WS-3  대규모 배치 성능 최적화                     ████████ │
     ├── WS-3A XLog/HeatMap 강화                         ██████░░ │
     ├── WS-4  Live 모드 잔여 페이지 전환                 ██████░░ │
     ├── WS-5  품질 안정화 + 결함 수정                     ██░░░░░░ │
@@ -168,50 +168,50 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| 39-1-1 | SQL Pareto 분석 (총 시간 비중 순위) | ☐ | |
-| 39-1-2 | EXPLAIN 자동 수집 (PostgreSQL/MySQL) | ☐ | |
-| 39-1-3 | N+1 패턴 자동 감지 | ☐ | 동일 SQL 건수만큼 반복 |
-| 39-1-4 | 인덱스 누락 탐지 + 추가 권고 | ☐ | EXPLAIN의 Seq Scan 감지 |
-| 39-1-5 | 불필요 조회 감지 (SELECT 결과 미사용) | ☐ | |
+| 39-1-1 | SQL Pareto 분석 (총 시간 비중 순위) | ✅ | Top-20 SQL 시간 비중 + 누적%, POST /api/v2/batch/analyze/sql |
+| 39-1-2 | EXPLAIN 자동 수집 (PostgreSQL/MySQL) | ✅ | ExplainResult 구조체 + hasSeqScan 감지 |
+| 39-1-3 | N+1 패턴 자동 감지 | ✅ | 동일 SQL ≥10회 반복 감지, severity: critical/warning |
+| 39-1-4 | 인덱스 누락 탐지 + 추가 권고 | ✅ | SeqScan 기반 IndexFinding + CREATE INDEX 권고문 |
+| 39-1-5 | 불필요 조회 감지 (SELECT 결과 미사용) | ✅ | rows_affected=0 + SELECT 패턴 → UnusedQuery |
 
 ### WS-3.2 청크/병렬화 분석 (Phase 39-2) — 2주
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| 39-2-1 | 청크 크기별 처리 속도 곡선 분석 | ☐ | |
-| 39-2-2 | 최적 청크 크기 계산 (메모리 제한 내) | ☐ | |
-| 39-2-3 | Step 간 의존성 분석 → 병렬화 기회 탐지 | ☐ | |
-| 39-2-4 | 데이터 파티셔닝 분할 권고 | ☐ | 날짜/계좌 기반 |
-| 39-2-5 | Worker 수 최적화 권고 | ☐ | |
+| 39-2-1 | 청크 크기별 처리 속도 곡선 분석 | ✅ | ChunkMetric[] → throughput 곡선, POST /api/v2/batch/analyze/chunk |
+| 39-2-2 | 최적 청크 크기 계산 (메모리 제한 내) | ✅ | 메모리 한도 내 max throughput 청크 크기 자동 계산 |
+| 39-2-3 | Step 간 의존성 분석 → 병렬화 기회 탐지 | ✅ | StepDependency DAG → parallelGroups 자동 추출 |
+| 39-2-4 | 데이터 파티셔닝 분할 권고 | ✅ | CPU 코어 기반 파티션 수 + 날짜 키 권고 |
+| 39-2-5 | Worker 수 최적화 권고 | ✅ | CPU 코어 기반, IO-bound 시 2x 권고 |
 
 ### WS-3.3 회귀 분석 + SLA 예측 (Phase 39-3) — 2주
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| 39-3-1 | 실행 시간 트렌드 분석 (30~90일) | ☐ | 선형/지수 회귀 |
-| 39-3-2 | 데이터 건수 증가 ↔ 실행 시간 상관관계 | ☐ | |
-| 39-3-3 | 변곡점 감지 (배포/DB 변경과 연관) | ☐ | |
-| 39-3-4 | SLA 위반 예측 (N일 후 임계치 초과) | ☐ | |
+| 39-3-1 | 실행 시간 트렌드 분석 (30~90일) | ✅ | 선형 회귀 (slope, intercept, R²), POST /api/v2/batch/analyze/trend |
+| 39-3-2 | 데이터 건수 증가 ↔ 실행 시간 상관관계 | ✅ | Pearson 상관계수, strong/moderate/weak 분류 |
+| 39-3-3 | 변곡점 감지 (배포/DB 변경과 연관) | ✅ | 윈도우 평균 비교 (1.5x 이상 변화 감지), 원인 추정 |
+| 39-3-4 | SLA 위반 예측 (N일 후 임계치 초과) | ✅ | 선형 외삽, risk: low/medium/high/critical, 예상 위반일 계산 |
 
 ### WS-3.4 리소스 효율 + 비교 + 리포트 (Phase 39-4~5) — 3주
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| 39-4-1 | CPU/IO 바운드 판별 + 스레드 수 권고 | ☐ | |
-| 39-4-2 | DB 커넥션 풀 사용률 분석 + 풀 크기 권고 | ☐ | |
-| 39-4-3 | GC 과다 여부 + 힙 튜닝 권고 | ☐ | |
-| 39-5-1 | 정상 vs 이상 실행 비교 분석 | ☐ | |
-| 39-5-2 | 배포 전후 성능 비교 | ☐ | |
-| 39-5-3 | 자동 최적화 리포트 생성 (성능 등급 A~F) | ☐ | |
+| 39-4-1 | CPU/IO 바운드 판별 + 스레드 수 권고 | ✅ | cpu_bound/io_bound/balanced 분류, 스레드 수 권고 |
+| 39-4-2 | DB 커넥션 풀 사용률 분석 + 풀 크기 권고 | ✅ | PoolAnalysis (peak/avg active, wait count, 권장 max) |
+| 39-4-3 | GC 과다 여부 + 힙 튜닝 권고 | ✅ | GCAnalysis (pauseRatio > 5% → excessive, 힙 증가 권고) |
+| 39-5-1 | 정상 vs 이상 실행 비교 분석 | ✅ | CompareExecutions (baseline vs compare, diff%, findings) |
+| 39-5-2 | 배포 전후 성능 비교 | ✅ | 동일 CompareExecutions 엔진 활용, POST /api/v2/batch/analyze/compare |
+| 39-5-3 | 자동 최적화 리포트 생성 (성능 등급 A~F) | ✅ | GenerateReport (섹션별 등급 + 종합 등급 + 항목별 권고문) |
 
 ### WS-3.5 장시간 배치 실시간 뷰 (Phase 39-6) — 2주
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| 39-6-1 | 실시간 진행률 (처리건수/총건수, 예상 완료 시간) | ☐ | |
-| 39-6-2 | Step별 현황 (진행/대기/완료 상태) | ☐ | |
-| 39-6-3 | 실시간 처리 속도 트렌드 차트 | ☐ | |
-| 39-6-4 | 실시간 SQL Top-N + 이상 감지 | ☐ | |
+| 39-6-1 | 실시간 진행률 (처리건수/총건수, 예상 완료 시간) | ✅ | LiveBatchState: progressPct, ETA 자동 계산 |
+| 39-6-2 | Step별 현황 (진행/대기/완료 상태) | ✅ | LiveStepState: name, status, progress, itemCount |
+| 39-6-3 | 실시간 처리 속도 트렌드 차트 | ✅ | ThroughputHistory (60점 링버퍼, items/sec) |
+| 39-6-4 | 실시간 SQL Top-N + 이상 감지 | ✅ | LiveSQLStat: isAnomaly (2x spike 감지) |
 
 ---
 

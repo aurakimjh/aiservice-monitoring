@@ -28,6 +28,7 @@ import (
 	"strconv"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/batchanalyzer"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/compat"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
 	k8smod "github.com/aurakimjh/aiservice-monitoring/agent/internal/k8s"
@@ -614,6 +615,7 @@ func main() {
 		"/api/v2/alerts",
 		"/api/v2/databases",
 		"/api/v2/biztx",
+		"/api/v2/batch/",
 		"/api/v2/k8s/",
 		// WS-1.5 External integration (unauthenticated for scrape/push)
 		"/api/v1/prom/",
@@ -705,6 +707,10 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// ── K8s Dashboard API (WS-2.2) ────────────────────────────────────────
 	k8sHandler := k8smod.NewHandler(k8sStr, logger)
 	k8sHandler.Register(mux)
+
+	// ── Batch Performance Analysis API (WS-3) ─────────────────────────────
+	batchAnalyzerH := batchanalyzer.NewHandler(logger)
+	batchAnalyzerH.Register(mux)
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
 
