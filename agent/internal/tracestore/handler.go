@@ -39,6 +39,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v2/traces", h.handleSearch)
 	mux.HandleFunc("GET /api/v2/services", h.handleServices)
 	mux.HandleFunc("GET /api/v2/services/deps", h.handleDeps)
+	// E1-1: Database entity endpoints
+	mux.HandleFunc("GET /api/v2/databases", h.handleListDatabases)
+	mux.HandleFunc("GET /api/v2/databases/{id}/slow-queries", h.handleSlowQueries)
+	mux.HandleFunc("GET /api/v2/databases/{id}", h.handleGetDatabase)
+	mux.HandleFunc("GET /api/v2/services/{name}/databases", h.handleServiceDatabases)
+	mux.HandleFunc("GET /api/v2/services/db-edges", h.handleServiceDBEdges)
 }
 
 // ── S2-3: Search traces ───────────────────────────────────────────────────────
@@ -214,6 +220,66 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	ring := h.store.RingStats()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ring": ring,
+	})
+}
+
+// ── E1-1: Database entity API handlers ────────────────────────────────────────
+
+func (h *Handler) handleListDatabases(w http.ResponseWriter, r *http.Request) {
+	dbs := h.store.Databases()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"databases": dbs,
+		"count":     len(dbs),
+	})
+}
+
+func (h *Handler) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeErr(w, http.StatusBadRequest, "database id required")
+		return
+	}
+	db := h.store.GetDatabase(id)
+	if db == nil {
+		writeErr(w, http.StatusNotFound, "database not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, db)
+}
+
+func (h *Handler) handleSlowQueries(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	queries := h.store.SlowQueries(id, limit)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"queries": queries,
+		"count":   len(queries),
+	})
+}
+
+func (h *Handler) handleServiceDatabases(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeErr(w, http.StatusBadRequest, "service name required")
+		return
+	}
+	dbs := h.store.DatabasesForService(name)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"databases": dbs,
+		"count":     len(dbs),
+	})
+}
+
+func (h *Handler) handleServiceDBEdges(w http.ResponseWriter, r *http.Request) {
+	edges := h.store.ServiceDBEdges()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"edges": edges,
+		"count": len(edges),
 	})
 }
 

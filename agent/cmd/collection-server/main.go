@@ -601,6 +601,7 @@ func main() {
 		"/api/v2/services",
 		"/api/v2/metrics",
 		"/api/v2/alerts",
+		"/api/v2/databases",
 		// WS-1.5 External integration (unauthenticated for scrape/push)
 		"/api/v1/prom/",
 		"/api/v1/export/",

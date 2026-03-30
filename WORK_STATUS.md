@@ -115,11 +115,11 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| E1-1 | Database 엔티티 모델 + /api/v1/databases API | ☐ | PG/MySQL/Redis/Qdrant/Kafka |
-| E1-2 | Trace span db.*/server.address에서 자동 감지 | ☐ | Service↔DB N:M 관계 |
-| E1-3 | DB Detail 대시보드 (Connection Pool, Slow Queries, Lock) | ☐ | |
-| E1-4 | Service Detail에 DB 탭 추가 | ☐ | |
-| E1-5 | Dependency Graph에 DB 노드 추가 | ☐ | |
+| E1-1 | Database 엔티티 모델 + /api/v2/databases API | ✅ | DatabaseIndex + CRUD API 5개 엔드포인트 |
+| E1-2 | Trace span db.*/server.address에서 자동 감지 | ✅ | db.system/db.name/server.address 파싱, Service↔DB N:M |
+| E1-3 | DB Detail 대시보드 (Connection Pool, Slow Queries, Lock) | ✅ | /database 페이지 v2 API 연결, slow-queries API |
+| E1-4 | Service Detail에 DB 탭 추가 | ✅ | Databases 탭 + 연결된 DB 테이블 (system, endpoint, queries, latency) |
+| E1-5 | Dependency Graph에 DB 노드 추가 | ✅ | data 레이어에 DB 노드 + sql/redis 프로토콜 엣지 (기존 토폴로지 활용) |
 
 ### WS-2.2 Kubernetes 통합 (Phase E2) — 3주
 

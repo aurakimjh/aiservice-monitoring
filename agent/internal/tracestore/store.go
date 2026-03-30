@@ -53,6 +53,7 @@ type Store struct {
 	ring    *RingBuffer
 	warm    *WarmStore
 	svcIdx  *ServiceIndex
+	dbIdx   *DatabaseIndex // E1-2: Database auto-detection
 	archive *Archiver
 	logger  *slog.Logger
 }
@@ -78,6 +79,7 @@ func New(cfg Config, logger *slog.Logger) (*Store, error) {
 		ring:    NewRingBuffer(),
 		warm:    warm,
 		svcIdx:  NewServiceIndex(),
+		dbIdx:   NewDatabaseIndex(),
 		archive: archiver,
 		logger:  logger,
 	}, nil
@@ -94,6 +96,9 @@ func (s *Store) Ingest(spans []*otlp.Span) {
 
 	// Service index: extract services and dependency edges.
 	s.svcIdx.Ingest(spans)
+
+	// Database index: extract database entities from db.* span attributes.
+	s.dbIdx.Ingest(spans)
 
 	// Warm tier: persist to SQLite (best-effort; log errors but don't block).
 	if err := s.warm.Write(spans); err != nil {
@@ -235,6 +240,23 @@ func (s *Store) Services() []*ServiceInfo { return s.svcIdx.Services() }
 
 // DependencyGraph returns the service dependency graph.
 func (s *Store) DependencyGraph() []DependencyEdge { return s.svcIdx.DependencyGraph() }
+
+// ── Database entity queries (E1-1, E1-2) ─────────────────────────────────────
+
+// Databases returns all auto-detected databases.
+func (s *Store) Databases() []*DatabaseInfo { return s.dbIdx.Databases() }
+
+// GetDatabase returns a single database by ID.
+func (s *Store) GetDatabase(id string) *DatabaseInfo { return s.dbIdx.GetDatabase(id) }
+
+// DatabasesForService returns databases connected to a service.
+func (s *Store) DatabasesForService(svc string) []*DatabaseInfo { return s.dbIdx.DatabasesForService(svc) }
+
+// SlowQueries returns recent slow queries, optionally filtered by database ID.
+func (s *Store) SlowQueries(dbID string, limit int) []SlowQuery { return s.dbIdx.SlowQueries(dbID, limit) }
+
+// ServiceDBEdges returns all Service → Database dependency edges.
+func (s *Store) ServiceDBEdges() []ServiceDBEdge { return s.dbIdx.ServiceDBEdges() }
 
 // RingStats returns hot-tier buffer statistics.
 func (s *Store) RingStats() RingStats { return s.ring.Stats() }

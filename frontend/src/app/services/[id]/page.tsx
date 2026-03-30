@@ -37,7 +37,7 @@ import {
   Search,
 } from 'lucide-react';
 
-import { Server, Layers } from 'lucide-react';
+import { Server, Layers, Database } from 'lucide-react';
 
 // Instance type from API
 interface InstanceItem {
@@ -64,6 +64,7 @@ const SERVICE_TABS = [
   { id: 'xlog', label: 'XLog', icon: <Search size={13} /> },
   { id: 'traces', label: 'Traces', icon: <GitBranch size={13} /> },
   { id: 'errors', label: 'Errors', icon: <AlertTriangle size={13} /> },
+  { id: 'databases', label: 'Databases', icon: <Database size={13} /> },
   { id: 'dependencies', label: 'Dependencies', icon: <Network size={13} /> },
   { id: 'deployments', label: 'Deployments', icon: <Rocket size={13} /> },
 ];
@@ -493,6 +494,57 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             <AlertTriangle size={32} className="mx-auto text-[var(--text-muted)]" />
             <div className="text-sm font-medium text-[var(--text-secondary)]">Error Tracking</div>
             <div className="text-xs text-[var(--text-muted)]">Coming in Phase 11-4 &mdash; Error grouping and stack traces</div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── E1-4: Databases Tab ── */}
+      {activeTab === 'databases' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Database size={14} className="inline mr-1 text-[var(--accent-primary)]" />
+              연결된 데이터베이스
+            </CardTitle>
+          </CardHeader>
+          <div className="text-xs text-[var(--text-muted)] px-4 pb-2">
+            이 서비스의 트레이스에서 자동 감지된 데이터베이스 연결입니다.
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-default)] text-[var(--text-muted)] text-left">
+                  <th className="px-4 py-2 font-medium">System</th>
+                  <th className="px-4 py-2 font-medium">Database</th>
+                  <th className="px-4 py-2 font-medium">Endpoint</th>
+                  <th className="px-4 py-2 font-medium text-right">Queries</th>
+                  <th className="px-4 py-2 font-medium text-right">Avg Latency</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Demo: placeholder database rows */}
+                {[
+                  { system: 'PostgreSQL', name: 'main_db', endpoint: 'prod-db-01:5432', queries: 15420, avgMs: 12.3, status: 'online' },
+                  { system: 'Redis', name: 'cache', endpoint: 'prod-cache-01:6379', queries: 48200, avgMs: 0.8, status: 'online' },
+                  { system: 'Qdrant', name: 'vectors', endpoint: 'prod-qdrant-01:6333', queries: 3200, avgMs: 45.6, status: 'online' },
+                ].map((db) => (
+                  <tr key={db.endpoint} className="border-b border-[var(--border-muted)] hover:bg-[var(--bg-tertiary)]">
+                    <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{db.system}</td>
+                    <td className="px-4 py-2 text-[var(--text-secondary)]">{db.name}</td>
+                    <td className="px-4 py-2 font-mono text-[var(--text-muted)]">{db.endpoint}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{db.queries.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{db.avgMs}ms</td>
+                    <td className="px-4 py-2">
+                      <span className="inline-flex items-center gap-1 text-[var(--status-healthy)]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        {db.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}

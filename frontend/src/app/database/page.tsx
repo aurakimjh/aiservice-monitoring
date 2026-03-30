@@ -341,7 +341,7 @@ const TAB_DEFS = [
 // ═══════════════════════════════════════════════════════════════
 export default function DatabasePage() {
   const demoFallback = useCallback(() => generateDemoData(), []);
-  const { data: rawData, source } = useDataSource('/database/instances', demoFallback, { refreshInterval: 30_000 });
+  const { data: rawData, source } = useDataSource('/api/v2/databases', demoFallback, { refreshInterval: 30_000 });
   const parsed = rawData && typeof rawData === 'object' && !Array.isArray(rawData) ? rawData as any : { instances: [], slowQueries: [], locks: [], waitEvents: [] };
   const instances: DBInstance[] = parsed.instances ?? (Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? []);
   const slowQueries: DBSlowQuery[] = parsed.slowQueries ?? [];
