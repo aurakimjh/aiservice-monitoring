@@ -99,51 +99,63 @@ function flattenTree(nodes: SpanNode[]): SpanNode[] {
   return result;
 }
 
-// Transform Jaeger trace response → { traceId, duration, service, spans: TraceSpan[] }
-interface JaegerSpanTag { key: string; type: string; value: unknown }
-interface JaegerSpanRef { refType: string; traceID: string; spanID: string }
-interface JaegerSpan {
-  traceID: string; spanID: string; operationName: string;
-  startTime: number; duration: number;
-  references?: JaegerSpanRef[];
-  tags?: JaegerSpanTag[];
-  process?: { serviceName: string };
+// Transform v2 Trace Engine response → { traceId, duration, service, spans: TraceSpan[] }
+interface V2Span {
+  spanId: string;
+  parentSpanId?: string;
+  serviceName: string;
+  name: string;
+  kind: number;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  statusCode: number;
+  statusMessage?: string;
+  attributes?: Record<string, string>;
+  events?: Array<{ name: string; time?: string; attributes?: Record<string, string> }>;
+  resource?: Record<string, string>;
+  children?: string[];
 }
 
-function transformJaegerTrace(raw: unknown, traceId: string) {
-  const resp = raw as { data?: Array<{ traceID: string; spans: JaegerSpan[] }> };
-  const traceData = resp?.data?.[0];
+interface V2TraceDetail {
+  traceId: string;
+  serviceName: string;
+  rootName: string;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  statusCode: number;
+  spanCount: number;
+  spans: V2Span[];
+}
+
+function transformV2Trace(raw: unknown) {
+  const resp = raw as { trace?: V2TraceDetail };
+  const traceData = resp?.trace;
   if (!traceData || !traceData.spans?.length) return null;
 
-  const rootSpan = traceData.spans.find(s =>
-    !s.references?.some(r => r.refType === 'CHILD_OF' && traceData.spans.some(p => p.spanID === r.spanID))
-  ) ?? traceData.spans[0];
-
-  const rootStart = rootSpan.startTime;
+  const traceStartMs = new Date(traceData.startTime).getTime();
 
   const spans: TraceSpan[] = traceData.spans.map(s => {
-    const parentRef = s.references?.find(r => r.refType === 'CHILD_OF');
-    const attrs: Record<string, string | number> = {};
-    (s.tags ?? []).forEach(t => { attrs[t.key] = t.value as string | number; });
-
+    const spanStartMs = new Date(s.startTime).getTime();
     return {
-      spanId: s.spanID,
-      parentSpanId: parentRef?.spanID ?? '',
-      traceId: s.traceID,
-      service: s.process?.serviceName ?? 'unknown',
-      operation: s.operationName,
-      startTime: s.startTime / 1000, // μs → ms
-      duration: s.duration / 1000,
-      status: attrs['otel.status_code'] === 'ERROR' || attrs['error'] ? 'error' : 'ok',
-      kind: String(attrs['span.kind'] ?? 'internal'),
-      attributes: attrs,
+      spanId: s.spanId,
+      parentSpanId: s.parentSpanId ?? '',
+      traceId: traceData.traceId,
+      service: s.serviceName ?? 'unknown',
+      operation: s.name,
+      startTime: spanStartMs,
+      duration: s.durationMs,
+      status: s.statusCode === 2 ? 'error' : 'ok',
+      kind: ['unspecified', 'internal', 'server', 'client', 'producer', 'consumer'][s.kind] ?? 'internal',
+      attributes: s.attributes ?? {},
     };
   });
 
   return {
-    traceId: traceData.traceID,
-    duration: Math.round(rootSpan.duration / 1000),
-    service: rootSpan.process?.serviceName ?? 'unknown',
+    traceId: traceData.traceId,
+    duration: Math.round(traceData.durationMs),
+    service: traceData.serviceName ?? 'unknown',
     spans,
   };
 }
@@ -156,12 +168,12 @@ export default function TraceDetailPage({ params }: { params: Promise<{ traceId:
   const [collapsedSpans, setCollapsedSpans] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'waterfall' | 'method-profile'>('waterfall');
 
-  // Live: Jaeger API / Demo: generateTrace fallback
+  // Live: v2 Trace Engine API / Demo: generateTrace fallback
   const demoTrace = useCallback(() => generateTrace(traceId), [traceId]);
   const { data: liveTrace, source } = useDataSource(
-    `/proxy/jaeger/traces/${traceId}`,
+    `/api/v2/traces/${traceId}`,
     demoTrace,
-    { transform: (raw) => transformJaegerTrace(raw, traceId) },
+    { transform: transformV2Trace },
   );
   const trace = liveTrace ?? generateTrace(traceId);
 

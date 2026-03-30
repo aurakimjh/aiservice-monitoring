@@ -72,10 +72,10 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S4-1 | /proxy/prometheus/* → /api/v2/metrics/* 전환 | ☐ | |
-| S4-2 | /proxy/jaeger/* → /api/v2/traces/* 전환 | ☐ | |
-| S4-3 | useDataSource 훅에서 v2 API 우선 호출 | ☐ | |
-| S4-4 | 기존 프록시 API deprecated 처리 | ☐ | |
+| S4-1 | /proxy/prometheus/* → /api/v2/metrics/* 전환 | ✅ | metrics, dashboards 페이지 → v2 PromQL API |
+| S4-2 | /proxy/jaeger/* → /api/v2/traces/* 전환 | ✅ | traces, traces/[id], services, topology → v2 API |
+| S4-3 | useDataSource 훅에서 v2 API 우선 호출 | ✅ | API_V2_BASE 추가, 전 페이지 v2 경로 직접 사용 |
+| S4-4 | 기존 프록시 API deprecated 처리 | ✅ | proxy_api.go에 DEPRECATED 표시, 하위 호환 유지 |
 
 ### WS-1.5 외부 연동 호환 (Phase S5) — 1주
 

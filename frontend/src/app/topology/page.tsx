@@ -76,7 +76,7 @@ export default function TopologyPage() {
   const demoChanges = useCallback(() => getTopologyChanges(), []);
 
   const { data: topology, source } = useDataSource(
-    '/proxy/jaeger/dependencies',
+    '/api/v2/services/deps',
     demoTopology,
     { refreshInterval: 60_000 },
   );

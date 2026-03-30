@@ -67,31 +67,29 @@ interface QueryPanel {
   chartType: 'line' | 'area' | 'bar';
 }
 
-// ── Prometheus query helper ──
+// ── Metric query helper (v2 API — AITOP Metric Engine) ──
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
-  : 'http://localhost:8080/api/v1';
+import { API_V2_BASE } from '@/hooks/use-data-source';
 
-async function queryPrometheus(
+async function queryMetrics(
   promql: string,
   points: number,
 ): Promise<{ data: [number, number][]; label: string }[] | null> {
   try {
-    const end = Math.floor(Date.now() / 1000);
-    const start = end - points * 60;
-    const step = 60;
-    const url = `${API_BASE}/proxy/prometheus/query_range?query=${encodeURIComponent(promql)}&start=${start}&end=${end}&step=${step}`;
+    const end = Date.now();
+    const start = end - points * 60_000;
+    const step = '60s';
+    const url = `${API_V2_BASE}/api/v2/metrics/promql?query=${encodeURIComponent(promql)}&from=${start}&to=${end}&step=${step}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     const json = await res.json();
-    if (json.status !== 'success' || !json.data?.result?.length) return null;
+    if (!json.results?.length) return null;
 
-    return json.data.result.map((r: { metric: Record<string, string>; values: [number, string][] }) => {
-      const label = Object.entries(r.metric).map(([k, v]) => `${k}=${v}`).join(', ') || promql;
+    return json.results.map((r: { series: { name: string; labels: Record<string, string> }; samples: { t: string; v: number }[] }) => {
+      const label = Object.entries(r.series.labels ?? {}).map(([k, v]) => `${k}=${v}`).join(', ') || r.series.name;
       return {
         label,
-        data: r.values.map(([ts, val]: [number, string]) => [ts * 1000, parseFloat(val)] as [number, number]),
+        data: r.samples.map((s: { t: string; v: number }) => [new Date(s.t).getTime(), s.v] as [number, number]),
       };
     });
   } catch {
@@ -105,9 +103,9 @@ export default function MetricsPage() {
   const mode = useUIStore((s) => s.dataSourceMode);
   const demoPromStatus = useCallback(() => ({ status: 'demo' }), []);
   const { data: promStatus, source: promSource } = useDataSource<{ status: string }>(
-    '/proxy/prometheus/status',
+    '/api/v2/metrics/_stats',
     demoPromStatus,
-    { refreshInterval: 60_000 },
+    { refreshInterval: 60_000, transform: () => ({ status: 'ok' }) },
   );
 
   const [viewMode, setViewMode] = useState('explore');
@@ -377,7 +375,7 @@ function MetricPanel({
   useEffect(() => {
     if (mode === 'demo') { setPanelSource('demo'); return; }
     let cancelled = false;
-    queryPrometheus(panel.query, 60).then((result) => {
+    queryMetrics(panel.query, 60).then((result) => {
       if (cancelled) return;
       if (result && result.length > 0) { setLiveData(result); setPanelSource('live'); }
       else { setLiveData(null); setPanelSource('demo'); }

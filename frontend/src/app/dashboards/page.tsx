@@ -54,24 +54,22 @@ const SIZE_OPTIONS: { value: WidgetSize; label: string }[] = [
 
 const CHART_COLORS = ['#58A6FF', '#3FB950', '#D29922', '#F85149', '#BC8CFF', '#F778BA'];
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
-  : 'http://localhost:8080/api/v1';
+import { API_V2_BASE } from '@/hooks/use-data-source';
 
-// ── Prometheus query helper ──
+// ── Metric query helper (v2 API — AITOP Metric Engine) ──
 
-async function queryPrometheus(promql: string, points: number) {
+async function queryMetrics(promql: string, points: number) {
   try {
-    const end = Math.floor(Date.now() / 1000);
-    const start = end - points * 60;
-    const url = `${API_BASE}/proxy/prometheus/query_range?query=${encodeURIComponent(promql)}&start=${start}&end=${end}&step=60`;
+    const end = Date.now();
+    const start = end - points * 60_000;
+    const url = `${API_V2_BASE}/api/v2/metrics/promql?query=${encodeURIComponent(promql)}&from=${start}&to=${end}&step=60s`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const json = await res.json();
-    if (json.status !== 'success' || !json.data?.result?.length) return null;
-    return json.data.result.map((r: { metric: Record<string, string>; values: [number, string][] }) => ({
-      label: Object.entries(r.metric).map(([k, v]) => `${k}=${v}`).join(', ') || promql,
-      data: r.values.map(([ts, val]: [number, string]) => [ts * 1000, parseFloat(val)] as [number, number]),
+    if (!json.results?.length) return null;
+    return json.results.map((r: { series: { name: string; labels: Record<string, string> }; samples: { t: string; v: number }[] }) => ({
+      label: Object.entries(r.series.labels ?? {}).map(([k, v]) => `${k}=${v}`).join(', ') || r.series.name,
+      data: r.samples.map((s: { t: string; v: number }) => [new Date(s.t).getTime(), s.v] as [number, number]),
     }));
   } catch { return null; }
 }
@@ -536,18 +534,18 @@ function WidgetRenderer({ widget, promMode, globalProjectId }: { widget: WidgetC
       // 1. serviceId + individual: per-instance (by instance label)
       if (effectiveServiceId && widget.viewMode === 'individual') {
         const q = widget.query || `rate(demo_http_server_duration_milliseconds_count{exported_job="${effectiveServiceId}"}[5m])`;
-        const result = await queryPrometheus(q, 30);
+        const result = await queryMetrics(q, 30);
         if (!cancelled && result && result.length > 0) { setLiveData(result); setSource('live'); return; }
       }
       // 2. Explicit PromQL
       if (widget.query) {
-        const result = await queryPrometheus(widget.query, 30);
+        const result = await queryMetrics(widget.query, 30);
         if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
       }
       // 3. serviceId SUM: aggregate
       if (effectiveServiceId) {
         const q = `sum(rate(demo_http_server_duration_milliseconds_count{exported_job="${effectiveServiceId}"}[5m]))`;
-        const result = await queryPrometheus(q, 30);
+        const result = await queryMetrics(q, 30);
         if (!cancelled && result) { setLiveData(result); setSource('live'); return; }
       }
       if (!cancelled) { setLiveData(null); setSource('demo'); }

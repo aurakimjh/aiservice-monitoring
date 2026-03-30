@@ -2,8 +2,14 @@ package main
 
 // proxy_api.go — Phase 41-3: 실데이터 프록시 API
 //
-// Collection Server가 Prometheus와 Jaeger를 프록시하여
-// Frontend가 단일 엔드포인트(Collection Server)만 호출하면 되도록 합니다.
+// DEPRECATED (WS-1.4): Frontend는 이제 v2 API를 직접 사용합니다.
+//   - /api/v2/metrics/*  (MetricEngine, metricstore 패키지)
+//   - /api/v2/traces/*   (TraceEngine, tracestore 패키지)
+//   - /api/v2/services/* (TraceEngine 서비스 인덱스)
+//
+// 아래 프록시 엔드포인트는 하위 호환성을 위해 유지되며,
+// Prometheus/Jaeger가 아직 실행 중인 환경에서만 동작합니다.
+// v1.0 릴리스 이후 제거 예정.
 //
 // 환경변수:
 //   AITOP_PROMETHEUS_URL  (기본: http://localhost:9090)

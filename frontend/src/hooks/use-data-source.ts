@@ -48,6 +48,11 @@ const API_BASE = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1')
   : 'http://localhost:8080/api/v1';
 
+// v2 API base — direct to AITOP engines (no Prometheus/Jaeger proxy)
+export const API_V2_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8080')
+  : 'http://localhost:8080';
+
 export function useDataSource<T>(
   apiPath: string,
   demoFallback: () => T,

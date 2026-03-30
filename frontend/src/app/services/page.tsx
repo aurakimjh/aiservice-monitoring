@@ -70,7 +70,7 @@ export default function ServicesPage() {
     { refreshInterval: 30_000, transform: transformServices },
   );
   const { data: topology } = useDataSource(
-    '/proxy/jaeger/dependencies',
+    '/api/v2/services/deps',
     demoTopology,
     { refreshInterval: 60_000 },
   );

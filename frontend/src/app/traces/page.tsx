@@ -52,10 +52,11 @@ function classifyStatus(elapsed: number, statusCode: number): TransactionStatus 
   return 'normal';
 }
 
-function transformJaegerServices(raw: unknown): ServerOption[] {
-  const resp = raw as { data?: string[] };
-  if (!resp.data?.length) return [];
-  return resp.data.map((name) => ({ id: name, label: name }));
+// v2 API transform: /api/v2/services → ServerOption[]
+function transformV2Services(raw: unknown): ServerOption[] {
+  const resp = raw as { services?: Array<{ name: string }> };
+  if (!resp.services?.length) return [];
+  return resp.services.map((s) => ({ id: s.name, label: s.name }));
 }
 
 interface JaegerSpan {
@@ -74,42 +75,39 @@ interface JaegerTrace {
   spans: JaegerSpan[];
 }
 
-function transformJaegerTraces(raw: unknown): Transaction[] {
-  const resp = raw as { data?: JaegerTrace[] };
-  if (!resp.data?.length) return [];
+// v2 API transform: /api/v2/traces → Transaction[]
+interface V2Trace {
+  traceId: string;
+  serviceName: string;
+  rootName: string;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  statusCode: number;
+  spanCount: number;
+  source: string;
+}
 
-  return resp.data.map((trace) => {
-    // Find root span (no parent reference)
-    const rootSpan = trace.spans.find((s) =>
-      !s.references?.some((r) => r.refType === 'CHILD_OF'),
-    ) ?? trace.spans[0];
+function transformV2Traces(raw: unknown): Transaction[] {
+  const resp = raw as { traces?: V2Trace[] };
+  if (!resp.traces?.length) return [];
 
-    const elapsed = Math.round(rootSpan.duration / 1000); // μs → ms
-    const timestamp = Math.round(rootSpan.startTime / 1000); // μs → ms
-    const httpStatus = rootSpan.tags?.find((t) => t.key === 'http.status_code');
-    const statusCode = httpStatus ? Number(httpStatus.value) : 200;
+  return resp.traces.map((trace) => {
+    const elapsed = Math.round(trace.durationMs);
+    const timestamp = new Date(trace.startTime).getTime();
+    const statusCode = trace.statusCode === 2 ? 500 : 200;
 
     return {
-      traceId: trace.traceID,
-      rootSpanId: rootSpan.spanID,
+      traceId: trace.traceId,
+      rootSpanId: trace.traceId.slice(0, 16),
       timestamp,
       elapsed,
-      service: rootSpan.process?.serviceName ?? 'unknown',
-      endpoint: rootSpan.operationName,
+      service: trace.serviceName ?? 'unknown',
+      endpoint: trace.rootName ?? '',
       status: classifyStatus(elapsed, statusCode),
       statusCode,
       metrics: { ttft_ms: 0, tps: 0, tokens_generated: 0, guardrail_action: 'PASS' as const },
-      spans: trace.spans.map((s) => ({
-        spanId: s.spanID,
-        parentId: s.references?.find((r) => r.refType === 'CHILD_OF')?.spanID ?? '',
-        name: `${s.process?.serviceName ?? ''}: ${s.operationName}`,
-        startOffset: Math.round((s.startTime - rootSpan.startTime) / 1000),
-        duration: Math.round(s.duration / 1000),
-        status: (s.tags?.some((t) => t.key === 'error' && t.value === true) ? 'error' : 'ok') as 'ok' | 'error',
-        attributes: Object.fromEntries(
-          (s.tags ?? []).map((t) => [t.key, t.value as string | number]),
-        ),
-      })),
+      spans: [],
     };
   });
 }
@@ -168,12 +166,12 @@ export default function TracesPage() {
   const [isLive, setIsLive] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
 
-  // ── Jaeger services (real data) ──
+  // ── Services (v2 API — AITOP Trace Engine) ──
   const demoServicesFallback = useCallback(() => DEMO_SERVERS, []);
   const { data: jaegerServices, source: svcSource } = useDataSource<ServerOption[]>(
-    '/proxy/jaeger/services',
+    '/api/v2/services',
     demoServicesFallback,
-    { refreshInterval: 60_000, transform: transformJaegerServices },
+    { refreshInterval: 60_000, transform: transformV2Services },
   );
   const availableServers = jaegerServices ?? DEMO_SERVERS;
   const dataSource: DataSource = svcSource;
@@ -240,19 +238,17 @@ export default function TracesPage() {
     return map;
   }, [availableServers]);
 
-  // ── Jaeger traces (real data with demo fallback) ──
+  // ── Traces (v2 API — AITOP Trace Engine) ──
   const jaegerQuery = selectedServers.length > 0 ? selectedServers[0] : '';
-  const lookbackMs = range.to - range.from;
-  const lookbackStr = `${Math.round(lookbackMs / 60_000)}m`;
-  const jaegerApiPath = jaegerQuery
-    ? `/proxy/jaeger/traces?service=${encodeURIComponent(jaegerQuery)}&limit=200&lookback=${lookbackStr}`
+  const v2TracesPath = jaegerQuery
+    ? `/api/v2/traces?service=${encodeURIComponent(jaegerQuery)}&limit=200&from=${range.from}&to=${range.to}`
     : '';
 
   const demoTxnFallback = useCallback(() => [] as Transaction[], []);
   const { data: jaegerTxns, source: txnSource } = useDataSource<Transaction[]>(
-    jaegerApiPath || '/proxy/jaeger/traces?limit=0',
+    v2TracesPath || '/api/v2/traces?limit=0',
     demoTxnFallback,
-    { transform: transformJaegerTraces },
+    { transform: transformV2Traces },
   );
 
   // ── Transaction generation (real data or demo) ──
