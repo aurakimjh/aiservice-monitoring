@@ -613,6 +613,7 @@ func main() {
 		"/api/v2/metrics",
 		"/api/v2/alerts",
 		"/api/v2/databases",
+		"/api/v2/biztx",
 		"/api/v2/k8s/",
 		// WS-1.5 External integration (unauthenticated for scrape/push)
 		"/api/v1/prom/",

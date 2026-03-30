@@ -49,13 +49,14 @@ func DefaultConfig() Config {
 //	                                                      Archiver (S3/Parquet)
 //	                                                           (cold tier)
 type Store struct {
-	cfg     Config
-	ring    *RingBuffer
-	warm    *WarmStore
-	svcIdx  *ServiceIndex
-	dbIdx   *DatabaseIndex // E1-2: Database auto-detection
-	archive *Archiver
-	logger  *slog.Logger
+	cfg      Config
+	ring     *RingBuffer
+	warm     *WarmStore
+	svcIdx   *ServiceIndex
+	dbIdx    *DatabaseIndex  // E1-2: Database auto-detection
+	bizTxIdx *BizTxIndex     // E4-1: Business Transaction aggregation
+	archive  *Archiver
+	logger   *slog.Logger
 }
 
 // New creates and initialises a Store.  Call Start to begin background jobs.
@@ -75,13 +76,14 @@ func New(cfg Config, logger *slog.Logger) (*Store, error) {
 	archiver := NewArchiver(cfg.DataDir+"/cold", cfg.S3, logger)
 
 	return &Store{
-		cfg:     cfg,
-		ring:    NewRingBuffer(),
-		warm:    warm,
-		svcIdx:  NewServiceIndex(),
-		dbIdx:   NewDatabaseIndex(),
-		archive: archiver,
-		logger:  logger,
+		cfg:      cfg,
+		ring:     NewRingBuffer(),
+		warm:     warm,
+		svcIdx:   NewServiceIndex(),
+		dbIdx:    NewDatabaseIndex(),
+		bizTxIdx: NewBizTxIndex(),
+		archive:  archiver,
+		logger:   logger,
 	}, nil
 }
 
@@ -99,6 +101,9 @@ func (s *Store) Ingest(spans []*otlp.Span) {
 
 	// Database index: extract database entities from db.* span attributes.
 	s.dbIdx.Ingest(spans)
+
+	// Business Transaction index: aggregate root spans by (service, operation).
+	s.bizTxIdx.Ingest(spans)
 
 	// Warm tier: persist to SQLite (best-effort; log errors but don't block).
 	if err := s.warm.Write(spans); err != nil {
@@ -257,6 +262,20 @@ func (s *Store) SlowQueries(dbID string, limit int) []SlowQuery { return s.dbIdx
 
 // ServiceDBEdges returns all Service → Database dependency edges.
 func (s *Store) ServiceDBEdges() []ServiceDBEdge { return s.dbIdx.ServiceDBEdges() }
+
+// ── Business Transaction queries (E4-1, E4-2, E4-3) ──────────────────────────
+
+// BizTransactions returns all auto-detected business transactions.
+func (s *Store) BizTransactions() []*BizTxInfo { return s.bizTxIdx.List() }
+
+// GetBizTransaction returns a single business transaction by ID.
+func (s *Store) GetBizTransaction(id string) *BizTxInfo { return s.bizTxIdx.Get(id) }
+
+// SetBizTxSLO sets the SLO target for a business transaction.
+func (s *Store) SetBizTxSLO(biztxID string, slo BizTxSLO) { s.bizTxIdx.SetSLO(biztxID, slo) }
+
+// RemoveBizTxSLO removes the SLO target.
+func (s *Store) RemoveBizTxSLO(biztxID string) { s.bizTxIdx.RemoveSLO(biztxID) }
 
 // RingStats returns hot-tier buffer statistics.
 func (s *Store) RingStats() RingStats { return s.ring.Stats() }

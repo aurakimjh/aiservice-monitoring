@@ -145,9 +145,9 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| E4-1 | BusinessTransaction 엔티티 + CRUD API | ☐ | |
-| E4-2 | entry_service + entry_operation 기반 자동 집계 | ☐ | |
-| E4-3 | SLO 연동 (트랜잭션 그룹별 SLO 추적) | ☐ | |
+| E4-1 | BusinessTransaction 엔티티 + CRUD API | ✅ | BizTxIndex + 4개 API (list, get, set-slo, remove-slo) |
+| E4-2 | entry_service + entry_operation 기반 자동 집계 | ✅ | 루트 스팬 자동 감지, RPM/에러율/P50/P95/P99 집계, 1000건 링버퍼 |
+| E4-3 | SLO 연동 (트랜잭션 그룹별 SLO 추적) | ✅ | BizTxSLO 타겟 설정, compliance% 계산, breach 감지, SLO 페이지 연동 |
 
 ### WS-2.5 드릴다운 통합 (Phase E5) — 1주
 

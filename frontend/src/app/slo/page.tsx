@@ -37,7 +37,7 @@ const PROBE_TYPE_COLORS: Record<string, string> = {
 export default function SLOPage() {
   const demoSLOs = useCallback(() => getSLODefinitions(), []);
   const demoProbes = useCallback(() => getSyntheticProbes(), []);
-  const { data: slosData, source } = useDataSource('/slo/definitions', demoSLOs, { refreshInterval: 30_000 });
+  const { data: slosData, source } = useDataSource('/api/v2/biztx', demoSLOs, { refreshInterval: 30_000 });
   const { data: probesData } = useDataSource('/slo/probes', demoProbes, { refreshInterval: 30_000 });
   const slos = slosData ?? [];
   const [activeTab, setActiveTab] = useState<string>('slo');

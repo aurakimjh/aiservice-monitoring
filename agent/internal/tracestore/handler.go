@@ -39,6 +39,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v2/traces", h.handleSearch)
 	mux.HandleFunc("GET /api/v2/services", h.handleServices)
 	mux.HandleFunc("GET /api/v2/services/deps", h.handleDeps)
+	// E4-1: Business Transaction endpoints
+	mux.HandleFunc("GET /api/v2/biztx", h.handleListBizTx)
+	mux.HandleFunc("GET /api/v2/biztx/{id}", h.handleGetBizTx)
+	mux.HandleFunc("POST /api/v2/biztx/{id}/slo", h.handleSetBizTxSLO)
+	mux.HandleFunc("DELETE /api/v2/biztx/{id}/slo", h.handleRemoveBizTxSLO)
 	// E1-1: Database entity endpoints
 	mux.HandleFunc("GET /api/v2/databases", h.handleListDatabases)
 	mux.HandleFunc("GET /api/v2/databases/{id}/slow-queries", h.handleSlowQueries)
@@ -226,6 +231,44 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ring": ring,
 	})
+}
+
+// ── E4-1: Business Transaction API handlers ───────────────────────────────────
+
+func (h *Handler) handleListBizTx(w http.ResponseWriter, r *http.Request) {
+	txns := h.store.BizTransactions()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"transactions": txns,
+		"count":        len(txns),
+	})
+}
+
+func (h *Handler) handleGetBizTx(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	tx := h.store.GetBizTransaction(id)
+	if tx == nil {
+		writeErr(w, http.StatusNotFound, "business transaction not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, tx)
+}
+
+// E4-3: Set SLO for a business transaction.
+func (h *Handler) handleSetBizTxSLO(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var slo BizTxSLO
+	if err := json.NewDecoder(r.Body).Decode(&slo); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	h.store.SetBizTxSLO(id, slo)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "biztxId": id})
+}
+
+func (h *Handler) handleRemoveBizTxSLO(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	h.store.RemoveBizTxSLO(id)
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
 }
 
 // ── E1-1: Database entity API handlers ────────────────────────────────────────
