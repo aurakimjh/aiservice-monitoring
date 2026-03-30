@@ -7,7 +7,7 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Card, CardHeader, CardTitle, Badge, Button, DataSourceBadge } from '@/components/ui';
 import { EChartsWrapper } from '@/components/charts';
 import { generateTransactions } from '@/lib/demo-data';
-import { useDataSource, type DataSource } from '@/hooks/use-data-source';
+import { useDataSource, API_V2_BASE, type DataSource } from '@/hooks/use-data-source';
 import { formatDuration } from '@/lib/utils';
 import type { Transaction, TransactionStatus } from '@/types/monitoring';
 import { TimeRangePicker } from '@/components/monitoring/time-range-picker';
@@ -213,6 +213,43 @@ export default function TracesPage() {
     return () => clearInterval(id);
   }, [isLive]);
 
+  // XL-16: SSE streaming for real-time XLog updates (live mode only).
+  const [ssePoints, setSsePoints] = useState<Transaction[]>([]);
+  useEffect(() => {
+    if (!isLive || selectedServers.length === 0) {
+      setSsePoints([]);
+      return;
+    }
+    const svcParams = selectedServers.map(s => `service=${encodeURIComponent(s)}`).join('&');
+    const url = `${API_V2_BASE}/api/v2/traces/xlog/stream?${svcParams}`;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(url);
+      es.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.points?.length) {
+            const newTxns: Transaction[] = data.points.map((p: { timestamp: string; durationMs: number; statusCode: number; traceId?: string }) => ({
+              traceId: p.traceId ?? '',
+              rootSpanId: '',
+              timestamp: new Date(p.timestamp).getTime(),
+              elapsed: Math.round(p.durationMs),
+              service: selectedServers[0] ?? 'unknown',
+              endpoint: '',
+              status: p.statusCode === 2 ? 'error' as const : p.durationMs >= 3000 ? 'very_slow' as const : p.durationMs >= 1000 ? 'slow' as const : 'normal' as const,
+              statusCode: p.statusCode === 2 ? 500 : 200,
+              metrics: { ttft_ms: 0, tps: 0, tokens_generated: 0, guardrail_action: 'PASS' as const },
+              spans: [],
+            }));
+            setSsePoints(prev => [...prev.slice(-500), ...newTxns]); // keep last 500
+          }
+        } catch { /* ignore parse errors */ }
+      };
+      es.onerror = () => { es?.close(); };
+    } catch { /* SSE not supported or connection failed */ }
+    return () => { es?.close(); setSsePoints([]); };
+  }, [isLive, selectedServers]);
+
   const handleRangeChange = (r: TimeRange) => {
     setIsLive(false);
     setRange(r);
@@ -253,11 +290,12 @@ export default function TracesPage() {
     { transform: transformV2Traces },
   );
 
-  // ── Transaction generation (real data or demo) ──
+  // ── Transaction generation (real data + SSE stream or demo) ──
   const allTransactions = useMemo<TxnWithServer[]>(() => {
-    // Use Jaeger real data if available and non-empty
-    if (jaegerTxns && jaegerTxns.length > 0) {
-      return jaegerTxns.map((t) => ({
+    // XL-16: Merge API data + SSE streaming data when live.
+    const liveData = [...(jaegerTxns ?? []), ...ssePoints];
+    if (liveData.length > 0) {
+      return liveData.map((t) => ({
         ...t,
         serverId: t.service,
       }));
@@ -279,7 +317,7 @@ export default function TracesPage() {
         ? selectedServers[i % selectedServers.length]
         : DEMO_SERVERS[i % DEMO_SERVERS.length].id,
     }));
-  }, [range.from, range.to, selectedServers, jaegerTxns, txnSource]);
+  }, [range.from, range.to, selectedServers, jaegerTxns, txnSource, ssePoints]);
 
   const filteredTransactions = useMemo<TxnWithServer[]>(() => {
     if (statusFilter === 'all') return allTransactions;

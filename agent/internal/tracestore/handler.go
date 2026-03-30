@@ -2,6 +2,7 @@ package tracestore
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -33,7 +34,8 @@ func NewHandler(store *Store, logger *slog.Logger) *Handler {
 
 // Register attaches all routes to mux.
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v2/traces/xlog", h.handleXLog)       // must be before /{traceId}
+	mux.HandleFunc("GET /api/v2/traces/xlog/stream", h.handleXLogStream) // XL-16: SSE
+	mux.HandleFunc("GET /api/v2/traces/xlog", h.handleXLog)            // must be before /{traceId}
 	mux.HandleFunc("GET /api/v2/traces/_stats", h.handleStats)
 	mux.HandleFunc("GET /api/v2/traces/{traceId}", h.handleGetTrace)
 	mux.HandleFunc("GET /api/v2/traces", h.handleSearch)
@@ -155,15 +157,16 @@ func (h *Handler) handleGetTrace(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ── S2-5: XLog scatter-plot data ──────────────────────────────────────────────
+// ── XL-15: XLog scatter-plot data (lightweight, multi-service) ───────────────
 //
 // GET /api/v2/traces/xlog
-// Query: service (required), from, to, limit (default 5000)
+// Query: service (required, repeatable for multi-service), from, to, limit (default 5000)
+//        downsample=true (XL-17: auto-downsample for ranges > 1h)
 
 func (h *Handler) handleXLog(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	service := q.Get("service")
-	if service == "" {
+	services := q["service"] // XL-15: multi-service support
+	if len(services) == 0 {
 		writeErr(w, http.StatusBadRequest, "service param required")
 		return
 	}
@@ -185,18 +188,149 @@ func (h *Handler) handleXLog(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	pts, err := h.store.XLogPoints(service, from, to, limit)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+	// XL-17: Auto-downsample for time ranges > 1 hour.
+	downsample := q.Get("downsample") == "true" || to.Sub(from) > time.Hour
+
+	// Fetch points for all requested services.
+	var allPts []XLogPoint
+	perService := limit / len(services)
+	if perService < 100 {
+		perService = 100
+	}
+	for _, svc := range services {
+		pts, err := h.store.XLogPoints(svc, from, to, perService)
+		if err != nil {
+			h.logger.Warn("xlog query error", "service", svc, "error", err)
+			continue
+		}
+		allPts = append(allPts, pts...)
+	}
+
+	// XL-17: Downsample by bucketing into time windows.
+	if downsample && len(allPts) > 2000 {
+		allPts = downsampleXLog(allPts, 500)
+	}
+
+	// Cap to limit.
+	if len(allPts) > limit {
+		allPts = allPts[:limit]
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"services":    services,
+		"from":        from,
+		"to":          to,
+		"points":      allPts,
+		"count":       len(allPts),
+		"downsampled": downsample && len(allPts) > 0,
+	})
+}
+
+// ── XL-16: SSE streaming for real-time XLog updates ──────────────────────────
+//
+// GET /api/v2/traces/xlog/stream?service=svc1&service=svc2
+// Returns Server-Sent Events (text/event-stream) with new XLog points every 3s.
+
+func (h *Handler) handleXLogStream(w http.ResponseWriter, r *http.Request) {
+	services := r.URL.Query()["service"]
+	if len(services) == 0 {
+		writeErr(w, http.StatusBadRequest, "service param required")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"service": service,
-		"from":    from,
-		"to":      to,
-		"points":  pts,
-		"count":   len(pts),
-	})
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeErr(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	ctx := r.Context()
+	cursor := time.Now().UTC()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second):
+			now := time.Now().UTC()
+			var pts []XLogPoint
+			for _, svc := range services {
+				sp, _ := h.store.XLogPoints(svc, cursor, now, 200)
+				pts = append(pts, sp...)
+			}
+			cursor = now
+
+			if len(pts) > 0 {
+				data, _ := json.Marshal(map[string]interface{}{
+					"points": pts,
+					"count":  len(pts),
+					"time":   now,
+				})
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+// ── XL-17: Downsample helper ─────────────────────────────────────────────────
+
+// downsampleXLog reduces points by keeping representative samples per time bucket.
+func downsampleXLog(pts []XLogPoint, targetCount int) []XLogPoint {
+	if len(pts) <= targetCount || targetCount <= 0 {
+		return pts
+	}
+
+	// Find time bounds.
+	minT, maxT := pts[0].Timestamp, pts[0].Timestamp
+	for _, p := range pts[1:] {
+		if p.Timestamp.Before(minT) {
+			minT = p.Timestamp
+		}
+		if p.Timestamp.After(maxT) {
+			maxT = p.Timestamp
+		}
+	}
+
+	bucketCount := targetCount
+	span := maxT.Sub(minT)
+	if span <= 0 {
+		return pts[:targetCount]
+	}
+	bucketWidth := span / time.Duration(bucketCount)
+
+	// Keep one representative per bucket (max latency — preserves outliers).
+	type bucket struct {
+		best XLogPoint
+		set  bool
+	}
+	buckets := make([]bucket, bucketCount)
+
+	for _, p := range pts {
+		idx := int(p.Timestamp.Sub(minT) / bucketWidth)
+		if idx >= bucketCount {
+			idx = bucketCount - 1
+		}
+		if !buckets[idx].set || p.DurationMS > buckets[idx].best.DurationMS {
+			buckets[idx].best = p
+			buckets[idx].set = true
+		}
+	}
+
+	out := make([]XLogPoint, 0, bucketCount)
+	for _, b := range buckets {
+		if b.set {
+			out = append(out, b.best)
+		}
+	}
+	return out
 }
 
 // ── S2-6: Service list ────────────────────────────────────────────────────────

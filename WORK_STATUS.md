@@ -254,9 +254,9 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
 | XL-14 | /proxy/jaeger/* → /api/v2/traces/* API 전환 | ✅ | WS-1.4에서 완료 |
-| XL-15 | /api/v2/traces/xlog 전용 API (경량 필드만 반환) | ☐ | timestamp, duration, status, service만 |
-| XL-16 | 실시간 SSE/WebSocket 스트리밍 (5초 폴링 → 실시간 push) | ☐ | 대시보드 실시간성 대폭 향상 |
-| XL-17 | 시간 범위 확대 시 다운샘플링 (1시간+ → 버킷 집계) | ☐ | 대량 트랜잭션 성능 보장 |
+| XL-15 | /api/v2/traces/xlog 전용 API (경량 필드만 반환) | ✅ | 멀티 서비스 지원, 경량 XLogPoint 반환 |
+| XL-16 | 실시간 SSE/WebSocket 스트리밍 (5초 폴링 → 실시간 push) | ✅ | GET /api/v2/traces/xlog/stream SSE, 3초 간격, EventSource 연동 |
+| XL-17 | 시간 범위 확대 시 다운샘플링 (1시간+ → 버킷 집계) | ✅ | 1h+ 자동 다운샘플, 최대 latency 보존 방식 (500 버킷) |
 
 ---
 
