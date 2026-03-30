@@ -445,7 +445,7 @@ func parseTraceJSON(data []byte) ([]*Span, error) {
 	}
 
 	var spans []*Span
-	now := time.Now()
+	_ = time.Now() // Resolve() sets ReceivedAt internally
 
 	for _, rs := range req.ResourceSpans {
 		res := Resource{}
@@ -467,29 +467,25 @@ func parseTraceJSON(data []byte) ([]*Span, error) {
 					Kind:          SpanKind(sp.Kind),
 					StatusCode:    StatusCode(sp.Status.Code),
 					StatusMessage: sp.Status.Message,
-					Resource:      res,
-					ServiceName:   res.ServiceName,
+					RawResource:   res,
 					ScopeName:     ss.Scope.Name,
 					ScopeVersion:  ss.Scope.Version,
-					ReceivedAt:    now,
 				}
 				// Decode hex IDs
-				decodeHexID16(sp.TraceID, &s.TraceID)
-				decodeHexID8(sp.SpanID, &s.SpanID)
-				decodeHexID8(sp.ParentSpanID, &s.ParentSpanID)
+				decodeHexID16(sp.TraceID, &s.TraceIDBytes)
+				decodeHexID8(sp.SpanID, &s.SpanIDBytes)
+				decodeHexID8(sp.ParentSpanID, &s.ParentSpanIDBytes)
 
 				s.StartTimeNano = parseUint64String(sp.StartTimeUnixNano)
 				s.EndTimeNano = parseUint64String(sp.EndTimeUnixNano)
-				if s.EndTimeNano > s.StartTimeNano {
-					s.DurationNano = s.EndTimeNano - s.StartTimeNano
-				}
 
 				for _, attr := range sp.Attributes {
-					s.Attributes = append(s.Attributes, KeyValue{
+					s.RawAttributes = append(s.RawAttributes, KeyValue{
 						Key:   attr.Key,
 						Value: jsonAnyValueString(attr.Value),
 					})
 				}
+				s.Resolve()
 				spans = append(spans, s)
 			}
 		}

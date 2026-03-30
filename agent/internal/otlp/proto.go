@@ -271,12 +271,8 @@ func parseResourceSpans(r *protoReader) ([]*Span, error) {
 	var out []*Span
 	for _, ss := range scopeSpansList {
 		for _, s := range ss {
-			s.Resource = res
-			s.ServiceName = res.ServiceName
-			s.ReceivedAt = time.Now()
-			if s.EndTimeNano > s.StartTimeNano {
-				s.DurationNano = s.EndTimeNano - s.StartTimeNano
-			}
+			s.RawResource = res
+			s.Resolve()
 			out = append(out, s)
 		}
 	}
@@ -342,13 +338,13 @@ func parseSpan(r *protoReader) (*Span, error) {
 			if err != nil {
 				return s, err
 			}
-			copy(s.TraceID[:], b)
+			copy(s.TraceIDBytes[:], b)
 		case 2: // span_id (bytes, 8 bytes)
 			b, err := r.readBytes()
 			if err != nil {
 				return s, err
 			}
-			copy(s.SpanID[:], b)
+			copy(s.SpanIDBytes[:], b)
 		case 3: // trace_state
 			s.TraceState, err = r.readString()
 			if err != nil {
@@ -359,7 +355,7 @@ func parseSpan(r *protoReader) (*Span, error) {
 			if err != nil {
 				return s, err
 			}
-			copy(s.ParentSpanID[:], b)
+			copy(s.ParentSpanIDBytes[:], b)
 		case 5: // name
 			s.Name, err = r.readString()
 			if err != nil {
@@ -390,7 +386,7 @@ func parseSpan(r *protoReader) (*Span, error) {
 			if err != nil {
 				return s, err
 			}
-			s.Attributes = append(s.Attributes, kv)
+			s.RawAttributes = append(s.RawAttributes, kv)
 		case 15: // status
 			sub, err := r.sub()
 			if err != nil {

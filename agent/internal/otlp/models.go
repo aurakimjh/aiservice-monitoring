@@ -52,51 +52,126 @@ const (
 	StatusError StatusCode = 2
 )
 
+// SpanEvent is one event/log annotation attached to a span.
+type SpanEvent struct {
+	Name       string            `json:"name"`
+	TimeNano   uint64            `json:"-"`
+	Time       time.Time         `json:"time,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+}
+
+// Trace is a collection of related spans sharing the same trace ID.
+type Trace struct {
+	TraceID     string
+	ServiceName string
+	RootName    string
+	StartTime   time.Time
+	EndTime     time.Time
+	DurationMS  float64
+	StatusCode  StatusCode
+	SpanCount   int
+	Spans       []*Span
+}
+
 // Span is the internal representation of an OpenTelemetry span.
 // Field names and semantics mirror opentelemetry.proto.trace.v1.Span.
+//
+// Raw proto fields (populated by the protobuf decoder):
+//
+//	TraceID, SpanID, ParentSpanID     — byte arrays
+//	StartTimeNano, EndTimeNano        — uint64 nanoseconds
+//	Attributes                        — []KeyValue
+//	Resource                          — Resource struct
+//
+// Derived fields (populated by Resolve() after decoding):
+//
+//	TraceID, SpanID, ParentID         — hex strings
+//	StartTime, EndTime                — time.Time
+//	Attributes, Resource, Events      — maps/slices
 type Span struct {
-	TraceID        [16]byte
-	SpanID         [8]byte
-	ParentSpanID   [8]byte  // zero if root span
-	TraceState     string
-	Name           string
-	Kind           SpanKind
-	StartTimeNano  uint64 // Unix nanoseconds
-	EndTimeNano    uint64 // Unix nanoseconds
-	Attributes     []KeyValue
-	StatusCode     StatusCode
-	StatusMessage  string
-	Resource       Resource
-	ScopeName      string
-	ScopeVersion   string
+	// ── Raw proto fields (written by proto.go decoder) ────────────────────
+	TraceIDBytes      [16]byte   `json:"-"`
+	SpanIDBytes       [8]byte    `json:"-"`
+	ParentSpanIDBytes [8]byte    `json:"-"` // zero if root span
+	TraceState        string     `json:"-"`
+	Name              string
+	Kind              SpanKind
+	StartTimeNano     uint64     `json:"-"`
+	EndTimeNano       uint64     `json:"-"`
+	RawAttributes     []KeyValue `json:"-"`
+	StatusCode        StatusCode
+	StatusMessage     string
+	RawResource       Resource   `json:"-"`
+	ScopeName         string     `json:"-"`
+	ScopeVersion      string     `json:"-"`
 
-	// Derived fields (populated during ingestion)
-	ServiceName  string        // copied from Resource.ServiceName
-	DurationNano uint64        // EndTimeNano - StartTimeNano
-	ReceivedAt   time.Time     // wall-clock time on the collection server
+	// ── Derived fields (populated by Resolve) ────────────────────────────
+	TraceID      string            `json:"traceId"`
+	SpanID       string            `json:"spanId"`
+	ParentID     string            `json:"parentId,omitempty"`
+	ServiceName  string            `json:"serviceName"`
+	StartTime    time.Time         `json:"startTime"`
+	EndTime      time.Time         `json:"endTime"`
+	DurationNano uint64            `json:"-"`
+	ReceivedAt   time.Time         `json:"-"`
+	Attributes   map[string]string `json:"attributes,omitempty"`
+	Resource     map[string]string `json:"resource,omitempty"`
+	Events       []SpanEvent       `json:"events,omitempty"`
 }
+
+// Resolve populates derived fields from raw proto fields.
+// Called automatically by the OTLP receiver after protobuf decoding.
+func (s *Span) Resolve() {
+	s.TraceID = hexBytes(s.TraceIDBytes[:])
+	s.SpanID = hexBytes(s.SpanIDBytes[:])
+	var zeroParent [8]byte
+	if s.ParentSpanIDBytes != zeroParent {
+		s.ParentID = hexBytes(s.ParentSpanIDBytes[:])
+	}
+	s.StartTime = time.Unix(0, int64(s.StartTimeNano)).UTC()
+	s.EndTime = time.Unix(0, int64(s.EndTimeNano)).UTC()
+	if s.EndTimeNano > s.StartTimeNano {
+		s.DurationNano = s.EndTimeNano - s.StartTimeNano
+	}
+	s.ServiceName = s.RawResource.ServiceName
+	s.ReceivedAt = time.Now()
+
+	// Flatten raw attributes to map.
+	if len(s.RawAttributes) > 0 {
+		s.Attributes = make(map[string]string, len(s.RawAttributes))
+		for _, kv := range s.RawAttributes {
+			s.Attributes[kv.Key] = kv.Value
+		}
+	}
+	// Flatten resource attributes to map.
+	if len(s.RawResource.Attributes) > 0 {
+		s.Resource = make(map[string]string, len(s.RawResource.Attributes)+2)
+		for _, kv := range s.RawResource.Attributes {
+			s.Resource[kv.Key] = kv.Value
+		}
+		if s.RawResource.ServiceName != "" {
+			s.Resource["service.name"] = s.RawResource.ServiceName
+		}
+		if s.RawResource.ServiceVersion != "" {
+			s.Resource["service.version"] = s.RawResource.ServiceVersion
+		}
+	}
+}
+
+// IsRoot returns true if this is a root span (no parent).
+func (s *Span) IsRoot() bool { return s.ParentID == "" }
 
 // IsError returns true when the span has an error status.
 func (s *Span) IsError() bool { return s.StatusCode == StatusError }
 
+// DurationMS returns the span duration in milliseconds.
+func (s *Span) DurationMS() float64 {
+	return float64(s.DurationNano) / 1e6
+}
+
 // Duration returns the span duration.
 func (s *Span) Duration() time.Duration {
 	return time.Duration(s.DurationNano)
-}
-
-// TraceIDHex returns the trace ID as a 32-char hex string.
-func (s *Span) TraceIDHex() string { return hexBytes(s.TraceID[:]) }
-
-// SpanIDHex returns the span ID as a 16-char hex string.
-func (s *Span) SpanIDHex() string { return hexBytes(s.SpanID[:]) }
-
-// ParentSpanIDHex returns the parent span ID as a hex string, or "" for root spans.
-func (s *Span) ParentSpanIDHex() string {
-	var zero [8]byte
-	if s.ParentSpanID == zero {
-		return ""
-	}
-	return hexBytes(s.ParentSpanID[:])
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────

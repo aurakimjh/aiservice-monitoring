@@ -13,7 +13,7 @@
 v0.9.0-rc.1 (현재)                                        v1.0 릴리스
     │                                                          │
     ├── WS-8  문서 정합성 + v1.0 Readiness ★최우선★   ░░░░░░░░ │ ← Phase 0 (NEW)
-    ├── WS-1  자체 스토리지 엔진 (Prom/Jaeger 제거)     ░░░░░░░░ │
+    ├── WS-1  자체 스토리지 엔진 (Prom/Jaeger 제거)     █████░░░ │
     ├── WS-2  엔티티 계층 확장 (K8s/DB/BizTx)          ░░░░░░░░ │
     ├── WS-3  대규모 배치 성능 최적화                     ░░░░░░░░ │
     ├── WS-3A XLog/HeatMap 강화                         ░░░░░░░░ │
@@ -59,14 +59,14 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S3-1 | 인메모리 시계열 링버퍼 (4시간, Sharded RWMutex) | ☐ | |
-| S3-2 | SQLite 시계열 테이블 + 라벨 인덱스 (Warm 7~90일) | ☐ | |
-| S3-3 | 자체 쿼리 API (/api/v2/metrics/query) | ☐ | JSON 기반 |
-| S3-4 | 집계 함수: rate, sum, avg, max, min, percentile | ☐ | |
-| S3-5 | 다운샘플링 크론 (원본→1분→1시간) | ☐ | |
-| S3-6 | 알림 규칙 평가 엔진 | ☐ | 기존 Prometheus alert rules 대체 |
-| S3-7 | PromQL 기본 파서 (핵심 함수 20개) | ☐ | 커스텀 대시보드 호환 |
-| S3-8 | Cold Tier: S3 Parquet 아카이브 | ☐ | |
+| S3-1 | 인메모리 시계열 링버퍼 (4시간, Sharded RWMutex) | ✅ | 64-shard FNV32 해싱, 시리즈당 960 샘플 링 |
+| S3-2 | SQLite 시계열 테이블 + 라벨 인덱스 (Warm 7~90일) | ✅ | 일별 파티셔닝, label_index 역인덱스 |
+| S3-3 | 자체 쿼리 API (/api/v2/metrics/query) | ✅ | GET/POST JSON, Hot+Warm 자동 병합 |
+| S3-4 | 집계 함수: rate, sum, avg, max, min, percentile | ✅ | rate, irate, increase, p50/90/95/99, count |
+| S3-5 | 다운샘플링 크론 (원본→1분→1시간) | ✅ | 6시간 주기, 1d+ raw→1m, 7d+ 1m→1h |
+| S3-6 | 알림 규칙 평가 엔진 | ✅ | 15초 주기, CRUD API, eventbus 연동 |
+| S3-7 | PromQL 기본 파서 (핵심 함수 20개) | ✅ | rate, sum, avg, topk, histogram_quantile 등 |
+| S3-8 | Cold Tier: S3 Parquet 아카이브 | ✅ | NDJSON.gz, 1h 다운샘플 데이터 아카이브 |
 
 ### WS-1.4 Frontend 전환 (Phase S4) — 1주
 

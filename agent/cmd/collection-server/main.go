@@ -29,7 +29,9 @@ import (
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/metricstore"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/otlp"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/tracestore"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/ws"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
@@ -521,14 +523,47 @@ func main() {
 		logger.Info("restored agents from db", "count", len(savedAgents))
 	}
 
+	// ── Trace Engine (WS-1.2) ────────────────────────────────────────────────
+	traceCfg := tracestore.DefaultConfig()
+	traceCfg.DataDir = envOrDefault("AITOP_TRACE_DATA_DIR", "./data/traces")
+	traceStore, err := tracestore.New(traceCfg, logger)
+	if err != nil {
+		logger.Error("trace store init failed", "error", err)
+		os.Exit(1)
+	}
+
+	// ── Metric Engine (WS-1.3) ───────────────────────────────────────────────
+	metricCfg := metricstore.DefaultConfig()
+	metricCfg.DataDir = envOrDefault("AITOP_METRIC_DATA_DIR", "./data/metrics")
+	metricStore, err := metricstore.New(metricCfg, func(rule metricstore.AlertRule, state metricstore.AlertState) {
+		action := "resolved"
+		if state.Firing {
+			action = "firing"
+		}
+		bus.Publish(eventbus.Event{
+			Type:      eventbus.EventType("metric.alert." + action),
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"rule_id":   rule.ID,
+				"rule_name": rule.Name,
+				"metric":    rule.Metric,
+				"value":     state.Value,
+				"threshold": rule.Threshold,
+				"severity":  rule.Severity,
+			},
+		})
+	}, logger)
+	if err != nil {
+		logger.Error("metric store init failed", "error", err)
+		os.Exit(1)
+	}
+
 	// ── OTLP Receiver (WS-1.1) ───────────────────────────────────────────────
-	// traceH and metricH are no-op stubs until WS-1.2 (TraceEngine) and
-	// WS-1.3 (MetricEngine) are wired in.
 	otlpTraceH := func(batch otlp.TraceBatch) {
-		logger.Debug("otlp: trace batch received", "spans", len(batch.Spans))
+		traceStore.Ingest(batch.Spans)
 	}
 	otlpMetricH := func(batch otlp.MetricBatch) {
-		logger.Debug("otlp: metric batch received", "points", len(batch.Points))
+		metricStore.Ingest(batch.Points)
 	}
 	otlpCfg := otlp.Config{
 		GRPCAddr:     envOrDefault("AITOP_OTLP_GRPC_ADDR", ":4317"),
@@ -536,7 +571,7 @@ func main() {
 	}
 	otlpRecv := otlp.New(otlpCfg, otlpTraceH, otlpMetricH, logger)
 
-	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store, otlpRecv)
+	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store, otlpRecv, traceStore, metricStore)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -560,6 +595,11 @@ func main() {
 		// OTLP/HTTP ingestion endpoints — OTel SDKs do not carry AITOP JWTs
 		"/v1/traces",
 		"/v1/metrics",
+		// v2 Trace/Metric Engine APIs
+		"/api/v2/traces",
+		"/api/v2/services",
+		"/api/v2/metrics",
+		"/api/v2/alerts",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
@@ -577,6 +617,10 @@ func main() {
 
 	// Start background purge scheduler
 	go startPurgeScheduler(ctx, store, storageCfg.Local.RetentionDays, logger)
+
+	// Start Trace Engine + Metric Engine background jobs
+	traceStore.Start(ctx)
+	metricStore.Start(ctx)
 
 	// Start OTLP fan-out dispatch loop
 	go otlpRecv.RunFanOut(ctx)
@@ -605,13 +649,21 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend, otlpRecv *otlp.Receiver) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend, otlpRecv *otlp.Receiver, traceStr *tracestore.Store, metricStr *metricstore.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── OTLP/HTTP endpoints (S1-2) ────────────────────────────────────────────
 	// POST /v1/traces   — OTLP ExportTraceServiceRequest
 	// POST /v1/metrics  — OTLP ExportMetricsServiceRequest
 	otlpRecv.RegisterHTTP(mux)
+
+	// ── Trace Engine API (WS-1.2) ─────────────────────────────────────────────
+	traceHandler := tracestore.NewHandler(traceStr, logger)
+	traceHandler.Register(mux)
+
+	// ── Metric Engine API (WS-1.3) ────────────────────────────────────────────
+	metricHandler := metricstore.NewHandler(metricStr, logger)
+	metricHandler.Register(mux)
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
 
