@@ -30,6 +30,7 @@ import (
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/compat"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
+	k8smod "github.com/aurakimjh/aiservice-monitoring/agent/internal/k8s"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/metricstore"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/otlp"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/tracestore"
@@ -559,9 +560,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ── K8s Integration (WS-2.2) ─────────────────────────────────────────────
+	k8sStore := k8smod.NewStore(logger)
+	k8sWatcher := k8smod.NewWatcher(k8sStore, logger)
+
 	// ── OTLP Receiver (WS-1.1) ───────────────────────────────────────────────
 	otlpTraceH := func(batch otlp.TraceBatch) {
 		traceStore.Ingest(batch.Spans)
+		// E2-5/E2-6: Auto-map K8s entities from OTel resource attributes.
+		for _, sp := range batch.Spans {
+			if sp.Resource != nil && sp.Resource["k8s.pod.name"] != "" {
+				k8sStore.MapFromOTelResource(sp.Resource, sp.ServiceName)
+			}
+		}
 	}
 	otlpMetricH := func(batch otlp.MetricBatch) {
 		metricStore.Ingest(batch.Points)
@@ -572,7 +583,7 @@ func main() {
 	}
 	otlpRecv := otlp.New(otlpCfg, otlpTraceH, otlpMetricH, logger)
 
-	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store, otlpRecv, traceStore, metricStore)
+	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store, otlpRecv, traceStore, metricStore, k8sStore)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -602,6 +613,7 @@ func main() {
 		"/api/v2/metrics",
 		"/api/v2/alerts",
 		"/api/v2/databases",
+		"/api/v2/k8s/",
 		// WS-1.5 External integration (unauthenticated for scrape/push)
 		"/api/v1/prom/",
 		"/api/v1/export/",
@@ -627,6 +639,11 @@ func main() {
 	// Start Trace Engine + Metric Engine background jobs
 	traceStore.Start(ctx)
 	metricStore.Start(ctx)
+
+	// Start K8s API watcher (if running in Kubernetes)
+	if k8sWatcher != nil {
+		go k8sWatcher.Run(ctx)
+	}
 
 	// Start OTLP fan-out dispatch loop
 	go otlpRecv.RunFanOut(ctx)
@@ -655,7 +672,7 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend, otlpRecv *otlp.Receiver, traceStr *tracestore.Store, metricStr *metricstore.Store) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend, otlpRecv *otlp.Receiver, traceStr *tracestore.Store, metricStr *metricstore.Store, k8sStr *k8smod.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	// ── OTLP/HTTP endpoints (S1-2) ────────────────────────────────────────────
@@ -683,6 +700,10 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// S5-3: Self-monitoring /metrics endpoint
 	selfMetrics := compat.NewSelfMetricsHandler(traceStr, metricStr, logger)
 	selfMetrics.Register(mux)
+
+	// ── K8s Dashboard API (WS-2.2) ────────────────────────────────────────
+	k8sHandler := k8smod.NewHandler(k8sStr, logger)
+	k8sHandler.Register(mux)
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
 

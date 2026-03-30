@@ -125,12 +125,12 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| E2-1 | K8sCluster, K8sWorkload 엔티티 + API | ☐ | |
-| E2-2 | Agent DaemonSet: Node+Pod 메트릭 수집 (kubelet/cAdvisor) | ☐ | |
-| E2-3 | Collection Server K8s API Watcher | ☐ | Pod Event, Deployment Status |
-| E2-4 | K8s Dashboard (Cluster/Namespace/Workload/Pod/Node/Events) | ☐ | 6개 탭 |
-| E2-5 | Pod → Instance 자동 매핑 (k8s.pod.name) | ☐ | |
-| E2-6 | Node → Host 자동 매핑 (hostname) | ☐ | |
+| E2-1 | K8sCluster, K8sWorkload 엔티티 + API | ✅ | Cluster/Namespace/Workload/Pod/Node/Event 모델 + 10개 API |
+| E2-2 | Agent DaemonSet: Node+Pod 메트릭 수집 (kubelet/cAdvisor) | ✅ | IngestNodeMetrics/IngestPodMetrics, OTel 리소스 자동 수집 |
+| E2-3 | Collection Server K8s API Watcher | ✅ | K8s API Watch (Nodes/Pods/Deployments), 30초 주기 동기화 |
+| E2-4 | K8s Dashboard (Cluster/Namespace/Workload/Pod/Node/Events) | ✅ | /kubernetes 페이지 6탭 + KPI 6개 + 데모 데이터 |
+| E2-5 | Pod → Instance 자동 매핑 (k8s.pod.name) | ✅ | OTel resource k8s.pod.name → MappedServiceID/InstanceID |
+| E2-6 | Node → Host 자동 매핑 (hostname) | ✅ | OTel resource k8s.node.name → MappedHostID |
 
 ### WS-2.3 Topology 고도화 (Phase E3) — 2주
 
