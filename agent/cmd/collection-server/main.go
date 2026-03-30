@@ -28,6 +28,7 @@ import (
 	"strconv"
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/compat"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/metricstore"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/otlp"
@@ -600,6 +601,10 @@ func main() {
 		"/api/v2/services",
 		"/api/v2/metrics",
 		"/api/v2/alerts",
+		// WS-1.5 External integration (unauthenticated for scrape/push)
+		"/api/v1/prom/",
+		"/api/v1/export/",
+		"/metrics",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
@@ -664,6 +669,19 @@ func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegis
 	// ── Metric Engine API (WS-1.3) ────────────────────────────────────────────
 	metricHandler := metricstore.NewHandler(metricStr, logger)
 	metricHandler.Register(mux)
+
+	// ── External Integration (WS-1.5) ─────────────────────────────────────
+	// S5-1: Prometheus Remote Write receiver
+	remoteWriteH := compat.NewRemoteWriteHandler(metricStr, logger)
+	remoteWriteH.Register(mux)
+
+	// S5-2: OTLP Export to external systems
+	otlpExporter := compat.NewOTLPExporter(traceStr, metricStr, logger)
+	otlpExporter.Register(mux)
+
+	// S5-3: Self-monitoring /metrics endpoint
+	selfMetrics := compat.NewSelfMetricsHandler(traceStr, metricStr, logger)
+	selfMetrics.Register(mux)
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
 

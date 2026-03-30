@@ -81,9 +81,9 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S5-1 | Prometheus Remote Write 수신 엔드포인트 | ☐ | 기존 Prom 데이터 통합 |
-| S5-2 | OTLP Export (외부 Jaeger/Grafana 복제) | ☐ | 선택 기능 |
-| S5-3 | /metrics 엔드포인트 (자체 메트릭 노출) | ☐ | |
+| S5-1 | Prometheus Remote Write 수신 엔드포인트 | ✅ | POST /api/v1/prom/write (JSON+text exposition) |
+| S5-2 | OTLP Export (외부 Jaeger/Grafana 복제) | ✅ | POST /api/v1/export/configure, 주기적 push |
+| S5-3 | /metrics 엔드포인트 (자체 메트릭 노출) | ✅ | GET /metrics (Prometheus scrape, 30+ 자체 지표) |
 
 ### WS-1.6 PostgreSQL 백엔드 (Phase S6) — 2주
 
