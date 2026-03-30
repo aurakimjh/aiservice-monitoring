@@ -120,10 +120,20 @@ func (s *Store) Search(req QueryRequest) ([]*TraceRow, error) {
 	hotCutoff := time.Now().Add(-HotRetention)
 	var results []*TraceRow
 
+	// Build service name match set (XL-1: multi-service support).
+	svcMatch := make(map[string]bool)
+	if len(req.ServiceNames) > 1 {
+		for _, sn := range req.ServiceNames {
+			svcMatch[sn] = true
+		}
+	} else if req.ServiceName != "" {
+		svcMatch[req.ServiceName] = true
+	}
+
 	// Hot tier: serve from ring buffer when the time window overlaps.
 	if req.To.After(hotCutoff) {
 		hotSpans := s.ring.Snapshot(hotCutoff, 0, func(sp *otlp.Span) bool {
-			if req.ServiceName != "" && sp.ServiceName != req.ServiceName {
+			if len(svcMatch) > 0 && !svcMatch[sp.ServiceName] {
 				return false
 			}
 			if req.StatusCode != 0 && sp.StatusCode != req.StatusCode {

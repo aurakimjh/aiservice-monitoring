@@ -356,7 +356,15 @@ func (w *WarmStore) queryTracesFromDB(db *sql.DB, req QueryRequest) ([]*TraceRow
 	conds = append(conds, "start_time >= ? AND start_time <= ?")
 	args = append(args, req.From.UnixNano(), req.To.UnixNano())
 
-	if req.ServiceName != "" {
+	// XL-1: support multi-service query
+	if len(req.ServiceNames) > 1 {
+		placeholders := make([]string, len(req.ServiceNames))
+		for i, sn := range req.ServiceNames {
+			placeholders[i] = "?"
+			args = append(args, sn)
+		}
+		conds = append(conds, "service_name IN ("+strings.Join(placeholders, ",")+")")
+	} else if req.ServiceName != "" {
 		conds = append(conds, "service_name = ?")
 		args = append(args, req.ServiceName)
 	}
@@ -486,6 +494,7 @@ func daysInRange(from, to time.Time) []string {
 // QueryRequest encapsulates all trace search parameters.
 type QueryRequest struct {
 	ServiceName   string
+	ServiceNames  []string        // XL-1: multi-service query (overrides ServiceName if len > 1)
 	From          time.Time
 	To            time.Time
 	StatusCode    otlp.StatusCode // 0 = any

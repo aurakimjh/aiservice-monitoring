@@ -238,11 +238,13 @@ export default function TracesPage() {
     return map;
   }, [availableServers]);
 
-  // ── Traces (v2 API — AITOP Trace Engine) ──
-  const jaegerQuery = selectedServers.length > 0 ? selectedServers[0] : '';
-  const v2TracesPath = jaegerQuery
-    ? `/api/v2/traces?service=${encodeURIComponent(jaegerQuery)}&limit=200&from=${range.from}&to=${range.to}`
-    : '';
+  // ── Traces (v2 API — AITOP Trace Engine) ── XL-1: 복수 서비스 동시 조회
+  const v2TracesPath = useMemo(() => {
+    if (selectedServers.length === 0) return '';
+    // Build multi-service query: service=svc1&service=svc2&...
+    const svcParams = selectedServers.map((s) => `service=${encodeURIComponent(s)}`).join('&');
+    return `/api/v2/traces?${svcParams}&limit=200&from=${range.from}&to=${range.to}`;
+  }, [selectedServers, range.from, range.to]);
 
   const demoTxnFallback = useCallback(() => [] as Transaction[], []);
   const { data: jaegerTxns, source: txnSource } = useDataSource<Transaction[]>(
@@ -350,7 +352,15 @@ export default function TracesPage() {
       }
     }
 
-    return { hmData, errorDots, minT, bucketWidth };
+    // XL-12: TPS per time bucket (transactions per second)
+    const tpsBuckets: number[] = new Array(TIME_BUCKETS).fill(0);
+    for (let t = 0; t < TIME_BUCKETS; t++) {
+      const total = grid[t].reduce((a, b) => a + b, 0);
+      const bucketSecs = (bucketWidth || 1) / 1000;
+      tpsBuckets[t] = bucketSecs > 0 ? Math.round((total / bucketSecs) * 10) / 10 : 0;
+    }
+
+    return { hmData, errorDots, minT, bucketWidth, tpsBuckets };
   }, [filteredTransactions, range.from]);
 
   // Sync heatmap data to refs for use in brush handler
@@ -467,19 +477,46 @@ export default function TracesPage() {
   // ── HeatMap chart option (WhaTap style) ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const heatmapOption = useMemo<any>(() => {
-    const { hmData, errorDots } = hmComputed;
+    const { hmData, errorDots, tpsBuckets } = hmComputed;
     return {
       animation: false,
-      xAxis: {
-        type: 'category',
-        data: hmTimeLabels,
-        axisLabel: { interval: 4, fontSize: 10, color: '#8B949E' },
-      },
-      yAxis: {
-        type: 'category',
-        data: LATENCY_BUCKETS,
-        axisLabel: { fontSize: 10, color: '#8B949E' },
-      },
+      xAxis: [
+        // Bottom axis for heatmap
+        {
+          type: 'category',
+          data: hmTimeLabels,
+          axisLabel: { interval: 4, fontSize: 10, color: '#8B949E' },
+          gridIndex: 0,
+        },
+        // Top axis for TPS bar (XL-12)
+        {
+          type: 'category',
+          data: hmTimeLabels,
+          show: false,
+          gridIndex: 1,
+        },
+      ],
+      yAxis: [
+        // Heatmap Y axis
+        {
+          type: 'category',
+          data: LATENCY_BUCKETS,
+          axisLabel: { fontSize: 10, color: '#8B949E' },
+          gridIndex: 0,
+        },
+        // TPS Y axis (XL-12)
+        {
+          type: 'value',
+          show: false,
+          gridIndex: 1,
+        },
+      ],
+      grid: [
+        // Main heatmap grid
+        { left: 60, right: 16, top: 36, bottom: 64 },
+        // TPS bar grid (XL-12: top overlay)
+        { left: 60, right: 16, top: 4, bottom: 'auto', height: 28 },
+      ],
       // 4-stage WhaTap gradient (piecewise)
       visualMap: {
         type: 'piecewise',
@@ -489,6 +526,7 @@ export default function TracesPage() {
           { min: 51, max: 200, color: '#F5A623', label: '51~200' },
           { min: 201, color: '#D0021B', label: '201+' },
         ],
+        seriesIndex: 0,
         outOfRange: { color: 'transparent' },
         orient: 'horizontal',
         left: 'center',
@@ -503,37 +541,53 @@ export default function TracesPage() {
           name: 'Transactions',
           type: 'heatmap',
           data: hmData,
+          xAxisIndex: 0,
+          yAxisIndex: 0,
           emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.4)' } },
           itemStyle: { borderColor: '#0D1117', borderWidth: 0.5 },
         },
-        // Error dot overlay (red scatter on error cells)
+        // XL-10: Error marker overlay — ✕ symbol instead of simple dots
         {
           name: 'Errors',
           type: 'scatter',
           data: errorDots,
-          symbolSize: 6,
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          symbol: 'path://M-1,-1L1,1M1,-1L-1,1',
+          symbolSize: 10,
           z: 10,
-          itemStyle: { color: '#D0021B', opacity: 0.9 },
+          itemStyle: { color: '#FF4444', borderColor: '#FF4444', borderWidth: 2, opacity: 0.95 },
+          tooltip: { formatter: '에러 집중 구간 (≥10%)' },
+        },
+        // XL-12: TPS overlay bar chart (WhaTap style)
+        {
+          name: 'TPS',
+          type: 'bar',
+          data: tpsBuckets,
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          barWidth: '60%',
+          itemStyle: { color: 'rgba(74,144,217,0.4)', borderRadius: [1, 1, 0, 0] },
           tooltip: {
-            formatter: 'Error cluster',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter: (p: any) => `${hmTimeLabels[p.dataIndex] ?? ''}<br/>TPS: ${p.value}`,
           },
         },
       ],
       tooltip: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formatter: (p: any) => {
-          if (p.seriesName === 'Errors') {
-            return `<strong>에러 집중 구간</strong>`;
-          }
+          if (p.seriesName === 'Errors') return `<strong>에러 집중 구간</strong>`;
+          if (p.seriesName === 'TPS') return `${hmTimeLabels[p.dataIndex] ?? ''}<br/>TPS: ${p.value}`;
           const bucket = LATENCY_BUCKETS[p.data[1]] ?? '';
           return `${hmTimeLabels[p.data[0]] ?? ''} | ${bucket}ms<br/>${p.data[2]} 트랜잭션`;
         },
       },
-      grid: { left: 60, right: 16, top: 8, bottom: 64 },
       brush: {
         toolbox: ['rect', 'clear'],
         brushType: 'rect',
         brushMode: 'single',
+        seriesIndex: 0,
         brushStyle: {
           borderWidth: 1,
           color: 'rgba(74,144,217,0.15)',
@@ -833,15 +887,29 @@ export default function TracesPage() {
         </div>
       </div>
 
+      {/* XL-3: Empty state when no data in live mode */}
+      {txnSource === 'live' && filteredTransactions.length === 0 && (
+        <Card>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Activity size={32} className="text-[var(--text-muted)] mb-3 opacity-40" />
+            <p className="text-sm font-medium text-[var(--text-secondary)]">데이터가 없습니다</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              선택한 서비스에서 해당 시간 범위에 트레이스가 수집되지 않았습니다.
+              <br />서비스가 OTLP 데이터를 전송 중인지 확인하세요.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* ── Chart Panel ── */}
       {viewMode === 'split' ? (
-        /* Split view: XLog + HeatMap side by side */
+        /* XL-13: Split view with synced time range */
         <div className="grid grid-cols-2 gap-3">
           <Card padding="none">
             <CardHeader className="px-4 pt-3 pb-0">
               <CardTitle className="text-xs" helpId="chart-xlog-scatter">XLog 산점도</CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
-                <span className="text-[10px]">시간 동기화 ON</span>
+                <span className="text-[10px]">🔗 시간 동기화</span>
               </div>
             </CardHeader>
             <EChartsWrapper
@@ -855,9 +923,10 @@ export default function TracesPage() {
               <CardTitle className="text-xs" helpId="chart-heatmap">응답시간 HeatMap</CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
                 <span className="inline-flex items-center gap-0.5">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D0021B' }} />
-                  에러 구간
+                  <span className="w-2.5 h-2.5 text-[10px]">✕</span>
+                  에러 ≥10%
                 </span>
+                <span className="text-[10px]">📊 TPS</span>
               </div>
             </CardHeader>
             <EChartsWrapper
@@ -1196,11 +1265,20 @@ export default function TracesPage() {
           {/* Span attributes */}
           {selectedSpan && (
             <div className="mt-3 pt-3 border-t border-[var(--border-muted)]">
-              <div className="text-[10px] text-[var(--text-muted)] mb-2">
-                Span:{' '}
-                <strong className="text-[var(--text-primary)]">{selectedSpan.name}</strong>
-                <span className="ml-2">Duration: {formatDuration(selectedSpan.duration)}</span>
-                <span className="ml-2">Offset: +{formatDuration(selectedSpan.startOffset)}</span>
+              <div className="text-[10px] text-[var(--text-muted)] mb-2 flex items-center gap-2">
+                <span>
+                  Span:{' '}
+                  <strong className="text-[var(--text-primary)]">{selectedSpan.name}</strong>
+                </span>
+                <span>Duration: {formatDuration(selectedSpan.duration)}</span>
+                <span>Offset: +{formatDuration(selectedSpan.startOffset)}</span>
+                {/* XL-9: Link to full trace detail page */}
+                <Link
+                  href={`/traces/${selectedDetail.traceId}`}
+                  className="ml-auto text-[var(--accent-primary)] hover:underline"
+                >
+                  트레이스 상세 →
+                </Link>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {Object.entries(selectedSpan.attributes).map(([key, value]) => (

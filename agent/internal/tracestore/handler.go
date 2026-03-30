@@ -58,10 +58,11 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	req := QueryRequest{
-		ServiceName: q.Get("service"),
-		From:        now.Add(-time.Hour),
-		To:          now,
-		Limit:       100,
+		ServiceName:  q.Get("service"),
+		ServiceNames: q["service"], // XL-1: multi-service support
+		From:         now.Add(-time.Hour),
+		To:           now,
+		Limit:        100,
 	}
 
 	if v := q.Get("from"); v != "" {
