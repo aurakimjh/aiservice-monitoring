@@ -8,6 +8,14 @@
 
 ---
 
+> **[중요] 본 문서는 권고안(Architecture Decision Review)이며, 현재 운영 구조가 아닙니다.**
+>
+> - **현재 운영 구조(As-Is)**: OTel Collector → Prometheus/Jaeger 경유 아키텍처 — [ARCHITECTURE.md](./ARCHITECTURE.md) 참조
+> - **이 문서**: v1.0을 위한 자체 스토리지 전환 설계 검토서. WS-1~7 워크스트림 완료 후 실제 운영 구조로 전환 예정.
+> - **독자 안내**: 프로덕션 운영 참조 시 ARCHITECTURE.md를 사용하세요. 이 문서는 향후 아키텍처 방향 이해를 위한 검토 자료입니다.
+
+---
+
 ## 1. 검토 배경
 
 ### 1.1 현재 아키텍처의 문제

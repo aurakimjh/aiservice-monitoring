@@ -11,39 +11,41 @@
 
 ## 개요
 
-AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이전트 → 외부 API → 벡터 DB → LLM 추론)에 대한 **엔드-투-엔드 가시성**을 확보하고, TTFT·TPS·GPU VRAM 등 AI 특화 지표를 통해 성능 최적화 및 장애를 선제 방어하는 **상용 수준의 통합 모니터링 플랫폼**입니다.
+AI 에이전트 및 LLM 서비스의 복잡한 레이어(가드레일 → 에이전트 → 외부 API → 벡터 DB → LLM 추론)에 대한 **엔드-투-엔드 가시성**을 확보하는 통합 모니터링 플랫폼입니다.
 
-### 핵심 기능
+- **통합 모니터링 UI**: Next.js 16, 67개 화면 — APM·AI·인프라·에이전트·프로파일링·토폴로지 통합
+- **AITOP Agent**: Go 기반, 12개 Collector (OS/WEB/WAS/DB/GPU/LLM/VectorDB/Serving/OTel/Cache/MQ/Profiling)
+- **AI 특화 지표**: TTFT, TPS, GPU VRAM 포화 예측, 가드레일 차단율, Fine-tuning 모니터링
+- **분산 추적 + 프로파일링**: W3C TraceContext 기반 추적, FlameGraph Continuous Profiling
+- **엔터프라이즈 기능**: SSO (OIDC/SAML), 멀티테넌트, Terraform Provider, Fleet 관리
 
-| 기능 | 설명 |
-|------|------|
-| **통합 모니터링 UI** | Next.js 16 기반 67개 화면 — APM + AI + 인프라 + 에이전트 + 프로파일링 + 토폴로지 + 커스텀 대시보드를 단일 플랫폼에서 통합 |
-| **AITOP Agent** | Go 기반 경량 에이전트 — 12개 Collector (OS/WEB/WAS/DB/GPU/LLM/VectorDB/Serving/OTel/Cache/MQ/Profiling) |
-| **AI Copilot** | 자연어 → PromQL 변환 (NL→PromQL), AI 기반 장애 분석 및 쿼리 자동 생성 |
-| **Continuous Profiling** | FlameGraph 기반 CPU/메모리/Lock 프로파일링 — Go/Java/.NET 지원 |
-| **Topology Auto-Discovery** | D3.js 기반 네트워크 토폴로지 자동 탐지 — 프로토콜 감지 및 의존성 시각화 |
-| **분산 추적** | 사용자 요청이 모든 레이어를 통과하는 동안 Trace ID 연속성 보장 (W3C TraceContext) |
-| **AI 특화 메트릭** | TTFT, TPS, ms/token, GPU VRAM 포화 예측, 가드레일 차단율, Fine-tuning 학습 모니터링 |
-| **Multi-Cloud 모니터링** | AWS CloudWatch, GCP Monitoring, Azure Monitor 통합 — 비용 최적화 포함 |
-| **Data Pipeline 모니터링** | Airflow, Prefect, Dagster 파이프라인 실행 상태 및 성능 추적 |
-| **Business KPI** | 비즈니스 메트릭과 기술 메트릭 상관 분석 — 매출, 전환율, SLA 대시보드 |
-| **Marketplace** | 대시보드 템플릿, 알림 정책, 커스텀 Collector 공유 마켓플레이스 |
-| **Mobile Dashboard** | 반응형 모바일 대시보드 — 주요 지표 실시간 확인 및 알림 수신 |
-| **SSO 인증** | OIDC/SAML 지원 — Okta, Azure AD, Google Workspace 통합 |
-| **Terraform Provider** | IaC 기반 모니터링 설정 — 5개 리소스, 3개 데이터소스 |
-| **지능형 샘플링** | Head-based + Tail-based Sampling으로 저장 비용 80% 절감 |
-| **Fleet 관리** | 에이전트 중앙 관리, 서버 그룹, OTA 업데이트, 원격 CLI, 수집 스케줄링 |
-| **이상 탐지** | 자동 이상 탐지 + 합성 모니터링(Synthetic Monitoring) + 정기 보고서 |
-| **진단 보고서** | IT 55항목 + AI 31항목 = 86개 자동 진단 및 교차 분석 |
-| **가드레일 가시성** | 차단율, 위반 유형, 레이턴시 기여도 실시간 측정 |
-| **미들웨어 모니터링** | Redis/Memcached 캐시 + RabbitMQ/Kafka 메시지 큐 모니터링 |
-| **RUM** | Core Web Vitals (LCP/FID/CLS/INP), Session Replay, 글로벌 PoP 레이턴시 |
-| **SRE Golden Signals** | Latency/Traffic/Errors/Saturation 통합 뷰 + SLO Burn Rate 경고 |
-| **런타임 모니터링** | Python GIL/Free-Thread, .NET AOT/ThreadPool, Go Scheduler Latency |
-| **DB 모니터링** | PostgreSQL/MySQL 슬로우 쿼리, 락 분석, 대기 이벤트, 실행 계획 |
-| **SLO 기반 알림** | 6개 SLO + 2계층 Burn Rate Alert (page/ticket) + Error Budget 추적 |
-| **멀티테넌트** | 프로젝트 기반 리소스 격리, White-label, RBAC |
-| **국제화** | 한국어/영어/일본어 3개 언어 지원 |
+> 전체 기능 목록 및 제품 비전: [DOCS/PRODUCT_OVERVIEW.md](DOCS/PRODUCT_OVERVIEW.md)
+> 비전·전략·경쟁 분석: [DOCS/SOLUTION_STRATEGY.md](DOCS/SOLUTION_STRATEGY.md)
+
+---
+
+## 현재 동작하는 것 / 실행 방법 / 권장 모드
+
+### 현재 동작하는 것 (v0.9.0-rc.1)
+
+| 항목 | 상태 | 실행 방법 |
+|------|------|---------|
+| **통합 모니터링 UI** (67개 화면) | 시연 가능 | `npm run dev` (목업 데이터 포함) |
+| **AITOP Agent** (12개 Collector) | 빌드/실행 가능 | `go build ./cmd/aitop-agent` |
+| **Collection Server** (gRPC) | 실행 가능 | `go build ./cmd/collection-server` |
+| **Demo 환경** (RAG 서비스 포함) | 실행 가능 | `docker compose up -d` (개발 스택) |
+| **SDK 계측** (Python/Node/Go/Java/.NET) | 사용 가능 | `sdk-instrumentation/` 참조 |
+| **Terraform Provider** | 빌드/테스트 가능 | `terraform-provider-aitop/` 참조 |
+
+> **참고**: 현재 버전은 Prometheus/Jaeger를 스토리지로 사용합니다. 자체 스토리지 엔진(WS-1) 완료 후 외부 의존성 제거 예정.
+
+### 권장 실행 모드
+
+| 목적 | 명령 | 스택 |
+|------|------|------|
+| **개발/시연** | `docker compose -f infra/docker/docker-compose.yaml up -d` | Prometheus + Jaeger + PostgreSQL + Grafana |
+| **상용 배포 (라이선스 안전)** | `docker compose -f infra/docker/docker-compose.commercial.yaml up -d` | Prometheus + Jaeger + PostgreSQL (AGPL 제외) |
+| **Kubernetes** | `helm install aitop ./helm/aiservice-monitoring` | Helm Chart (dev/prod values 선택) |
 
 ---
 
@@ -466,29 +468,41 @@ sso:
 
 ## 개발 진행 현황
 
+> **표기 기준**
+> - **설계/시연 완료** (`✅`): UI 구현·기능 설계·시연 환경 검증 완료. 상용 프로덕션 배포를 위한 추가 과제(WS-1~7) 진행 중.
+> - **상용 릴리스 완료** (`🚀`): 엔터프라이즈 프로덕션 배포 가능 수준 — 자체 스토리지·수평 확장·엔터프라이즈 패키징 완료 후 해당.
+> - **현재 버전**: v0.9.0-rc.1 (설계/시연 완료 단계)
+
 ```
-Phase 1~6:   OTel 인프라 + SDK + 대시보드 + Helm + CI/CD           ████████████ 100% ✅
-Phase 10~14: 상용 솔루션 UI (67개 화면 기반)                         ████████████ 100% ✅
-Phase 15~16: AITOP Agent (IT/AI Collector + Fleet + CLI)           ████████████ 100% ✅
-Phase 17~18: UI 통합 테스트 + E2E 시나리오                            ████████████ 100% ✅
-Phase 19:    보안 강화 + RBAC + 감사 로그                             ████████████ 100% ✅
-Phase 20:    운영 고도화 (이상 탐지 · 보고서 · 합성 모니터링)            ████████████ 100% ✅
-Phase 21:    Continuous Profiling + Terraform Provider + SSO       ████████████ 100% ✅
-Phase 22:    AI Copilot + Topology Auto-Discovery + Fine-tuning    ████████████ 100% ✅
-Phase 23:    Multi-Cloud + Data Pipeline + Business KPI + Mobile   ████████████ 100% ✅
-Phase 24:    Java/.NET SDK + 메소드 프로파일링                        ████████████ 100% ✅
-Phase 25:    서버 그룹 + SDK 자동 인식 + 중앙 설정                     ████████████ 100% ✅
-Phase 26:    미들웨어 런타임 + Redis/Cache + 메시지 큐                  ████████████ 100% ✅
-Phase 27~30: 고급 기능 완성 + Enterprise/Lite + AGPL-free 전환        ████████████ 100% ✅
-Phase 31:    진단 항목 Go 구현 + Java Agent EOL                      ████████████ 100% ✅
-Phase 32:    GPU 멀티벤더 지원 (NVIDIA/AMD/Intel/Apple/Cloud)         ████████████ 100% ✅
-Phase 33:    중앙 플러그인 배포 (Plugin Manager + Fleet Console)      ████████████ 100% ✅
-Phase 34:    Runtime Attach 프로파일링 (Java/Python/.NET/Node/Go)    ████████████ 100% ✅
-Phase 35:    perf/eBPF 시스템 프로파일링 + FlameGraph 생성 엔진       ████████████ 100% ✅
-Phase 36~38: 배치 모니터링 (감지·프로파일링·대시보드)                    ████████████ 100% ✅
+[설계/시연 완료 — v0.9.0-rc.1]
+Phase 1~6:   OTel 인프라 + SDK + 대시보드 + Helm + CI/CD           ████████████ 설계/시연 완료 ✅
+Phase 10~14: 상용 솔루션 UI (67개 화면 기반)                         ████████████ 설계/시연 완료 ✅
+Phase 15~16: AITOP Agent (IT/AI Collector + Fleet + CLI)           ████████████ 설계/시연 완료 ✅
+Phase 17~18: UI 통합 테스트 + E2E 시나리오                            ████████████ 설계/시연 완료 ✅
+Phase 19:    보안 강화 + RBAC + 감사 로그                             ████████████ 설계/시연 완료 ✅
+Phase 20:    운영 고도화 (이상 탐지 · 보고서 · 합성 모니터링)            ████████████ 설계/시연 완료 ✅
+Phase 21:    Continuous Profiling + Terraform Provider + SSO       ████████████ 설계/시연 완료 ✅
+Phase 22:    AI Copilot + Topology Auto-Discovery + Fine-tuning    ████████████ 설계/시연 완료 ✅
+Phase 23:    Multi-Cloud + Data Pipeline + Business KPI + Mobile   ████████████ 설계/시연 완료 ✅
+Phase 24:    Java/.NET SDK + 메소드 프로파일링                        ████████████ 설계/시연 완료 ✅
+Phase 25:    서버 그룹 + SDK 자동 인식 + 중앙 설정                     ████████████ 설계/시연 완료 ✅
+Phase 26:    미들웨어 런타임 + Redis/Cache + 메시지 큐                  ████████████ 설계/시연 완료 ✅
+Phase 27~30: 고급 기능 완성 + Enterprise/Lite + AGPL-free 전환        ████████████ 설계/시연 완료 ✅
+Phase 31:    진단 항목 Go 구현 + Java Agent EOL                      ████████████ 설계/시연 완료 ✅
+Phase 32:    GPU 멀티벤더 지원 (NVIDIA/AMD/Intel/Apple/Cloud)         ████████████ 설계/시연 완료 ✅
+Phase 33:    중앙 플러그인 배포 (Plugin Manager + Fleet Console)      ████████████ 설계/시연 완료 ✅
+Phase 34:    Runtime Attach 프로파일링 (Java/Python/.NET/Node/Go)    ████████████ 설계/시연 완료 ✅
+Phase 35:    perf/eBPF 시스템 프로파일링 + FlameGraph 생성 엔진       ████████████ 설계/시연 완료 ✅
+Phase 36~38: 배치 모니터링 (감지·프로파일링·대시보드)                    ████████████ 설계/시연 완료 ✅
 ─────────────────────────────────────────────────────────────────────────────────────
-Phase  7':   E2E 통합 검증 (PASS 34 / WARN 13 / 버그 7건 수정)       ████████████ 100% ✅
+Phase  7':   E2E 통합 검증 (PASS 34 / WARN 13 / 버그 7건 수정)       ████████████ 설계/시연 완료 ✅
 잔여:        Phase 8'/9' — K8s 통합 배포 · SLO 튜닝 (인프라 환경 필요) ░░░░░░░░░░░░   0% 📋
+
+[상용 릴리스 완료 — v1.0 목표]
+WS-1: 자체 스토리지 엔진 (Prom/Jaeger 제거)                          ░░░░░░░░░░░░   미착수
+WS-2: 엔티티 계층 확장 (K8s/DB/BizTx)                               ░░░░░░░░░░░░   미착수
+WS-3: 대규모 배치 성능 최적화                                          ░░░░░░░░░░░░   미착수
+WS-4~7: Live 전환 · 품질 안정화 · 통합 테스트 · 상용 패키징              ░░░░░░░░░░░░   미착수
 ```
 
 상세 현황은 [WORK_STATUS.md](WORK_STATUS.md) 참조.

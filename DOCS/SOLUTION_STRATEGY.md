@@ -72,9 +72,12 @@ AITOP은 세 가지 약속을 지킨다:
 
 | 약속 | 의미 | 측정 지표 |
 |------|------|----------|
-| **1. 즉각적 인지** | 문제가 발생하면 30초 이내에 알린다 | MTTD (Mean Time To Detect) < 30s |
-| **2. 정확한 진단** | 근본 원인을 5분 이내에 특정한다 | MTTR (Mean Time To Resolve) < 5min |
-| **3. 선제적 예방** | 장애가 발생하기 전에 예측하여 대응한다 | Predictive Accuracy > 85% |
+| **1. 즉각적 인지** | 문제가 발생하면 30초 이내에 알린다 | MTTD (Mean Time To Detect) < 30s `[설계목표]` |
+| **2. 정확한 진단** | 근본 원인을 5분 이내에 특정한다 | MTTR (Mean Time To Resolve) < 5min `[설계목표]` |
+| **3. 선제적 예방** | 장애가 발생하기 전에 예측하여 대응한다 | Predictive Accuracy > 85% `[설계목표]` |
+
+> **출처 표기 범례**: `[설계목표]` = v1.0 달성 목표치 (미실측) / `[실측]` = 실제 측정값 / `[PoC]` = 개발 환경 측정값 / `[경쟁사 공개자료]` = 각 사 공개 문서·블로그 기준
+> 실측 결과는 `DOCS/PERFORMANCE_BENCHMARKS.md`에 기록하며, 해당 수치는 `[실측]`으로 업데이트한다. (WS-8.4 R-15)
 
 ### 1.3 핵심 가치 — 왜 AITOP인가
 
@@ -870,7 +873,10 @@ AITOP Agent (단일 Go 바이너리, ~15MB)
 
 ### 5.4 성능 벤치마크 목표
 
-| 지표 | 목표치 | 비교 (Datadog Agent) | 비교 (OTel Collector) |
+> ⚠️ **출처 표기**: AITOP 수치는 `[설계목표]` (미실측), 경쟁사 수치는 `[경쟁사 공개자료]` (각 사 공개 문서·블로그 기준).
+> 실측 결과는 `DOCS/PERFORMANCE_BENCHMARKS.md`에 기록하며, 실측 완료 항목은 `[실측]`으로 업데이트한다. (WS-8.4 R-15)
+
+| 지표 | 목표치 `[설계목표]` | 비교 (Datadog Agent) `[경쟁사 공개자료]` | 비교 (OTel Collector) `[경쟁사 공개자료]` |
 |------|:------:|:--------------------:|:---------------------:|
 | **Agent CPU 사용률** | < 2% (idle), < 5% (active) | ~3% idle | ~2% idle |
 | **Agent 메모리** | < 50MB (idle), < 150MB (active) | ~100MB idle | ~80MB idle |
@@ -1075,7 +1081,7 @@ APAC 시장 진입 우선순위
 
 ## 7. 차세대 혁신 로드맵
 
-Phase 1~40 + Phase 7'~9'가 완료된 현재, AITOP은 **v1.0.0 릴리스 준비 완료** 상태이다. 이 기능들이 프로덕션에 배포되면 AITOP은 단순 모니터링 플랫폼을 넘어 **AI 서비스 운영 자동화 플랫폼**으로 진화한다.
+Phase 1~40 + Phase 7'가 설계/시연 완료된 현재(Phase 8'/9' — K8s 통합 배포·SLO 튜닝은 인프라 환경 필요로 별도 진행), AITOP은 **v1.0 설계 완료, 릴리스 실행 과제(WS-1~7) 진행 중** 상태이다. 이 기능들이 프로덕션에 배포되면 AITOP은 단순 모니터링 플랫폼을 넘어 **AI 서비스 운영 자동화 플랫폼**으로 진화한다.
 
 ### 7.1 혁신 로드맵 전체 뷰
 
@@ -1394,7 +1400,9 @@ Federated Monitoring 아키텍처
 
 ### 9.2 엔지니어링 KPI
 
-| 영역 | KPI | 목표 (Year 1) | 목표 (Year 3) | 측정 방법 |
+> ⚠️ 아래 수치는 `[설계목표]` — 실측 전 목표치. 실측 후 `DOCS/PERFORMANCE_BENCHMARKS.md`에 업데이트. (WS-8.4 R-15)
+
+| 영역 | KPI | 목표 (Year 1) `[설계목표]` | 목표 (Year 3) `[설계목표]` | 측정 방법 |
 |------|-----|:-------------:|:-------------:|----------|
 | **품질** | P0 장애 발생 빈도 | < 2회/분기 | < 1회/분기 | 인시던트 추적 |
 | **품질** | Agent Crash Rate | < 0.01% | < 0.001% | Crash 리포트 |
@@ -1735,7 +1743,7 @@ AITOP 방식:
 
 ### 핵심 역량
 
-| 영역 | AITOP v1.3 기능 | 대응 경쟁사 수준 |
+| 영역 | AITOP v1.3 기능 | 대응 경쟁사 수준 `[목표 설계]` |
 |------|----------------|----------------|
 | **LLM Call Tracing** | OTel GenAI Span 기반 전 호출 트레이싱, 입출력 토큰·프롬프트·응답 캡처 | Datadog LLM Observability 동등 |
 | **Token & Cost Tracking** | 모델별 토큰 단가 설정, 실시간 비용 집계 (`gen_ai.cost_usd`), 일/주/월 추이 | Dynatrace AI Cost Analytics 동등 |
@@ -1744,6 +1752,9 @@ AITOP 방식:
 | **Prompt Version Management** | 프롬프트 템플릿 버전 관리, A/B 비교, 성능 회귀 감지 | Langsmith 참조 |
 | **AI Security Monitoring** | PII 유출 감지, Prompt Injection 탐지, 토큰 이상 사용 알림 | 자체 구현 (경쟁사 미비) |
 | **AI Diagnostic Items 5종** | ai-cost-spike, ai-agent-loop, ai-rag-quality, ai-gpu-saturation, ai-model-drift | 업계 최초 통합 진단 |
+
+> **`[목표 설계]`**: 위 경쟁사 수준 비교는 v1.3 구현 완료 후 달성을 목표로 한 설계 기준이며,
+> 기능 동등성 증빙은 구현 완료 후 `DOCS/COMPETITIVE_ANALYSIS.md`의 기능 비교표에서 검증한다. (WS-8.4 R-16)
 
 ### 경쟁 포지셔닝
 

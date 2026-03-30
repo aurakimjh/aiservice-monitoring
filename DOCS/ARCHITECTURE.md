@@ -18,6 +18,18 @@
 
 ---
 
+> ### 문서 범위 안내 — As-Is / To-Be / Transition Plan
+>
+> | 구분 | 설명 | 해당 버전 |
+> |------|------|----------|
+> | **As-Is (현재 v0.9.0-rc.1)** | OTel Collector → Prometheus/Jaeger 경유 구조. 현재 실제 운영 중인 아키텍처. | 현재 |
+> | **To-Be (v1.0 목표)** | 자체 스토리지 엔진 내장 (WS-1), 외부 Prometheus/Jaeger 의존성 제거, 8→3 컨테이너 | v1.0 목표 |
+> | **Transition Plan** | WS-1~7 워크스트림으로 단계적 전환. 상세: [WORK_STATUS.md](../WORK_STATUS.md) | 진행 중 |
+>
+> **이 문서는 주로 As-Is(현재) 아키텍처를 기술합니다.** To-Be 설계 검토는 [ARCHITECTURE_REVIEW_v2.md](./ARCHITECTURE_REVIEW_v2.md)를 참조하세요.
+
+---
+
 ## 이 문서를 읽기 전에 — 핵심 개념 이해하기
 
 > 이 섹션은 OpenTelemetry나 모니터링에 익숙하지 않은 분을 위한 안내입니다.
