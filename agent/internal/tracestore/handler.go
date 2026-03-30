@@ -1,0 +1,325 @@
+package tracestore
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/otlp"
+)
+
+// Handler exposes the Trace Engine via HTTP.
+//
+// Routes (to be registered on the main mux):
+//
+//	GET  /api/v2/traces              — S2-3: search traces
+//	GET  /api/v2/traces/{traceId}    — S2-4: trace detail (span tree)
+//	GET  /api/v2/traces/xlog         — S2-5: XLog scatter-plot data
+//	GET  /api/v2/services            — S2-6: service list
+//	GET  /api/v2/services/deps       — S2-6: dependency graph
+//	GET  /api/v2/traces/_stats       — ring buffer + store stats
+type Handler struct {
+	store  *Store
+	logger *slog.Logger
+}
+
+// NewHandler creates an HTTP handler backed by store.
+func NewHandler(store *Store, logger *slog.Logger) *Handler {
+	return &Handler{store: store, logger: logger}
+}
+
+// Register attaches all routes to mux.
+func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v2/traces/xlog", h.handleXLog)       // must be before /{traceId}
+	mux.HandleFunc("GET /api/v2/traces/_stats", h.handleStats)
+	mux.HandleFunc("GET /api/v2/traces/{traceId}", h.handleGetTrace)
+	mux.HandleFunc("GET /api/v2/traces", h.handleSearch)
+	mux.HandleFunc("GET /api/v2/services", h.handleServices)
+	mux.HandleFunc("GET /api/v2/services/deps", h.handleDeps)
+}
+
+// ── S2-3: Search traces ───────────────────────────────────────────────────────
+//
+// Query params:
+//   service    string
+//   from       RFC3339 or Unix ms (default: now-1h)
+//   to         RFC3339 or Unix ms (default: now)
+//   status     0|1|2  (unset|ok|error)
+//   minMs      float  minimum duration in ms
+//   maxMs      float  maximum duration in ms
+//   limit      int    (default 100, max 1000)
+//   offset     int
+
+func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	now := time.Now().UTC()
+	req := QueryRequest{
+		ServiceName: q.Get("service"),
+		From:        now.Add(-time.Hour),
+		To:          now,
+		Limit:       100,
+	}
+
+	if v := q.Get("from"); v != "" {
+		req.From = parseTime(v, req.From)
+	}
+	if v := q.Get("to"); v != "" {
+		req.To = parseTime(v, req.To)
+	}
+	if v := q.Get("status"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			req.StatusCode = otlp.StatusCode(n)
+		}
+	}
+	if v := q.Get("minMs"); v != "" {
+		req.MinDurationMS, _ = strconv.ParseFloat(v, 64)
+	}
+	if v := q.Get("maxMs"); v != "" {
+		req.MaxDurationMS, _ = strconv.ParseFloat(v, 64)
+	}
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			if n > 1000 {
+				n = 1000
+			}
+			req.Limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		req.Offset, _ = strconv.Atoi(v)
+	}
+
+	rows, err := h.store.Search(req)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"traces": rows,
+		"total":  len(rows),
+	})
+}
+
+// ── S2-4: Get trace detail ────────────────────────────────────────────────────
+//
+// Path: /api/v2/traces/{traceId}
+// Query: from, to (window hint for warm-tier lookup; defaults to last 24 h)
+
+func (h *Handler) handleGetTrace(w http.ResponseWriter, r *http.Request) {
+	traceID := r.PathValue("traceId")
+	if traceID == "" {
+		writeErr(w, http.StatusBadRequest, "traceId required")
+		return
+	}
+
+	now := time.Now().UTC()
+	from := now.Add(-24 * time.Hour)
+	to := now
+
+	q := r.URL.Query()
+	if v := q.Get("from"); v != "" {
+		from = parseTime(v, from)
+	}
+	if v := q.Get("to"); v != "" {
+		to = parseTime(v, to)
+	}
+
+	trace, err := h.store.GetTrace(traceID, from, to)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if trace == nil {
+		writeErr(w, http.StatusNotFound, "trace not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"trace": traceToDetail(trace),
+	})
+}
+
+// ── S2-5: XLog scatter-plot data ──────────────────────────────────────────────
+//
+// GET /api/v2/traces/xlog
+// Query: service (required), from, to, limit (default 5000)
+
+func (h *Handler) handleXLog(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	service := q.Get("service")
+	if service == "" {
+		writeErr(w, http.StatusBadRequest, "service param required")
+		return
+	}
+
+	now := time.Now().UTC()
+	from := now.Add(-10 * time.Minute)
+	to := now
+	limit := 5000
+
+	if v := q.Get("from"); v != "" {
+		from = parseTime(v, from)
+	}
+	if v := q.Get("to"); v != "" {
+		to = parseTime(v, to)
+	}
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	pts, err := h.store.XLogPoints(service, from, to, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"service": service,
+		"from":    from,
+		"to":      to,
+		"points":  pts,
+		"count":   len(pts),
+	})
+}
+
+// ── S2-6: Service list ────────────────────────────────────────────────────────
+
+func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {
+	svcs := h.store.Services()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"services": svcs,
+		"count":    len(svcs),
+	})
+}
+
+// ── S2-6: Dependency graph ────────────────────────────────────────────────────
+
+func (h *Handler) handleDeps(w http.ResponseWriter, r *http.Request) {
+	edges := h.store.DependencyGraph()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"edges": edges,
+		"count": len(edges),
+	})
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
+	ring := h.store.RingStats()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ring": ring,
+	})
+}
+
+// ── Serialisation helpers ─────────────────────────────────────────────────────
+
+// traceDetail is the JSON shape for the trace-detail endpoint.
+type traceDetail struct {
+	TraceID     string       `json:"traceId"`
+	ServiceName string       `json:"serviceName"`
+	RootName    string       `json:"rootName"`
+	StartTime   time.Time    `json:"startTime"`
+	EndTime     time.Time    `json:"endTime"`
+	DurationMS  float64      `json:"durationMs"`
+	StatusCode  int          `json:"statusCode"`
+	SpanCount   int          `json:"spanCount"`
+	Spans       []spanDetail `json:"spans"`
+}
+
+type spanDetail struct {
+	SpanID        string            `json:"spanId"`
+	ParentID      string            `json:"parentSpanId,omitempty"`
+	ServiceName   string            `json:"serviceName"`
+	Name          string            `json:"name"`
+	Kind          int               `json:"kind"`
+	StartTime     time.Time         `json:"startTime"`
+	EndTime       time.Time         `json:"endTime"`
+	DurationMS    float64           `json:"durationMs"`
+	StatusCode    int               `json:"statusCode"`
+	StatusMessage string            `json:"statusMessage,omitempty"`
+	Attributes    map[string]string `json:"attributes,omitempty"`
+	Events        []otlp.SpanEvent  `json:"events,omitempty"`
+	Resource      map[string]string `json:"resource,omitempty"`
+	Children      []string          `json:"children,omitempty"` // child span IDs
+}
+
+func traceToDetail(t *otlp.Trace) traceDetail {
+	// Build child-ID map.
+	children := make(map[string][]string)
+	for _, sp := range t.Spans {
+		if sp.ParentID != "" {
+			children[sp.ParentID] = append(children[sp.ParentID], sp.SpanID)
+		}
+	}
+
+	spans := make([]spanDetail, 0, len(t.Spans))
+	for _, sp := range t.Spans {
+		spans = append(spans, spanDetail{
+			SpanID:        sp.SpanID,
+			ParentID:      sp.ParentID,
+			ServiceName:   sp.ServiceName,
+			Name:          sp.Name,
+			Kind:          int(sp.Kind),
+			StartTime:     sp.StartTime,
+			EndTime:       sp.EndTime,
+			DurationMS:    sp.DurationMS(),
+			StatusCode:    int(sp.StatusCode),
+			StatusMessage: sp.StatusMessage,
+			Attributes:    sp.Attributes,
+			Events:        sp.Events,
+			Resource:      sp.Resource,
+			Children:      children[sp.SpanID],
+		})
+	}
+
+	return traceDetail{
+		TraceID:     t.TraceID,
+		ServiceName: t.ServiceName,
+		RootName:    t.RootName,
+		StartTime:   t.StartTime,
+		EndTime:     t.EndTime,
+		DurationMS:  t.DurationMS,
+		StatusCode:  int(t.StatusCode),
+		SpanCount:   t.SpanCount,
+		Spans:       spans,
+	}
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+
+func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v) //nolint:errcheck
+}
+
+func writeErr(w http.ResponseWriter, code int, msg string) {
+	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+// parseTime parses RFC3339, Unix-seconds, or Unix-milliseconds strings.
+func parseTime(s string, fallback time.Time) time.Time {
+	// Try RFC3339 first.
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC()
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t.UTC()
+	}
+	// Try numeric.
+	s = strings.TrimSpace(s)
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	// Heuristic: > 1e12 → milliseconds, else seconds.
+	if n > 1_000_000_000_000 {
+		return time.UnixMilli(n).UTC()
+	}
+	return time.Unix(n, 0).UTC()
+}

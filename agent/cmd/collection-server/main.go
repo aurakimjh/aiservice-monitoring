@@ -29,6 +29,7 @@ import (
 
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/auth"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/eventbus"
+	"github.com/aurakimjh/aiservice-monitoring/agent/internal/otlp"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/validation"
 	"github.com/aurakimjh/aiservice-monitoring/agent/internal/ws"
 	"github.com/aurakimjh/aiservice-monitoring/agent/pkg/models"
@@ -520,7 +521,22 @@ func main() {
 		logger.Info("restored agents from db", "count", len(savedAgents))
 	}
 
-	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store)
+	// ── OTLP Receiver (WS-1.1) ───────────────────────────────────────────────
+	// traceH and metricH are no-op stubs until WS-1.2 (TraceEngine) and
+	// WS-1.3 (MetricEngine) are wired in.
+	otlpTraceH := func(batch otlp.TraceBatch) {
+		logger.Debug("otlp: trace batch received", "spans", len(batch.Spans))
+	}
+	otlpMetricH := func(batch otlp.MetricBatch) {
+		logger.Debug("otlp: metric batch received", "points", len(batch.Points))
+	}
+	otlpCfg := otlp.Config{
+		GRPCAddr:     envOrDefault("AITOP_OTLP_GRPC_ADDR", ":4317"),
+		MaxBodyBytes: int64(envOrDefaultInt("AITOP_OTLP_MAX_BODY_MB", 4) * 1024 * 1024),
+	}
+	otlpRecv := otlp.New(otlpCfg, otlpTraceH, otlpMetricH, logger)
+
+	mux := buildMux(f, gr, sr, cr, sar, logger, jwtMgr, bus, validator, wsHub, store, otlpRecv)
 
 	// Apply middleware: CORS → JWT Auth
 	corsMiddleware := auth.CORS("*")
@@ -541,6 +557,9 @@ func main() {
 		"/api/v1/service-groups",
 		"/api/v1/instances",
 		"/api/v1/genai/",
+		// OTLP/HTTP ingestion endpoints — OTel SDKs do not carry AITOP JWTs
+		"/v1/traces",
+		"/v1/metrics",
 	})
 
 	handler := corsMiddleware(authMiddleware(mux))
@@ -559,6 +578,16 @@ func main() {
 	// Start background purge scheduler
 	go startPurgeScheduler(ctx, store, storageCfg.Local.RetentionDays, logger)
 
+	// Start OTLP fan-out dispatch loop
+	go otlpRecv.RunFanOut(ctx)
+
+	// Start OTLP/gRPC server on :4317
+	go func() {
+		if err := otlpRecv.StartGRPC(ctx); err != nil {
+			logger.Error("otlp grpc server error", "error", err)
+		}
+	}()
+
 	go func() {
 		logger.Info("collection-server starting", "addr", *addr, "version", version.Full())
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -576,8 +605,13 @@ func main() {
 }
 
 // buildMux wires all REST endpoints.
-func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend) http.Handler {
+func buildMux(f *fleet, gr *groupRegistry, sr *scheduleRegistry, cr *configRegistry, sar *sdkAlertRegistry, logger *slog.Logger, jwtMgr *auth.JWTManager, bus *eventbus.Bus, validator *validation.Gateway, wsHub *ws.Hub, store storage.StorageBackend, otlpRecv *otlp.Receiver) http.Handler {
 	mux := http.NewServeMux()
+
+	// ── OTLP/HTTP endpoints (S1-2) ────────────────────────────────────────────
+	// POST /v1/traces   — OTLP ExportTraceServiceRequest
+	// POST /v1/metrics  — OTLP ExportMetricsServiceRequest
+	otlpRecv.RegisterHTTP(mux)
 
 	// ── Auth endpoints ────────────────────────────────────────────────────────
 

@@ -36,24 +36,24 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S1-1 | gRPC 서버에 OTLP TraceService / MetricsService 등록 | ☐ | protobuf 직접 디코딩 방식 |
-| S1-2 | HTTP 엔드포인트 /v1/traces, /v1/metrics 추가 | ☐ | 기존 :8080 서버에 통합 |
-| S1-3 | protobuf → 내부 모델 변환 레이어 | ☐ | Span, MetricPoint 구조체 |
-| S1-4 | Backpressure Queue (Ring Buffer, 1M 이벤트) | ☐ | Go channel + overflow 샘플링 |
-| S1-5 | Fan-out (Metric Engine / Trace Engine 분배) | ☐ | 배치 단위 병렬 기록 |
-| S1-6 | 기존 OTel Collector 설정 → AITOP 마이그레이션 가이드 | ☐ | 문서 |
+| S1-1 | gRPC 서버에 OTLP TraceService / MetricsService 등록 | ✅ | protobuf 직접 디코딩 방식, :4317 h2c |
+| S1-2 | HTTP 엔드포인트 /v1/traces, /v1/metrics 추가 | ✅ | 기존 :8080 서버에 통합, JSON+Protobuf |
+| S1-3 | protobuf → 내부 모델 변환 레이어 | ✅ | Span, MetricPoint, Resource 구조체 |
+| S1-4 | Backpressure Queue (Ring Buffer, 1M 이벤트) | ✅ | atomic CAS 기반, 1-in-10 overflow 샘플링 |
+| S1-5 | Fan-out (Metric Engine / Trace Engine 분배) | ✅ | 배치 단위 병렬 goroutine 기록 |
+| S1-6 | 기존 OTel Collector 설정 → AITOP 마이그레이션 가이드 | ✅ | DOCS/OTEL_COLLECTOR_MIGRATION.md |
 
 ### WS-1.2 Trace Engine (Phase S2) — 2주
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S2-1 | 인메모리 트레이스 링버퍼 (100K건, 4시간) | ☐ | 서비스별 역인덱스 포함 |
-| S2-2 | SQLite traces/spans 테이블 + FTS5 인덱스 | ☐ | 일별 파티셔닝 (Warm 30일) |
-| S2-3 | /api/v2/traces 검색 API (서비스, 기간, 상태, 태그) | ☐ | |
-| S2-4 | /api/v2/traces/{traceId} 상세 조회 (스팬 트리) | ☐ | |
-| S2-5 | XLog 산점도 데이터 API (/api/v2/traces/xlog) | ☐ | timestamp, duration, status 캐시 |
-| S2-6 | 서비스 목록 자동 인덱스 + 의존성 그래프 자동 추출 | ☐ | trace parent-child에서 추출 |
-| S2-7 | Cold Tier: Warm → S3 Parquet 아카이브 크론 | ☐ | 1년+ 보관 |
+| S2-1 | 인메모리 트레이스 링버퍼 (100K건, 4시간) | ✅ | 서비스별 역인덱스 포함 |
+| S2-2 | SQLite traces/spans 테이블 + FTS5 인덱스 | ✅ | 일별 파티셔닝 (Warm 30일) |
+| S2-3 | /api/v2/traces 검색 API (서비스, 기간, 상태, 태그) | ✅ | |
+| S2-4 | /api/v2/traces/{traceId} 상세 조회 (스팬 트리) | ✅ | |
+| S2-5 | XLog 산점도 데이터 API (/api/v2/traces/xlog) | ✅ | timestamp, duration, status 캐시 |
+| S2-6 | 서비스 목록 자동 인덱스 + 의존성 그래프 자동 추출 | ✅ | trace parent-child에서 추출 |
+| S2-7 | Cold Tier: Warm → S3 Parquet 아카이브 크론 | ✅ | 1년+ 보관 |
 
 ### WS-1.3 Metric Engine (Phase S3) — 3주
 
