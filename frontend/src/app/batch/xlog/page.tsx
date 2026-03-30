@@ -40,8 +40,8 @@ export default function BatchXLogPage() {
   const router = useRouter();
   const demoJobs = useCallback(() => getBatchJobs(), []);
   const demoXLog = useCallback(() => getBatchXLogData(), []);
-  const { data: jobs } = useDataSource('/batch/jobs', demoJobs);
-  const { data: allData } = useDataSource('/batch/xlog', demoXLog);
+  const { data: jobs } = useDataSource('/batch/jobs', demoJobs, { refreshInterval: 30_000 });
+  const { data: allData } = useDataSource('/batch/xlog', demoXLog, { refreshInterval: 15_000 });
 
   const [jobFilter, setJobFilter] = useState('');
   const [dateRange, setDateRange] = useState('7');

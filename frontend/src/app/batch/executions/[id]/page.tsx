@@ -131,9 +131,9 @@ export default function BatchExecutionDetailPage() {
   const demoDetail = useCallback(() => getBatchExecutionDetail(executionId), [executionId]);
   const demoSQL = useCallback(() => getBatchSQLProfile(executionId), [executionId]);
   const demoMethods = useCallback(() => getBatchMethodProfile(executionId), [executionId]);
-  const { data: detail } = useDataSource(`/batch/executions/${executionId}`, demoDetail);
-  const { data: sqlProfiles } = useDataSource(`/batch/executions/${executionId}/profile/sql`, demoSQL);
-  const { data: methodProfiles } = useDataSource(`/batch/executions/${executionId}/profile/methods`, demoMethods);
+  const { data: detail } = useDataSource(`/batch/executions/${executionId}`, demoDetail, { refreshInterval: 30_000 });
+  const { data: sqlProfiles } = useDataSource(`/batch/executions/${executionId}/profile/sql`, demoSQL, { refreshInterval: 30_000 });
+  const { data: methodProfiles } = useDataSource(`/batch/executions/${executionId}/profile/methods`, demoMethods, { refreshInterval: 30_000 });
 
   const [activeTab, setActiveTab] = useState('overview');
   const [sqlSort, setSqlSort] = useState<{ field: SQLSortField; dir: 'asc' | 'desc' }>({ field: 'total_time_ms', dir: 'desc' });

@@ -88,9 +88,9 @@ export default function BatchAlertsPage() {
   const demoRules = useCallback(() => getBatchAlertRules(), []);
   const demoHistory = useCallback(() => getBatchAlertHistory(), []);
   const demoJobs = useCallback(() => getBatchJobs(), []);
-  const { data: rulesData } = useDataSource('/batch/alerts/rules', demoRules);
-  const { data: historyData } = useDataSource('/batch/alerts/history', demoHistory);
-  const { data: jobsData } = useDataSource('/batch/jobs', demoJobs);
+  const { data: rulesData } = useDataSource('/batch/alerts/rules', demoRules, { refreshInterval: 30_000 });
+  const { data: historyData } = useDataSource('/batch/alerts/history', demoHistory, { refreshInterval: 30_000 });
+  const { data: jobsData } = useDataSource('/batch/jobs', demoJobs, { refreshInterval: 30_000 });
   const [rules, setRules] = useState(rulesData ?? []);
   const alertHistory = historyData ?? [];
   const jobs = jobsData ?? [];

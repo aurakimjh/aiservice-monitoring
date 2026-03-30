@@ -54,7 +54,7 @@ export default function AIServiceDetailPage({ params }: { params: Promise<{ id: 
     const all = getProjectAIServices(projectId);
     return all.find((s) => s.id === id) ?? null;
   }, [projectId, id]);
-  const { data: liveSvc, source } = useDataSource(`/ai/services/${id}`, demoSvc);
+  const { data: liveSvc, source } = useDataSource(`/ai/services/${id}`, demoSvc, { refreshInterval: 30_000 });
   const svc = liveSvc ?? getProjectAIServices(projectId).find((s) => s.id === id) ?? null;
 
   const [activeTab, setActiveTab] = useState('overview');

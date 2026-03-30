@@ -13,11 +13,11 @@
 v0.9.0-rc.1 (현재)                                        v1.0 릴리스
     │                                                          │
     ├── WS-8  문서 정합성 + v1.0 Readiness ★최우선★   ░░░░░░░░ │ ← Phase 0 (NEW)
-    ├── WS-1  자체 스토리지 엔진 (Prom/Jaeger 제거)     █████░░░ │
+    ├── WS-1  자체 스토리지 엔진 (Prom/Jaeger 제거)     ███████░ │
     ├── WS-2  엔티티 계층 확장 (K8s/DB/BizTx)          ░░░░░░░░ │
     ├── WS-3  대규모 배치 성능 최적화                     ████████ │
     ├── WS-3A XLog/HeatMap 강화                         ██████░░ │
-    ├── WS-4  Live 모드 잔여 페이지 전환                 ██████░░ │
+    ├── WS-4  Live 모드 잔여 페이지 전환                 ████████ │
     ├── WS-5  품질 안정화 + 결함 수정                     ██░░░░░░ │
     ├── WS-6  통합 테스트 + 데모 리허설                  ░░░░░░░░ │
     ├── WS-7  상용 패키징 + 문서 최종화                  ░░░░░░░░ │
@@ -89,10 +89,10 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 작업 | 상태 | 비고 |
 |---|------|:----:|------|
-| S6-1 | PostgreSQL 스토리지 어댑터 (metrics/traces/spans) | ☐ | |
-| S6-2 | 일별 파티셔닝 자동 생성 + 만료 DROP | ☐ | |
-| S6-3 | 보관 정책 엔진 (Critical/Slow/Normal/Health 등급) | ☐ | 스마트 보관 점수 |
-| S6-4 | storage.mode: auto 감지 → PostgreSQL 전환 권고 | ☐ | |
+| S6-1 | PostgreSQL 스토리지 어댑터 (metrics/traces/spans) | ✅ | pgstore 패키지, WriteMetricSamples/WriteSpans, JSONB+GIN 인덱스 |
+| S6-2 | 일별 파티셔닝 자동 생성 + 만료 DROP | ✅ | EnsurePartitions(N일), DropExpiredPartitions, PARTITION BY RANGE |
+| S6-3 | 보관 정책 엔진 (Critical/Slow/Normal/Health 등급) | ✅ | RetentionEngine, 4등급 자동 스코어링 (365/180/90/30일) |
+| S6-4 | storage.mode: auto 감지 → PostgreSQL 전환 권고 | ✅ | RecommendStorageMode (시리즈 10K+/트레이스 1M+/데이터 10GB+) |
 
 ### WS-1.7 수평 확장 + ClickHouse (Phase S7) — 3주
 
@@ -269,32 +269,32 @@ v0.9.0-rc.1 (현재)                                        v1.0 릴리스
 
 | # | 페이지 | 상태 | 필요 API |
 |---|--------|:----:|---------|
-| L-01 | /batch/[name] | ☐ | `/batch/{name}/executions` |
-| L-02 | /batch/executions/[id] | ☐ | `/batch/executions/{id}` |
-| L-03 | /batch/xlog | ☐ | `/batch/xlog/data` |
-| L-04 | /batch/alerts | ☐ | `/batch/alerts/rules` |
-| L-05 | /traces/[traceId] | ☐ | v2 Trace Engine 의존 |
-| L-06 | /ai/[id] | ☐ | `/ai/services/{id}` |
-| L-07 | /ai/evaluation | ☐ | `/genai/evals` |
-| L-08 | /ai/gpu | ☐ | Agent GPU Collector |
+| L-01 | /batch/[name] | ✅ | refreshInterval 30s, v1 API 연결 |
+| L-02 | /batch/executions/[id] | ✅ | refreshInterval 30s (detail+sql+methods) |
+| L-03 | /batch/xlog | ✅ | refreshInterval 15s, Live 스트리밍 호환 |
+| L-04 | /batch/alerts | ✅ | refreshInterval 30s (rules+history+jobs) |
+| L-05 | /traces/[traceId] | ✅ | WS-1.4에서 v2 API 전환 완료 |
+| L-06 | /ai/[id] | ✅ | refreshInterval 30s, AI 서비스 상세 |
+| L-07 | /ai/evaluation | ✅ | 기존 refreshInterval 30s 확인 |
+| L-08 | /ai/gpu | ✅ | 기존 refreshInterval 30s 확인 |
 
 ### WS-4.2 P1 — 인프라/에이전트 (7개 페이지)
 
 | # | 페이지 | 상태 |
 |---|--------|:----:|
-| L-09 | /infra/cache | ☐ |
-| L-10 | /infra/middleware | ☐ |
-| L-11 | /infra/middleware/connection-pool | ☐ |
-| L-12 | /infra/queues | ☐ |
-| L-13~15 | /agents/plugins, plugins/[name], groups/[id] | ☐ |
+| L-09 | /infra/cache | ✅ | 기존 refreshInterval 30s 확인 |
+| L-10 | /infra/middleware | ✅ | 기존 refreshInterval 30s 확인 |
+| L-11 | /infra/middleware/connection-pool | ✅ | 기존 refreshInterval 30s 확인 |
+| L-12 | /infra/queues | ✅ | 기존 refreshInterval 30s 확인 |
+| L-13~15 | /agents/plugins, plugins/[name], groups/[id] | ✅ | 기존 refreshInterval 30s 확인 |
 
 ### WS-4.3 P2~P4 — 나머지 (16개 페이지)
 
 | # | 페이지 | 상태 |
 |---|--------|:----:|
-| L-16~18 | /ai/prompts, training, training/[id] | ☐ |
-| L-19~23 | /profiling/*, /runtime/* | ☐ |
-| L-24~31 | /golden-signals, /rum, /database, /executive, /costs, /notebooks, /tenants, /dashboards | ☐ |
+| L-16~18 | /ai/prompts, training, training/[id] | ✅ | 기존 refreshInterval 30s 확인 |
+| L-19~23 | /profiling/*, /runtime/* | ✅ | 기존 refreshInterval 30s 확인 |
+| L-24~31 | /golden-signals, /rum, /database, /executive, /costs, /notebooks, /tenants, /dashboards | ✅ | 기존 refreshInterval 30s 확인, /database v2 API 연결 |
 
 ---
 
